@@ -827,11 +827,14 @@ void FD3D12CommandContext::ValidateExclusiveDepthStencilAccess(FExclusiveDepthSt
 	}
 	}
 
-void FD3D12CommandContext::RHISetDepthStencilState(FDepthStencilStateRHIParamRef NewStateRHI, uint32 StencilRef)
+void FD3D12CommandContext::RHISetDepthStencilState(FDepthStencilStateRHIParamRef NewStateRHI, uint32 StencilRef, bool bBypassValidation)
 {
 	FD3D12DepthStencilState* NewState = FD3D12DynamicRHI::ResourceCast(NewStateRHI);
 
-	ValidateExclusiveDepthStencilAccess(NewState->AccessType);
+	if (!bBypassValidation)
+	{
+		ValidateExclusiveDepthStencilAccess(NewState->AccessType);
+	}
 
 	StateCache.SetDepthStencilState(&NewState->Desc, StencilRef);
 }

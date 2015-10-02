@@ -1,0 +1,123 @@
+#include "GeneratedUniformBuffers.usf" 
+#include "ShaderVersion.usf"
+#include "Common.usf"
+#include "ReflectionEnvironmentShared.usf"
+#include "BRDF.usf"
+#include "SHCommon.usf"
+struct FVertexFactoryInterpolantsVSToPS
+{};
+#include "ShadowDepthCommon.usf"
+
+#include "GFSDK_HairWorks_ShaderCommon.usf"
+
+float4 IndirectLightingSHCoefficients[3];
+
+float3 LightDir;
+float3 LightColor;
+
+GFSDK_Hair_ConstantBuffer HairConstantBuffer;
+
+SamplerState TextureSampler;
+
+Texture2D RootColorTexture;
+Texture2D TipColorTexture;
+Texture2D SpecularColorTexture;
+
+GFSDK_HAIR_DECLARE_SHADER_RESOURCES(t10, t11, t12);
+
+struct MainOut
+{
+	float4 Color : SV_Target0;
+};
+
+MainOut Main(GFSDK_Hair_PixelShaderInput input)
+{
+	// Shader attributes
+	GFSDK_Hair_ShaderAttributes shaderAttributes = GFSDK_Hair_GetShaderAttributes(input, HairConstantBuffer);
+
+	// Setup material
+	if (HairConstantBuffer.useSpecularTexture)
+		HairConstantBuffer.defaultMaterial.specularColor.rgb = SpecularColorTexture.SampleLevel(TextureSampler, shaderAttributes.texcoords.xy, 0).rgb;
+
+	// Diffuse
+	float diffuse = GFSDK_Hair_ComputeHairDiffuseShading(
+		LightDir, 
+		shaderAttributes.T, 
+		shaderAttributes.N, 
+		HairConstantBuffer.defaultMaterial.diffuseScale,
+		HairConstantBuffer.defaultMaterial.diffuseBlend
+		);
+
+	// Indirect light
+	float3 IndirectLight = 0;
+	{
+		FTwoBandSHVectorRGB PointIndirectLighting;
+		PointIndirectLighting.R.V = IndirectLightingSHCoefficients[0];
+		PointIndirectLighting.G.V = IndirectLightingSHCoefficients[1];
+		PointIndirectLighting.B.V = IndirectLightingSHCoefficients[2];
+
+		FTwoBandSHVector DiffuseTransferSH = CalcDiffuseTransferSH(shaderAttributes.N.xyz, 1);
+		IndirectLight = max(half3(0, 0, 0), DotSH(PointIndirectLighting, DiffuseTransferSH));
+
+		IndirectLight *= View.IndirectLightingColorScale;
+	}
+
+	// Sky light
+	float3 sky = GetSkySHDiffuse(shaderAttributes.N) * View.SkyLightColor.rgb;
+
+	// Specular
+	float specular = GFSDK_Hair_ComputeHairSpecularShading(
+		LightDir,
+		shaderAttributes,
+		HairConstantBuffer.defaultMaterial
+		);
+
+	// Glint
+	float glint = GFSDK_Hair_ComputeHairGlint(
+		HairConstantBuffer,
+		HairConstantBuffer.defaultMaterial,
+		shaderAttributes
+		);
+
+	specular *= lerp(1.0, glint, HairConstantBuffer.defaultMaterial.glintStrength);
+
+	float4 lightAttenuation = Square(LightAttenuationTexture.Sample(TextureSampler, (input.position.xy + View.ViewRectMin.xy) * View.ViewSizeAndSceneTexelSize.zw));
+	const float3 lightColor = LightColor * min(lightAttenuation.x, lightAttenuation.z);
+	float luminance = dot(lightColor, float3(0.3, 0.5, 0.2));
+	sky += HairConstantBuffer.defaultMaterial.glintStrength * glint * float3(luminance, luminance, luminance);
+
+	// Sum
+	float3 hairColor = GFSDK_Hair_SampleHairColorTex(
+		HairConstantBuffer, 
+		HairConstantBuffer.defaultMaterial, 
+		TextureSampler,
+		RootColorTexture,
+		TipColorTexture,
+		shaderAttributes.texcoords
+		);
+
+	// Avoid looking too bright
+	float3 diffuseColor = Diffuse_Lambert(hairColor);
+	float3 specularColor = Diffuse_Lambert(HairConstantBuffer.defaultMaterial.specularColor);
+
+	MainOut outPut = (MainOut)0;
+
+	outPut.Color.rgb += (sky + IndirectLight) * diffuseColor + (diffuse * diffuseColor + specular * specularColor) * lightColor;
+
+	outPut.Color.a = GFSDK_Hair_ComputeAlpha(
+		HairConstantBuffer,
+		HairConstantBuffer.defaultMaterial,
+		shaderAttributes);
+
+	return outPut;
+}
+
+float4 SimpleMain() : SV_Target0
+{
+	return 1;
+}
+
+float ShadowDepthMain(in float4 Position: SV_Position) : SV_Depth
+{
+	return Position.z * Position.w * ShadowParams.y + ShadowParams.x;
+}

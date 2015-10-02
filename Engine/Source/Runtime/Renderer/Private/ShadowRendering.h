@@ -606,6 +606,9 @@ public:
 	/** To not cast a shadow on the ground outside the object and having higher quality (useful for first person weapon). */
 	uint32 bSelfShadowOnly : 1;
 
+	mutable uint32 bHairReceiver : 1;
+	mutable uint32 bHairRenderProjection : 1;
+
 	TBitArray<SceneRenderingBitArrayAllocator> StaticMeshWholeSceneShadowDepthMap;
 	TArray<uint64,SceneRenderingAllocator> StaticMeshWholeSceneShadowBatchVisibility;
 
@@ -1091,7 +1094,12 @@ public:
 
 		if (SoftTransitionScale.IsBound())
 		{
-			const float TransitionSize = ShadowInfo->ComputeTransitionSize();
+			float TransitionSize = ShadowInfo->ComputeTransitionSize();
+			if (ShadowInfo->bHairRenderProjection)
+			{
+				static const auto& CVarHairShadowTransitionScale = *IConsoleManager::Get().FindConsoleVariable(TEXT("r.Hair.Shadow.TransitionScale"));
+				TransitionSize *= CVarHairShadowTransitionScale.GetFloat();
+			}
 
 			SetShaderValue(RHICmdList, ShaderRHI, SoftTransitionScale, FVector(0, 0, 1.0f / TransitionSize));
 		}
@@ -1189,6 +1197,8 @@ public:
 		ProjectionParameters.Bind(Initializer.ParameterMap);
 		ShadowFadeFraction.Bind(Initializer.ParameterMap,TEXT("ShadowFadeFraction"));
 		ShadowSharpen.Bind(Initializer.ParameterMap,TEXT("ShadowSharpen"));
+		HairReceiver.Bind(Initializer.ParameterMap, TEXT("bHairReceiver"));
+		HairMaskTexture.Bind(Initializer.ParameterMap, TEXT("HairMaskTexture"));
 	}
 
 	static bool ShouldCache(EShaderPlatform Platform)
@@ -1226,8 +1236,11 @@ public:
 
 		ProjectionParameters.Set(RHICmdList, this, View, ShadowInfo);
 
+		FSceneRenderTargets& SceneContext = FSceneRenderTargets::Get(RHICmdList);
 		SetShaderValue(RHICmdList, ShaderRHI, ShadowFadeFraction, ShadowInfo->FadeAlphas[ViewIndex] );
 		SetShaderValue(RHICmdList, ShaderRHI, ShadowSharpen, ShadowInfo->GetLightSceneInfo().Proxy->GetShadowSharpen() * 7.0f + 1.0f );
+		SetShaderValue(RHICmdList, GetPixelShader(), HairReceiver, ShadowInfo->bHairReceiver);
+		SetTextureParameter(RHICmdList, GetPixelShader(), HairMaskTexture, SceneContext.HairMask->GetRenderTargetItem().ShaderResourceTexture);
 	}
 
 	/**
@@ -1240,6 +1253,8 @@ public:
 		Ar << ProjectionParameters;
 		Ar << ShadowFadeFraction;
 		Ar << ShadowSharpen;
+		Ar << HairReceiver;
+		Ar << HairMaskTexture;
 		return bShaderHasOutdatedParameters;
 	}
 
@@ -1247,6 +1262,8 @@ protected:
 	FShadowProjectionShaderParameters ProjectionParameters;
 	FShaderParameter ShadowFadeFraction;
 	FShaderParameter ShadowSharpen;
+	FShaderParameter HairReceiver;
+	FShaderResourceParameter HairMaskTexture;
 };
 
 /** Pixel shader to project modulated shadows onto the scene. */

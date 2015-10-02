@@ -542,9 +542,16 @@ private: // Get...() methods instead of direct access
 	// 0 before BeginRenderingSceneColor and after tone mapping in deferred shading
 	// Permanently allocated for forward shading
 	TRefCountPtr<IPooledRenderTarget> SceneColor[(int32)EShadingPath::Num];
+
+public:
+
 	// also used as LDR scene color
 	TRefCountPtr<IPooledRenderTarget> LightAttenuation;
-public:
+
+	TRefCountPtr<IPooledRenderTarget> HairMask;
+	TRefCountPtr<IPooledRenderTarget> HairLightAttenuation;
+	TRefCountPtr<IPooledRenderTarget> HairDepthZ;
+
 	// Reflection Environment: Bringing back light accumulation buffer to apply indirect reflections
 	TRefCountPtr<IPooledRenderTarget> LightAccumulation;
 

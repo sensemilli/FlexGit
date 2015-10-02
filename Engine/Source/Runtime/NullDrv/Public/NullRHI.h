@@ -713,7 +713,7 @@ public:
 	}
 
 
-	virtual void RHISetDepthStencilState(FDepthStencilStateRHIParamRef NewState, uint32 StencilRef) final override
+	virtual void RHISetDepthStencilState(FDepthStencilStateRHIParamRef NewState, uint32 StencilRef, bool bBypassValidation = false) final override
 	{
 
 	}

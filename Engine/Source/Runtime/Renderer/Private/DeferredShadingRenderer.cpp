@@ -24,6 +24,7 @@
 #include "DistanceFieldAtlas.h"
 #include "../../Engine/Private/SkeletalRenderGPUSkin.h"		// GPrevPerBoneMotionBlur
 #include "EngineModule.h"
+#include "HairSceneProxy.h"
 
 // NVCHANGE_BEGIN: Add HBAO+
 #if WITH_GFSDK_SSAO
@@ -458,6 +459,33 @@ void FDeferredShadingSceneRenderer::RenderBasePassDynamicData(FRHICommandList& R
 		}
 	}
 
+	if (View.bHasHair)
+	{
+		FSceneRenderTargets& SceneContext = FSceneRenderTargets::Get(RHICmdList);
+		FHairSceneProxy::StartMsaa();
+
+		for (auto MeshIdx = 0; MeshIdx < View.VisibleDynamicPrimitives.Num(); ++MeshIdx)
+		{
+			auto* PrimitiveInfo = View.VisibleDynamicPrimitives[MeshIdx];
+			auto& ViewRelevance = View.PrimitiveViewRelevanceMap[PrimitiveInfo->GetIndex()];
+			if (!ViewRelevance.bHair)
+				continue;
+
+			auto& HairSceneProxy = static_cast<FHairSceneProxy&>(*PrimitiveInfo->Proxy);
+			HairSceneProxy.DrawBasePass(View);
+		}
+
+		FHairSceneProxy::FinishMsaa();
+
+		// Write to hair mask buffer and depth buffer.
+		SetRenderTarget(RHICmdList, SceneContext.HairMask->GetRenderTargetItem().TargetableTexture, SceneContext.HairDepthZ->GetRenderTargetItem().TargetableTexture, ESimpleRenderTargetMode::EClearColorAndDepth);	// View port is reset here.
+		RHICmdList.SetViewport(View.ViewRect.Min.X, View.ViewRect.Min.Y, 0.0f, View.ViewRect.Max.X, View.ViewRect.Max.Y, 1.0f);
+
+		FHairSceneProxy::DrawColorAndDepth();
+
+		SceneContext.BeginRenderingGBuffer(RHICmdList, ERenderTargetLoadAction::ENoAction, ERenderTargetLoadAction::ENoAction);
+	}
+
 	View.SimpleElementCollector.DrawBatchedElements(RHICmdList, View, FTexture2DRHIRef(), EBlendModeFilter::OpaqueAndMasked);
 
 	if( !View.Family->EngineShowFlags.CompositeEditorPrimitives )
@@ -609,6 +637,18 @@ bool FDeferredShadingSceneRenderer::RenderBasePassView(FRHICommandListImmediate&
 	bool bDirty = false; 
 	SetupBasePassView(RHICmdList, View.ViewRect, ViewFamily.EngineShowFlags.ShaderComplexity);
 	bDirty |= RenderBasePassStaticData(RHICmdList, View);
+
+	for (auto MeshIdx = 0; MeshIdx < View.VisibleDynamicPrimitives.Num(); ++MeshIdx)
+	{
+		auto PrimitiveInfo = View.VisibleDynamicPrimitives[MeshIdx];
+		auto& ViewRelevance = View.PrimitiveViewRelevanceMap[PrimitiveInfo->GetIndex()];
+		if (ViewRelevance.bHair)
+		{
+			View.bHasHair = true;
+			break;
+		}
+	}
+
 	RenderBasePassDynamicData(RHICmdList, View, bDirty);
 
 	return bDirty;

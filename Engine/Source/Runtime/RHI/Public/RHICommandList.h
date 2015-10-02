@@ -289,9 +289,11 @@ struct FRHICommandSetDepthStencilState : public FRHICommand<FRHICommandSetDepthS
 {
 	FDepthStencilStateRHIParamRef State;
 	uint32 StencilRef;
-	FORCEINLINE_DEBUGGABLE FRHICommandSetDepthStencilState(FDepthStencilStateRHIParamRef InState, uint32 InStencilRef)
+	bool bBypassValidation;
+	FORCEINLINE_DEBUGGABLE FRHICommandSetDepthStencilState(FDepthStencilStateRHIParamRef InState, uint32 InStencilRef, bool InBypassValidation)
 		: State(InState)
 		, StencilRef(InStencilRef)
+		, bBypassValidation(InBypassValidation)
 	{
 	}
 	RHI_API void Execute(FRHICommandListBase& CmdList);
@@ -1576,14 +1578,14 @@ public:
 		new (AllocCommand<FRHICommandSetStreamSource>()) FRHICommandSetStreamSource(StreamIndex, VertexBuffer, Stride, Offset);
 	}
 
-	FORCEINLINE_DEBUGGABLE void SetDepthStencilState(FDepthStencilStateRHIParamRef NewStateRHI, uint32 StencilRef = 0)
+	FORCEINLINE_DEBUGGABLE void SetDepthStencilState(FDepthStencilStateRHIParamRef NewStateRHI, uint32 StencilRef = 0, bool bBypassValidation = false)
 	{
 		if (Bypass())
 		{
-			CMD_CONTEXT(SetDepthStencilState)(NewStateRHI, StencilRef);
+			CMD_CONTEXT(SetDepthStencilState)(NewStateRHI, StencilRef, bBypassValidation);
 			return;
 		}
-		new (AllocCommand<FRHICommandSetDepthStencilState>()) FRHICommandSetDepthStencilState(NewStateRHI, StencilRef);
+		new (AllocCommand<FRHICommandSetDepthStencilState>()) FRHICommandSetDepthStencilState(NewStateRHI, StencilRef, bBypassValidation);
 	}
 
 	FORCEINLINE_DEBUGGABLE void SetViewport(uint32 MinX, uint32 MinY, float MinZ, uint32 MaxX, uint32 MaxY, float MaxZ)

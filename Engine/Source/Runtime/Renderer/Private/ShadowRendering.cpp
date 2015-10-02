@@ -9,6 +9,7 @@
 #include "TextureLayout.h"
 #include "LightPropagationVolume.h"
 #include "SceneUtils.h"
+#include "HairSceneProxy.h"
 
 static TAutoConsoleVariable<float> CVarCSMShadowDepthBias(
 	TEXT("r.Shadow.CSMDepthBias"),
@@ -1374,6 +1375,21 @@ void FProjectedShadowInfo::RenderDepthDynamic(FRHICommandList& RHICmdList, FScen
 			FShadowDepthDrawingPolicyFactory::DrawDynamicMesh(RHICmdList, *FoundView, Context, MeshBatch, false, true, MeshBatchAndRelevance.PrimitiveSceneProxy, MeshBatch.BatchHitProxyId);
 		}
 	}
+
+	// Draw hairs.
+	for (auto PrimitiveIdx = 0; PrimitiveIdx < SubjectPrimitives.Num(); ++PrimitiveIdx)
+	{
+		auto* PrimitiveInfo = SubjectPrimitives[PrimitiveIdx];
+		auto& ViewRelavence = FoundView->PrimitiveViewRelevanceMap[PrimitiveInfo->GetIndex()];
+		if (!ViewRelavence.bHair)
+			continue;
+
+		FViewMatrices ViewMatrices;
+		ViewMatrices.ViewMatrix = FTranslationMatrix(PreShadowTranslation) * SubjectAndReceiverMatrix;
+
+		auto& HairProxy = static_cast<FHairSceneProxy&>(*PrimitiveInfo->Proxy);
+		HairProxy.DrawShadow(ViewMatrices, GetShaderDepthBias(), InvMaxSubjectDepth);
+	}
 }
 
 class FDrawShadowMeshElementsThreadTask
@@ -2074,6 +2090,20 @@ void FProjectedShadowInfo::RenderProjection(FRHICommandListImmediate& RHICmdList
 	{
 		SCOPED_DRAW_EVENTF(RHICmdList, EventMaskSubjects, TEXT("Stencil Mask Subjects"));
 
+		if (View->bHasHair)
+		{
+			for (auto PrimitiveSceneInfo : ReceiverPrimitives)
+			{
+				auto& ViewRelevance = View->PrimitiveViewRelevanceMap[PrimitiveSceneInfo->GetIndex()];
+				if (ViewRelevance.bHair)
+				{
+					checkSlow(!bHairReceiver);
+					bHairReceiver = true;
+					break;
+				}
+			}
+		}
+
 		// Set stencil to one.
 		RHICmdList.SetDepthStencilState(TStaticDepthStencilState<
 			false,CF_DepthNearOrEqual,
@@ -2366,6 +2396,19 @@ void FProjectedShadowInfo::RenderProjection(FRHICommandListImmediate& RHICmdList
 		}
 	}
 
+	if (bHairReceiver)
+	{
+		FSceneRenderTargets& SceneContext = FSceneRenderTargets::Get(RHICmdList);
+		RHICmdList.SetDepthStencilState(TStaticDepthStencilState<false, CF_LessEqual>::GetRHI());
+
+		// Swap to replace render targets as well as shader resources.
+		SceneContext.LightAttenuation.Swap(SceneContext.HairLightAttenuation);
+		SceneContext.SceneDepthZ.Swap(SceneContext.HairDepthZ);
+		SceneContext.BeginRenderingLightAttenuation(RHICmdList);
+
+		RHICmdList.SetViewport(View->ViewRect.Min.X, View->ViewRect.Min.Y, 0.0f, View->ViewRect.Max.X, View->ViewRect.Max.Y, 1.0f);
+	}
+
 	{
 		uint32 LocalQuality = GetShadowQuality();
 
@@ -2437,6 +2480,18 @@ void FProjectedShadowInfo::RenderProjection(FRHICommandListImmediate& RHICmdList
 	{
 		// Clear the stencil buffer to 0.
 		RHICmdList.Clear(false, FColor(0, 0, 0), false, 0, true, 0, FIntRect());
+	}
+
+	if (bHairReceiver)
+	{
+		FSceneRenderTargets& SceneContext = FSceneRenderTargets::Get(RHICmdList);
+		bHairReceiver = false;
+
+		SceneContext.LightAttenuation.Swap(SceneContext.HairLightAttenuation);
+		SceneContext.SceneDepthZ.Swap(SceneContext.HairDepthZ);
+		SceneContext.BeginRenderingLightAttenuation(RHICmdList);
+
+		RHICmdList.SetViewport(View->ViewRect.Min.X, View->ViewRect.Min.Y, 0.0f, View->ViewRect.Max.X, View->ViewRect.Max.Y, 1.0f);
 	}
 }
 
@@ -2995,6 +3050,25 @@ void FSceneRenderer::RenderProjections(
 				if (ProjectedShadowInfo->FadeAlphas[ViewIndex] > 1.0f / 256.0f)
 				{
 					ProjectedShadowInfo->RenderProjection(RHICmdList, ViewIndex, &View, bForwardShading);
+
+					if (View.bHasHair && !ProjectedShadowInfo->bPreShadow && !ProjectedShadowInfo->bSelfShadowOnly)
+					{
+						SceneContext.SceneDepthZ.Swap(SceneContext.HairDepthZ);
+						SceneContext.LightAttenuation.Swap(SceneContext.HairLightAttenuation);
+						SceneContext.BeginRenderingLightAttenuation(RHICmdList);
+						RHICmdList.SetViewport(View.ViewRect.Min.X, View.ViewRect.Min.Y, 0.0f, View.ViewRect.Max.X, View.ViewRect.Max.Y, 1.0f);
+
+						checkSlow(!ProjectedShadowInfo->bHairRenderProjection);
+						ProjectedShadowInfo->bHairRenderProjection = true;
+						ProjectedShadowInfo->RenderProjection(RHICmdList, ViewIndex, &View, bForwardShading);
+						ProjectedShadowInfo->bHairRenderProjection = false;
+
+						SceneContext.SceneDepthZ.Swap(SceneContext.HairDepthZ);
+						SceneContext.LightAttenuation.Swap(SceneContext.HairLightAttenuation);
+						SceneContext.BeginRenderingLightAttenuation(RHICmdList);
+						RHICmdList.SetViewport(View.ViewRect.Min.X, View.ViewRect.Min.Y, 0.0f, View.ViewRect.Max.X, View.ViewRect.Max.Y, 1.0f);
+					}
+
 					if (!bForwardShading)
 					{
 						GRenderTargetPool.VisualizeTexture.SetCheckPoint(RHICmdList, SceneContext.GetLightAttenuation());

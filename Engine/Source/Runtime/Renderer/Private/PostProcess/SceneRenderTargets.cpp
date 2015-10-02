@@ -12,6 +12,7 @@
 #include "SceneUtils.h"
 #include "HdrCustomResolveShaders.h"
 #include "Public/LightPropagationVolumeBlendable.h"
+#include "HairSceneProxy.h"
 
 IMPLEMENT_UNIFORM_BUFFER_STRUCT(FGBufferResourceStruct,TEXT("GBuffers"));
 
@@ -702,6 +703,7 @@ void FSceneRenderTargets::AllocSceneColor()
 		}
 
 		GRenderTargetPool.FindFreeElement(Desc, GetSceneColorForCurrentShadingPath(), GetSceneColorTargetName(CurrentShadingPath));
+		GRenderTargetPool.FindFreeElement(Desc, HairMask, TEXT("HairMask"));
 	}
 
 	// otherwise we have a severe problem
@@ -725,6 +727,7 @@ void FSceneRenderTargets::AllocLightAttenuation()
 		FPooledRenderTargetDesc Desc(FPooledRenderTargetDesc::Create2DDesc(BufferSize, PF_B8G8R8A8, FClearValueBinding::White, TexCreate_None, TexCreate_RenderTargetable, false));
 		Desc.Flags |= TexCreate_FastVRAM;
 		GRenderTargetPool.FindFreeElement(Desc, LightAttenuation, TEXT("LightAttenuation"));
+		GRenderTargetPool.FindFreeElement(Desc, HairLightAttenuation, TEXT("HairLightAttenuation"));
 
 		// the channel assignment is documented in ShadowRendering.cpp (look for Light Attenuation channel assignment)
 	}
@@ -1694,6 +1697,8 @@ void FSceneRenderTargets::AllocateCommonDepthTargets()
 		// NVCHANGE_BEGIN: Add VXGI
 #endif
 		// NVCHANGE_END: Add VXGI
+
+		GRenderTargetPool.FindFreeElement(Desc, HairDepthZ, TEXT("HairDepthZ"));
 	}
 
 	// NVCHANGE_BEGIN: Add VXGI
@@ -1938,6 +1943,10 @@ void FSceneRenderTargets::ReleaseAllTargets()
 		SceneColor[i].SafeRelease();
 	}
 
+	HairDepthZ.SafeRelease();
+	LightAttenuation.SafeRelease();
+	HairMask.SafeRelease();
+
 	SceneAlphaCopy.SafeRelease();
 	SceneDepthZ.SafeRelease();
 	AuxiliarySceneDepthZ.SafeRelease();
@@ -1946,7 +1955,7 @@ void FSceneRenderTargets::ReleaseAllTargets()
 	DBufferB.SafeRelease();
 	DBufferC.SafeRelease();
 	ScreenSpaceAO.SafeRelease();
-	LightAttenuation.SafeRelease();
+	HairLightAttenuation.SafeRelease();
 	LightAccumulation.SafeRelease();
 	DirectionalOcclusion.SafeRelease();
 	CustomDepth.SafeRelease();

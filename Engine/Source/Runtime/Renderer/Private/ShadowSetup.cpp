@@ -389,6 +389,9 @@ FProjectedShadowInfo::FProjectedShadowInfo()
 	, CascadeSurfaceIndex(0)
 #endif
 	// NVCHANGE_END: Add VXGI
+
+	, bHairReceiver(false)
+	, bHairRenderProjection(false)
 {
 }
 
@@ -1402,7 +1405,17 @@ void FSceneRenderer::CreatePerObjectProjectedShadow(
 		MaxScreenPercent = FMath::Max(MaxScreenPercent, ScreenPercent);
 
 		// Determine the amount of shadow buffer resolution needed for this view.
-		const float UnclampedResolution = ScreenRadius * CVarShadowTexelsPerPixel.GetValueOnRenderThread();
+		float UnclampedResolution = ScreenRadius * CVarShadowTexelsPerPixel.GetValueOnRenderThread();
+
+		{
+			const auto& PrimViewRel = View.PrimitiveViewRelevanceMap[ShadowGroupPrimitives[0]->GetIndex()];
+			if (PrimViewRel.bHair)
+			{
+				static const auto& CVarHairTexelsScale = *IConsoleManager::Get().FindConsoleVariable(TEXT("r.Hair.Shadow.TexelsScale"));
+				UnclampedResolution *= CVarHairTexelsScale.GetFloat();
+			}
+		}
+
 		MaxUnclampedResolution = FMath::Max( MaxUnclampedResolution, UnclampedResolution );
 		MaxDesiredResolution = FMath::Max(
 			MaxDesiredResolution,

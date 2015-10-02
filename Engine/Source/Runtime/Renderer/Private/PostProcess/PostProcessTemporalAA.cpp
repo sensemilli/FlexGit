@@ -81,6 +81,8 @@ public:
 	FShaderParameter LowpassWeights;
 	FShaderParameter PlusWeights;
 	FShaderParameter RandomOffset;
+	FShaderResourceParameter HairMaskTexture;
+	FShaderParameter HasHair;
 
 	/** Initialization constructor. */
 	FPostProcessTemporalAAPS(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
@@ -92,13 +94,15 @@ public:
 		LowpassWeights.Bind(Initializer.ParameterMap, TEXT("LowpassWeights"));
 		PlusWeights.Bind(Initializer.ParameterMap, TEXT("PlusWeights"));
 		RandomOffset.Bind(Initializer.ParameterMap, TEXT("RandomOffset"));
+		HairMaskTexture.Bind(Initializer.ParameterMap, TEXT("HairMaskTexture"));
+		HasHair.Bind(Initializer.ParameterMap, TEXT("bHasHair"));
 	}
 
 	// FShader interface.
 	virtual bool Serialize(FArchive& Ar) override
 	{
 		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
-		Ar << PostprocessParameter << DeferredParameters << SampleWeights << LowpassWeights << PlusWeights << RandomOffset;
+		Ar << PostprocessParameter << DeferredParameters << SampleWeights << LowpassWeights << PlusWeights << RandomOffset << HairMaskTexture << HasHair;
 		return bShaderHasOutdatedParameters;
 	}
 
@@ -202,6 +206,11 @@ public:
 		}
 
 		SetUniformBufferParameter(Context.RHICmdList, ShaderRHI, GetUniformBufferParameter<FCameraMotionParameters>(), CreateCameraMotionParametersUniformBuffer(Context.View));
+
+		FSceneRenderTargets& SceneContext = FSceneRenderTargets::Get(Context.RHICmdList);
+		static const auto* CVarHairTemporalAa = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Hair.TemporalAa"));
+		SetShaderValue(Context.RHICmdList, ShaderRHI, HasHair, Context.View.bHasHair && !CVarHairTemporalAa->GetInt());
+		SetTextureParameter(Context.RHICmdList, ShaderRHI, HairMaskTexture, SceneContext.HairMask->GetRenderTargetItem().ShaderResourceTexture);
 	}
 };
 

@@ -544,6 +544,7 @@ void FDeferredShadingSceneRenderer::RenderLights(FRHICommandListImmediate& RHICm
 			SCOPED_DRAW_EVENT(RHICmdList, ShadowedLights);
 
 			bool bDirectLighting = ViewFamily.EngineShowFlags.DirectLighting;
+			bool bClearedHairLightAttenuation = false;
 
 			// Draw shadowed and light function lights
 			for (int32 LightIndex = AttenuationLightStart; LightIndex < SortedLights.Num(); LightIndex++)
@@ -567,6 +568,17 @@ void FDeferredShadingSceneRenderer::RenderLights(FRHICommandListImmediate& RHICm
 				if (bDrawShadows)
 				{
 					INC_DWORD_STAT(STAT_NumShadowedLights);
+
+					// Clear for hair.
+					if (!bClearedHairLightAttenuation)
+					{
+						bClearedHairLightAttenuation = true;
+
+						SceneContext.LightAttenuation.Swap(SceneContext.HairLightAttenuation);
+						SceneContext.BeginRenderingLightAttenuation(RHICmdList, false);
+						RHICmdList.Clear(true, FLinearColor::White, false, 0, false, 0, FIntRect());
+						SceneContext.LightAttenuation.Swap(SceneContext.HairLightAttenuation);
+					}
 
 					for (int32 ViewIndex = 0; ViewIndex < Views.Num(); ViewIndex++)
 					{
@@ -823,6 +835,13 @@ void CalculateLightNearFarDepthFromBounds(const FViewInfo& View, const FSphere &
 
 }
 
+namespace HairLight
+{
+	extern FVector Direction;
+	extern FLinearColor Color;
+	extern bool bShadowed;
+}
+
 /**
  * Used by RenderLights to render a light to the scene color buffer.
  *
@@ -909,6 +928,14 @@ void FDeferredShadingSceneRenderer::RenderLight(FRHICommandList& RHICmdList, con
 				FSceneRenderTargets::Get(RHICmdList).GetBufferSizeXY(),
 				*VertexShader,
 				EDRF_UseTriangleOptimization);
+
+			// Set light for hairs
+			if (View.bHasHair)
+			{
+				HairLight::Direction = LightSceneInfo->Proxy->GetDirection();
+				HairLight::Color = LightSceneInfo->Proxy->GetColor();
+				HairLight::bShadowed = LightSceneInfo->Proxy->CastsDynamicShadow() || LightSceneInfo->Proxy->CastsStaticShadow();
+			}
 		}
 		else
 		{

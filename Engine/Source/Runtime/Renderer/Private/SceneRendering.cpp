@@ -297,6 +297,7 @@ void FViewInfo::Init()
 	bIgnoreExistingQueries = false;
 	bDisableQuerySubmissions = false;
 	bDisableDistanceBasedFadeTransitions = false;	
+	bHasHair = false;
 	ShadingModelMaskInView = 0;
 	NumVisibleStaticMeshElements = 0;
 	PrecomputedVisibilityData = 0;

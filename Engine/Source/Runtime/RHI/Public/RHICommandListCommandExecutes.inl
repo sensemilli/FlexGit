@@ -17,7 +17,7 @@ void FRHICommandSetRasterizerState::Execute(FRHICommandListBase& CmdList)
 void FRHICommandSetDepthStencilState::Execute(FRHICommandListBase& CmdList)
 {
 	RHISTAT(SetDepthStencilState);
-	INTERNAL_DECORATOR(SetDepthStencilState)(State, StencilRef);
+	INTERNAL_DECORATOR(SetDepthStencilState)(State, StencilRef, bBypassValidation);
 }
 
 template <typename TShaderRHIParamRef>

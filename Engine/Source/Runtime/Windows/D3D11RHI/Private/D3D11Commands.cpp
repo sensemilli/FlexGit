@@ -677,11 +677,25 @@ void FD3D11DynamicRHI::ValidateExclusiveDepthStencilAccess(FExclusiveDepthStenci
 	}
 }
 
-void FD3D11DynamicRHI::RHISetDepthStencilState(FDepthStencilStateRHIParamRef NewStateRHI,uint32 StencilRef)
+void FD3D11DynamicRHI::RHISetDepthStencilState(FDepthStencilStateRHIParamRef NewStateRHI, uint32 StencilRef, bool bBypassValidation)
 {
 	FD3D11DepthStencilState* NewState = ResourceCast(NewStateRHI);
 
-	ValidateExclusiveDepthStencilAccess(NewState->AccessType);
+	if (!bBypassValidation)
+	{
+		ValidateExclusiveDepthStencilAccess(NewState->AccessType);
+	}
+	else
+	{
+		if (CurrentDepthTexture && NewState->AccessType.GetIndex() != CurrentDSVAccessType.GetIndex())
+		{
+			CurrentDSVAccessType = NewState->AccessType;
+			CurrentDepthStencilTarget = CurrentDepthTexture->GetDepthStencilView(CurrentDSVAccessType);
+
+			ConditionalClearShaderResource(CurrentDepthTexture);
+			CommitRenderTargetsAndUAVs();
+		}
+	}
 
 	StateCache.SetDepthStencilState(NewState->Resource, StencilRef);
 }

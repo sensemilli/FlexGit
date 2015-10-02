@@ -2033,6 +2033,16 @@ void FSceneRenderer::PostVisibilityFrameSetup(TArray<FViewInfo> *ViewArrayPtr)
 		{
 			((FSceneViewState*)View.State)->TrimHistoryRenderTargets(Scene);
 		}
+
+		View.VisibleDynamicPrimitives.Sort([&](const FPrimitiveSceneInfo& Left, const FPrimitiveSceneInfo& Right)
+		{
+			const FPrimitiveViewRelevance& LeftRelevance = View.PrimitiveViewRelevanceMap[Left.GetIndex()];
+			const FPrimitiveViewRelevance& RightRelevance = View.PrimitiveViewRelevanceMap[Right.GetIndex()];
+			if (LeftRelevance.bHair && !RightRelevance.bHair)
+				return false;
+			else
+				return true;
+		});
 	}
 
 	bool bCheckLightShafts = false;

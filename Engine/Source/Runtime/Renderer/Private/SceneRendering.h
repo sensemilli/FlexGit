@@ -524,6 +524,8 @@ public:
 	/** Bitmask of all shading models used by primitives in this view */
 	uint16 ShadingModelMaskInView;
 
+	uint32 bHasHair : 1;
+
 	FViewMatrices PrevViewMatrices;
 
 	/** Last frame's view and projection matrices */
