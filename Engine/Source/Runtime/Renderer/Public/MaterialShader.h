@@ -8,6 +8,7 @@
 
 #include "MaterialShaderType.h"
 #include "AtmosphereTextureParameters.h"
+#include "WaveWorksShaderParameters.h"
 #include "SceneRenderTargetParameters.h"
 #include "PostProcessParameters.h"
 #include "GlobalDistanceFieldParameters.h"
@@ -159,6 +160,8 @@ private:
 	/** The PerlinNoise3DTexture parameter for materials that use GradientNoise */
 	FShaderResourceParameter PerlinNoise3DTexture;
 	FShaderResourceParameter PerlinNoise3DTextureSampler;
+
+	FWaveWorksShaderParameters WaveWorksParameters;
 
 	FGlobalDistanceFieldParameters GlobalDistanceFieldParameters;
 

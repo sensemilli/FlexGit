@@ -65,6 +65,16 @@ void* FNullDynamicRHI::GetStaticBuffer()
 	return Buffer;
 }
 
+namespace
+{
+	TArray<WaveWorksShaderInput> ShaderInput;
+}
+
+const TArray<WaveWorksShaderInput>& FNullDynamicRHI::RHIGetWaveWorksShaderInput()
+{
+	return ShaderInput;
+}
+
 
 /** Value between 0-100 that determines the percentage of the vertical scan that is allowed to pass while still allowing us to swap when VSYNC'ed.
 This is used to get the same behavior as the old *_OR_IMMEDIATE present modes. */

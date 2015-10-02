@@ -276,6 +276,9 @@ protected:
 	/** The structure of a uniform buffer containing values for these uniform expressions. */
 	TScopedPointer<FUniformBufferStruct> UniformBufferStruct;
 
+	/** WaveWorks referenced by the material that was translated. */
+	FGuid WaveWorks;
+
 	friend class FMaterial;
 	friend class FHLSLMaterialTranslator;
 	friend class FMaterialShaderMap;
@@ -1288,6 +1291,8 @@ struct FUniformExpressionCache
 	FLocalUniformBuffer LocalUniformBuffer;
 	/** Ids of parameter collections needed for rendering. */
 	TArray<FGuid> ParameterCollections;
+	/** WaveWorks reference. */
+	FGuid WaveWorks;
 	/** True if the cache is up to date. */
 	bool bUpToDate;
 

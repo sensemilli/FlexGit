@@ -188,6 +188,8 @@ public:
 	virtual int32 SpeedTree(ESpeedTreeGeometryType GeometryType, ESpeedTreeWindType WindType, ESpeedTreeLODType LODType, float BillboardThreshold, bool bAccurateWindVelocities) = 0;
 	virtual int32 TextureCoordinateOffset() = 0;
 	virtual int32 EyeAdaptation() = 0;
+
+	virtual int32 WaveWorks(class UWaveWorks* WaveWorks, int32 UVs, float DistanceScale, FString OutputName) = 0;
 };
 
 /** 
@@ -386,6 +388,12 @@ public:
 	{
 		return Compiler->EyeAdaptation();
 	}
+
+	virtual int32 WaveWorks(class UWaveWorks* WaveWorks, int32 UVs, float DistanceScale, FString OutputName)
+	{
+		return Compiler->WaveWorks(WaveWorks, UVs, DistanceScale, OutputName);
+	}
+
 protected:
 		
 	FMaterialCompiler* Compiler;

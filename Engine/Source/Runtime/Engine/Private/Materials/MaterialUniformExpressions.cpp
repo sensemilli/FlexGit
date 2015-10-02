@@ -90,6 +90,7 @@ void FUniformExpressionSet::Serialize(FArchive& Ar)
 	Ar << UniformCubeTextureExpressions;
 
 	Ar << ParameterCollections;
+	Ar << WaveWorks;
 
 	Ar << PerFrameUniformScalarExpressions;
 	Ar << PerFrameUniformVectorExpressions;

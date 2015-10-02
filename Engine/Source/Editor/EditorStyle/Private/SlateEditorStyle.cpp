@@ -5366,7 +5366,8 @@ void FSlateEditorStyle::FStyle::SetupClassIconsAndThumbnails()
 			TEXT("Cube"),
 			TEXT("Sphere"),
 			TEXT("Cylinder"),
-			TEXT("Cone")
+			TEXT("Cone"),
+			TEXT("WaveWorks")
 		};
 
 		const TCHAR* Path = TEXT("Icons/AssetIcons/%s_%dx");

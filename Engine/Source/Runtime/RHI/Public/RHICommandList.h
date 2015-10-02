@@ -410,6 +410,20 @@ struct FRHICommandSetShaderSampler : public FRHICommand<FRHICommandSetShaderSamp
 	RHI_API void Execute(FRHICommandListBase& CmdList);
 };
 
+struct FRHICommandSetWaveWorksState : public FRHICommand < FRHICommandSetWaveWorksState >
+{
+	FWaveWorksRHIParamRef State;
+	FMatrix ViewMatrix;
+	TArray<uint32> ShaderInputMappings;
+	FORCEINLINE_DEBUGGABLE FRHICommandSetWaveWorksState(FWaveWorksRHIParamRef InState, const FMatrix& InViewMatrix, const TArray<uint32>& InShaderInputMappings)
+		: State(InState)
+		, ViewMatrix(InViewMatrix)
+		, ShaderInputMappings(InShaderInputMappings)
+	{
+	}
+	RHI_API void Execute(FRHICommandListBase& CmdList);
+};
+
 struct FRHICommandDrawPrimitive : public FRHICommand<FRHICommandDrawPrimitive>
 {
 	uint32 PrimitiveType;
@@ -1546,6 +1560,16 @@ public:
 			return;
 		}
 		new (AllocCommand<FRHICommandSetBlendState>()) FRHICommandSetBlendState(State, BlendFactor);
+	}
+
+	FORCEINLINE_DEBUGGABLE void SetWaveWorksState(FWaveWorksRHIParamRef State, const FMatrix ViewMatrix, const TArray<uint32>& ShaderInputMappings)
+	{
+		if (Bypass())
+		{
+			CMD_CONTEXT(SetWaveWorksState)(State, ViewMatrix, ShaderInputMappings);
+			return;
+		}
+		new (AllocCommand<FRHICommandSetWaveWorksState>()) FRHICommandSetWaveWorksState(State, ViewMatrix, ShaderInputMappings);
 	}
 
 	FORCEINLINE_DEBUGGABLE void DrawPrimitive(uint32 PrimitiveType, uint32 BaseVertexIndex, uint32 NumPrimitives, uint32 NumInstances)

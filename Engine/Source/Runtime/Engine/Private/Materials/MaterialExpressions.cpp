@@ -140,6 +140,8 @@
 #include "Materials/MaterialExpressionVxgiVoxelization.h"
 // NVCHANGE_END: Add VXGI
 
+#include "Materials/MaterialExpressionWaveWorks.h"
+
 #include "EditorSupportDelegates.h"
 #include "MaterialCompiler.h"
 #if WITH_EDITOR
@@ -1104,6 +1106,8 @@ EMaterialSamplerType UMaterialExpressionTextureBase::GetSamplerTypeForTexture(co
 				return SAMPLERTYPE_Alpha;
 			case TC_Masks:
 				return SAMPLERTYPE_Masks;
+			case TC_UV:
+				return SAMPLERTYPE_UV;
 			case TC_DistanceFieldFont:
 				return SAMPLERTYPE_DistanceFieldFont;
 			default:
@@ -9517,6 +9521,55 @@ int32 UMaterialExpressionEyeAdaptation::Compile(class FMaterialCompiler* Compile
 void UMaterialExpressionEyeAdaptation::GetCaption(TArray<FString>& OutCaptions) const
 {
 	OutCaptions.Add(FString(TEXT("EyeAdaptation")));
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// UMaterialExpressionWaveWorks
+///////////////////////////////////////////////////////////////////////////////
+UMaterialExpressionWaveWorks::UMaterialExpressionWaveWorks(const class FObjectInitializer& PCIP)
+	: Super(PCIP)
+{
+	// Structure to hold one-time initialization
+	struct FConstructorStatics
+	{
+		FText NAME_WaveWorks;
+		FConstructorStatics()
+			: NAME_WaveWorks(LOCTEXT("WaveWorks", "WaveWorks"))
+		{
+		}
+	};
+	static FConstructorStatics ConstructorStatics;
+
+	MenuCategories.Add(ConstructorStatics.NAME_WaveWorks);
+
+	WaveWorks = nullptr;
+	DistanceScale = 0.25f;
+
+	Outputs.Reset();
+	Outputs.Add(FExpressionOutput(TEXT("Foam"), 1, 1, 1, 1, 0));
+	Outputs.Add(FExpressionOutput(TEXT("Normal"), 1, 1, 1, 1, 0));
+	Outputs.Add(FExpressionOutput(TEXT("Displacement"), 1, 1, 1, 1, 0));
+	bShowOutputNameOnPin = true;
+}
+
+int32 UMaterialExpressionWaveWorks::Compile(class FMaterialCompiler* Compiler, int32 OutputIndex, int32 MultiplexIndex)
+{
+	if (!WaveWorks)
+	{
+		return Compiler->Errorf(TEXT("Missing WaveWorks input"));
+	}
+
+	if (!Coordinates.Expression)
+	{
+		return Compiler->Errorf(TEXT("Missing Coordinates input"));
+	}
+
+	return Compiler->WaveWorks(WaveWorks, Coordinates.Compile(Compiler), DistanceScale, GetOutputs()[OutputIndex].OutputName);
+}
+
+void UMaterialExpressionWaveWorks::GetCaption(TArray<FString>& OutCaptions) const
+{
+	OutCaptions.Add(TEXT("WaveWorks"));
 }
 
 #undef LOCTEXT_NAMESPACE

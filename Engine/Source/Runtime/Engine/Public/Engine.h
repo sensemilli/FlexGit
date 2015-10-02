@@ -305,6 +305,8 @@
 #include "Engine/UserDefinedEnum.h"
 #include "Engine/UserDefinedStruct.h"
 #include "Animation/VertexAnim/MorphTarget.h"
+#include "Engine/World.h"
+#include "Engine/WaveWorks.h"
 
 #include "SystemSettings.h"					// Scalability options.
 #include "SceneManagement.h"				// Scene management.

@@ -15,6 +15,10 @@
 	#include "SpeedTreeCommon.usf"
 #endif
 
+#if USES_WAVEWORKS
+	#include "WaveWorks.usf"
+#endif
+
 #define NUM_MATERIAL_TEXCOORDS_VERTEX %s
 #define NUM_MATERIAL_TEXCOORDS %s
  
@@ -992,6 +996,55 @@ float3 GetSpeedTreeVertexOffset(FMaterialVertexParameters Parameters, int Geomet
 	return GetSpeedTreeVertexOffsetInner(Parameters, GeometryType, WindType, LODType, BillboardThreshold, GetCurrentSpeedTreeData());
 #else
 	return 0;
+#endif
+}
+
+#endif
+
+#if USES_WAVEWORKS
+
+/** Helper function to retrieve BlendFactors from last two TexCoords */
+float4 WaveWorksBlendFactors(float2 TexCoords[NUM_MATERIAL_TEXCOORDS])
+{
+#if !COMPUTESHADER
+	return float4(TexCoords[NUM_MATERIAL_TEXCOORDS-2], TexCoords[NUM_MATERIAL_TEXCOORDS-1]);
+#else
+	return float4(0,0,0,0);
+#endif
+}
+
+/** Domain shader for WaveWorks */
+float3 WaveWorksDisplacement(FMaterialTessellationParameters Parameters, float2 UVs)
+{
+#if !COMPUTESHADER
+	float4 BlendFactors = WaveWorksBlendFactors(Parameters.TexCoords);
+	float3 Displacement = GFSDK_WaveWorks_GetDisplacement(UVs, BlendFactors);
+	return TransformTangentVectorToWorld_PreScaled(Parameters, Displacement);
+#else
+	return float3(0,0,0);
+#endif
+}
+
+/** Pixel shader for WaveWorks */
+float3 WaveWorksNormal(FMaterialPixelParameters Parameters, float2 UVs)
+{
+#if !COMPUTESHADER
+	float4 BlendFactors = WaveWorksBlendFactors(Parameters.TexCoords);
+	GFSDK_WAVEWORKS_SURFACE_ATTRIBUTES Attributes = GFSDK_WaveWorks_GetSurfaceAttributes(UVs, BlendFactors);
+	return Attributes.Normal;
+#else
+	return float3(0,0,0);
+#endif
+}
+
+float3 WaveWorksFoam(FMaterialPixelParameters Parameters, float2 UVs)
+{
+#if !COMPUTESHADER
+	float4 BlendFactors = WaveWorksBlendFactors(Parameters.TexCoords);
+	GFSDK_WAVEWORKS_SURFACE_ATTRIBUTES Attributes = GFSDK_WaveWorks_GetSurfaceAttributes(UVs, BlendFactors);
+	return float3(Attributes.FoamSurfaceFolding, Attributes.FoamTurbulentEnergy, Attributes.FoamWaveHats);
+#else
+	return float3(0,0,0);
 #endif
 }
 

@@ -629,7 +629,27 @@ public:
 class FRHIUnorderedAccessView : public FRHIResource {};
 class FRHIShaderResourceView : public FRHIResource {};
 
+//
+// WaveWorks
+//
 
+class FRHIWaveWorks : public FRHIResource
+{
+public:
+	FRHIWaveWorks() : Simulation(nullptr) {}
+	virtual void UpdateTick() {}
+	template<typename ShaderRHIParamRef>
+	void SetRenderState(FRHICommandList& RHICmdList, ShaderRHIParamRef Shader, const FMatrix ViewMatrix, const TArray<uint32>& ShaderInputMappings)
+	{
+		SetRenderState(ViewMatrix, ShaderInputMappings);
+	}
+	virtual void SetRenderState(const FMatrix ViewMatrix, const TArray<uint32>& ShaderInputMappings) {}
+	struct GFSDK_WaveWorks_Simulation* Simulation;
+	// FRHIUniformBuffer* VertexShaderUniformBuffer;
+};
+
+typedef FRHIWaveWorks*					FWaveWorksRHIParamRef;
+typedef TRefCountPtr<FRHIWaveWorks>		FWaveWorksRHIRef;
 
 typedef FRHISamplerState*              FSamplerStateRHIParamRef;
 typedef TRefCountPtr<FRHISamplerState> FSamplerStateRHIRef;

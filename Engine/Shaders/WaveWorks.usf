@@ -1,0 +1,142 @@
+/*
+ * This code contains NVIDIA Confidential Information and is disclosed
+ * under the Mutual Non-Disclosure Agreement.
+ *
+ * Notice
+ * ALL NVIDIA DESIGN SPECIFICATIONS AND CODE ("MATERIALS") ARE PROVIDED "AS IS" NVIDIA MAKES
+ * NO REPRESENTATIONS, WARRANTIES, EXPRESSED, IMPLIED, STATUTORY, OR OTHERWISE WITH RESPECT TO
+ * THE MATERIALS, AND EXPRESSLY DISCLAIMS ANY IMPLIED WARRANTIES OF NONINFRINGEMENT,
+ * MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * NVIDIA Corporation assumes no responsibility for the consequences of use of such
+ * information or for any infringement of patents or other rights of third parties that may
+ * result from its use. No license is granted by implication or otherwise under any patent
+ * or patent rights of NVIDIA Corporation. No third party distribution is allowed unless
+ * expressly authorized by NVIDIA.  Details are subject to change without notice.
+ * This code supersedes and replaces all information previously supplied.
+ * NVIDIA Corporation products are not authorized for use as critical
+ * components in life support devices or systems without express written approval of
+ * NVIDIA Corporation.
+ *
+ * Copyright © 2008- 2013 NVIDIA Corporation. All rights reserved.
+ *
+ * NVIDIA Corporation and its licensors retain all intellectual property and proprietary
+ * rights in and to this software and related documentation and any modifications thereto.
+ * Any use, reproduction, disclosure or distribution of this software and related
+ * documentation without an express license agreement from NVIDIA Corporation is
+ * strictly prohibited.
+ */
+
+/**
+ * WaveWorks.usf: Code for WaveWorks
+ */
+
+#if SM5_PROFILE
+#else
+#error WaveWorks only supported for SM5_PROFILE
+#endif
+
+// bound to VS and DS
+cbuffer nv_waveworks_attr0 {
+	float3 nv_waveworks_attr1;
+	float nv_waveworks_attr3;
+	float4 nv_waveworks_attr4;
+};
+
+// bound to DS
+sampler nv_waveworks_attr5; texture2D nv_waveworks_attr6;
+sampler nv_waveworks_attr7; texture2D nv_waveworks_attr8;
+sampler nv_waveworks_attr9; texture2D nv_waveworks_attr10;
+sampler nv_waveworks_attr11; texture2D nv_waveworks_attr12;
+
+// bound to PS
+cbuffer nv_waveworks_attr15 {
+	float nv_waveworks_attr16;
+	float nv_waveworks_attr17;
+	float nv_waveworks_attr18;
+	float nv_waveworks_attr19;
+	float nv_waveworks_attr20;
+	float nv_waveworks_attr21;
+	float nv_waveworks_attr22;
+	float nv_waveworks_attr23;
+	float nv_waveworks_attr24;
+	float nv_waveworks_attr25;
+};
+
+// bound to PS
+sampler nv_waveworks_attr26; texture2D nv_waveworks_attr27;
+sampler nv_waveworks_attr28; texture2D nv_waveworks_attr29;
+sampler nv_waveworks_attr30; texture2D nv_waveworks_attr31;
+sampler nv_waveworks_attr32; texture2D nv_waveworks_attr33;
+
+float4 GFSDK_WaveWorks_GetBlendFactors(float nv_waveworks_temp31)
+{
+	float4 nv_waveworks_temp32 = nv_waveworks_attr4;
+	float3 nv_waveworks_temp33 = saturate(6.0 - nv_waveworks_temp31 * nv_waveworks_temp32.yzw);
+	return float4(1.0, nv_waveworks_temp33 * nv_waveworks_temp33);
+}
+
+float3 GFSDK_WaveWorks_GetDisplacement(float2 nv_waveworks_temp34, float4 nv_waveworks_temp35)
+{
+	float4 nv_waveworks_temp36 = nv_waveworks_attr4;
+
+	float3 nv_waveworks_temp37 = nv_waveworks_temp35.x * nv_waveworks_attr6.SampleLevel (nv_waveworks_attr5 , nv_waveworks_temp34 * nv_waveworks_temp36.x, 0).xyz;
+	nv_waveworks_temp37 += nv_waveworks_temp35.y==0 ? float3(0,0,0) : nv_waveworks_temp35.y * nv_waveworks_attr8.SampleLevel (nv_waveworks_attr7 , nv_waveworks_temp34 * nv_waveworks_temp36.y, 0).xyz;
+	nv_waveworks_temp37 += nv_waveworks_temp35.z==0 ? float3(0,0,0) : nv_waveworks_temp35.z * nv_waveworks_attr10.SampleLevel (nv_waveworks_attr9 , nv_waveworks_temp34 * nv_waveworks_temp36.z, 0).xyz;
+	nv_waveworks_temp37 += nv_waveworks_temp35.w==0 ? float3(0,0,0) : nv_waveworks_temp35.w * nv_waveworks_attr12.SampleLevel(nv_waveworks_attr11, nv_waveworks_temp34 * nv_waveworks_temp36.w, 0).xyz;
+
+	return nv_waveworks_temp37;
+}
+
+struct GFSDK_WAVEWORKS_SURFACE_ATTRIBUTES
+{
+	float3 Normal;
+	float FoamSurfaceFolding;
+	float FoamTurbulentEnergy;
+	float FoamWaveHats;
+};
+
+GFSDK_WAVEWORKS_SURFACE_ATTRIBUTES GFSDK_WaveWorks_GetSurfaceAttributes(float2 nv_waveworks_temp38, float4 nv_waveworks_temp39)
+{
+	// hack because nvsf_g_UVScaleCascade0123 is only bound to vertex and domain shader
+	float4 nv_waveworks_temp40 = float4(1.0f, nv_waveworks_attr17, nv_waveworks_attr20, nv_waveworks_attr23);
+	nv_waveworks_temp40 *= 1.0 / (128 * nv_waveworks_attr16); // 128 = fft resolution
+
+	float4 nv_waveworks_temp41 = nv_waveworks_attr27.Sample(nv_waveworks_attr26, nv_waveworks_temp38 * nv_waveworks_temp40.x);
+	float4 nv_waveworks_temp42 = nv_waveworks_attr29.Sample(nv_waveworks_attr28, nv_waveworks_temp38 * nv_waveworks_temp40.y);
+	float4 nv_waveworks_temp44 = nv_waveworks_attr31.Sample(nv_waveworks_attr30, nv_waveworks_temp38 * nv_waveworks_temp40.z);
+	float4 nv_waveworks_temp45 = nv_waveworks_attr33.Sample(nv_waveworks_attr32, nv_waveworks_temp38 * nv_waveworks_temp40.w);
+
+	float2 nv_waveworks_temp46 = nv_waveworks_temp39.x * nv_waveworks_temp41.xy
+		+ nv_waveworks_attr18 * nv_waveworks_temp39.y * nv_waveworks_temp42.xy
+		+ nv_waveworks_attr21 * nv_waveworks_temp39.z * nv_waveworks_temp44.xy
+		+ nv_waveworks_attr24 * nv_waveworks_temp39.w * nv_waveworks_temp45.xy;
+
+	float nv_waveworks_temp47 = 0.25;
+	float nv_waveworks_temp48 = 0.5;
+
+	float nv_waveworks_temp49 = 100 * nv_waveworks_temp41.w
+		* lerp(nv_waveworks_temp47, nv_waveworks_temp42.w, nv_waveworks_temp39.y)
+		* lerp(nv_waveworks_temp47, nv_waveworks_temp44.w, nv_waveworks_temp39.z)
+		* lerp(nv_waveworks_temp47, nv_waveworks_temp45.w, nv_waveworks_temp39.w);
+
+
+	float nv_waveworks_temp50 = max(-100, 1.0-nv_waveworks_temp41.z
+									   + 1.0-nv_waveworks_temp42.z
+									   + 1.0-nv_waveworks_temp44.z
+									   + 1.0-nv_waveworks_temp45.z);
+
+	float3 Normal = normalize(float3(nv_waveworks_temp46, nv_waveworks_attr16));
+
+	float FoamWaveHats = 10 * (-0.55 + 1.0-nv_waveworks_temp41.z
+			+ nv_waveworks_temp48 * (1.0-nv_waveworks_temp42.z
+			+ nv_waveworks_temp48 * (1.0-nv_waveworks_temp44.z
+			+ nv_waveworks_temp48 * (1.0-nv_waveworks_temp45.z))));
+
+	GFSDK_WAVEWORKS_SURFACE_ATTRIBUTES Output;
+	Output.Normal = Normal;
+	Output.FoamSurfaceFolding = nv_waveworks_temp50;
+	Output.FoamTurbulentEnergy = log(1.0 + nv_waveworks_temp49);
+	Output.FoamWaveHats = FoamWaveHats;
+	return Output;
+}

@@ -16,6 +16,7 @@ public class D3D11RHI : ModuleRules
 				"RenderCore",
 				"ShaderCore",
 				"UtilityShaders",
+                "WaveWorks"
 			}
 			);
 

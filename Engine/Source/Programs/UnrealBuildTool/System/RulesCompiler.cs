@@ -362,6 +362,16 @@ namespace UnrealBuildTool
                 Definitions.Add("WITH_FLEX=0");
             }
 
+            if (UEBuildConfiguration.bCompileWaveWorks == true)
+            {
+                AddThirdPartyPrivateStaticDependencies(Target, "WaveWorks");
+                Definitions.Add("WITH_WAVEWORKS=1");
+            }
+            else
+            {
+                Definitions.Add("WITH_WAVEWORKS=0");
+            }
+
             if(UEBuildConfiguration.bRuntimePhysicsCooking == true)
             {
                 Definitions.Add("WITH_RUNTIME_PHYSICS_COOKING");

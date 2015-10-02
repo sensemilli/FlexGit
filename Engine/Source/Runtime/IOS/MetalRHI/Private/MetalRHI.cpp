@@ -295,3 +295,22 @@ void FMetalDynamicRHI::RHIGraphicsWaitOnAsyncComputeJob(uint32 FenceIndex)
 {
 	UE_LOG(LogRHI, Fatal, TEXT("%s not implemented yet"), ANSI_TO_TCHAR(__FUNCTION__));
 }
+
+namespace
+{
+	TArray<WaveWorksShaderInput> ShaderInput;
+}
+
+const TArray<WaveWorksShaderInput>& FMetalDynamicRHI::RHIGetWaveWorksShaderInput()
+{
+	return ShaderInput;
+}
+
+FWaveWorksRHIRef FMetalDynamicRHI::RHICreateWaveWorks(const struct GFSDK_WaveWorks_Simulation_Settings& Settings, const struct GFSDK_WaveWorks_Simulation_Params& Params)
+{
+	return nullptr;
+}
+
+void FMetalDynamicRHI::RHISetWaveWorksState(FWaveWorksRHIParamRef State, const FMatrix& ViewMatrix, const TArray<uint32>& ShaderInputMappings)
+{
+}

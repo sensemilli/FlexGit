@@ -706,6 +706,11 @@ void FD3D11DynamicRHI::RHISetBlendState(FBlendStateRHIParamRef NewStateRHI,const
 	StateCache.SetBlendState(NewState->Resource, (const float*)&BlendFactor, 0xffffffff);
 }
 
+void FD3D11DynamicRHI::RHISetWaveWorksState(FWaveWorksRHIParamRef State, const FMatrix& ViewMatrix, const TArray<uint32>& ShaderInputMappings)
+{
+	StateCache.SetWaveWorksState(State, ViewMatrix, ShaderInputMappings);
+}
+
 void FD3D11DynamicRHI::CommitRenderTargetsAndUAVs()
 {
 	ID3D11RenderTargetView* RTArray[D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT];

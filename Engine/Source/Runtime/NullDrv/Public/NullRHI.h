@@ -854,6 +854,16 @@ public:
 	{
 	}
 
+	virtual const TArray<WaveWorksShaderInput>& RHIGetWaveWorksShaderInput() final override;
+	virtual FWaveWorksRHIRef RHICreateWaveWorks(const struct GFSDK_WaveWorks_Simulation_Settings& Settings, const struct GFSDK_WaveWorks_Simulation_Params& Params) final override
+	{
+		return nullptr;
+	}
+
+	virtual void RHISetWaveWorksState(FWaveWorksRHIParamRef State, const FMatrix& ViewMatrix, const TArray<uint32>& ShaderInputMappings) final override
+	{
+	}
+
 private:
 
 	/** Allocates a static buffer for RHI functions to return as a write destination. */

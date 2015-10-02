@@ -150,6 +150,10 @@ protected:
 	/** Parameter collections referenced by this material.  The position in this array is used as an index on the shader parameter. */
 	TArray<UMaterialParameterCollection*> ParameterCollections;
 
+	/** WaveWorks resource referenced by this material */
+	FGuid WaveWorksId;
+	FString BlendFactorsCode;
+
 	// Index of the next symbol to create
 	int32 NextSymbolIndex;
 
@@ -340,6 +344,11 @@ public:
 
 			Chunk[MP_PixelDepthOffset] = Material->CompilePropertyAndSetMaterialProperty(MP_PixelDepthOffset,this);
 
+			if (WaveWorksId.IsValid())
+			{
+				NumUserTexCoords += 2;
+			}
+
 			// No more calls to non-vertex shader CompilePropertyAndSetMaterialProperty beyond this point
 			const uint32 SavedNumUserTexCoords = NumUserTexCoords;
 
@@ -352,6 +361,17 @@ public:
 				{
 					Chunk[CustomUVIndex] = Material->CompilePropertyAndSetMaterialProperty((EMaterialProperty)CustomUVIndex, this);
 				}
+			}
+
+			if (WaveWorksId.IsValid())
+			{
+				int32 BlendFactor0 = MP_CustomizedUVs0 + NumUserTexCoords;
+				SetMaterialProperty((EMaterialProperty)BlendFactor0, SF_Vertex);
+				Chunk[BlendFactor0] = AddInlinedCodeChunk(MCT_Float2, TEXT("%s.xy"), *BlendFactorsCode);
+
+				int32 BlendFactor1 = MP_CustomizedUVs1 + NumUserTexCoords;
+				SetMaterialProperty((EMaterialProperty)BlendFactor1, SF_Vertex);
+				Chunk[BlendFactor1] = AddInlinedCodeChunk(MCT_Float2, TEXT("%s.zw"), *BlendFactorsCode);
 			}
 
 			bUsesPixelDepthOffset = IsMaterialPropertyUsed(MP_PixelDepthOffset, Chunk[MP_PixelDepthOffset], FLinearColor(0, 0, 0, 0), 1)
@@ -552,6 +572,8 @@ public:
 
 			// Create the material uniform buffer struct.
 			MaterialCompilationOutput.UniformExpressionSet.CreateBufferStruct();
+
+			MaterialCompilationOutput.UniformExpressionSet.WaveWorks = WaveWorksId;
 		}
 		INC_FLOAT_STAT_BY(STAT_ShaderCompiling_HLSLTranslation,(float)HLSLTranslateTime);
 
@@ -608,6 +630,11 @@ public:
 		if (bUsesSpeedTree)
 		{
 			OutEnvironment.SetDefine(TEXT("USES_SPEEDTREE"),TEXT("1"));
+		}
+
+		if (WaveWorksId.IsValid())
+		{
+			OutEnvironment.SetDefine(TEXT("USES_WAVEWORKS"), TEXT("1"));
 		}
 
 		if (bNeedsWorldPositionExcludingShaderOffsets)
@@ -2389,6 +2416,9 @@ protected:
 			? TEXT("TextureCubeSample")
 			: TEXT("Texture2DSample");
 		
+		if (SamplerType == SAMPLERTYPE_UV)
+			SampleCode += TEXT("UV");
+
 		EMaterialValueType UVsType = (TextureType == MCT_TextureCube) ? MCT_Float3 : MCT_Float2;
 	
 		if(MipValueMode == TMVM_None)
@@ -4019,6 +4049,42 @@ protected:
 		MaterialCompilationOutput.bUsesEyeAdaptation = true;
 
 		return AddInlinedCodeChunk(MCT_Float, TEXT("EyeAdaptationLookup()"));
+	}
+
+	virtual int32 WaveWorks(UWaveWorks* WaveWorks, int32 UVs, float DistanceScale, FString OutputName) override
+	{
+		if (ErrorUnlessFeatureLevelSupported(ERHIFeatureLevel::SM5) == INDEX_NONE)
+		{
+			return INDEX_NONE;
+		}
+
+		if (ShaderFrequency != SF_Domain && ShaderFrequency != SF_Pixel)
+			return Errorf(TEXT("Invalid node used in vertex/hull shader input!"));
+
+		if (UVs < 0)
+			return Errorf(TEXT("UVs input required!"));
+
+		if (!WaveWorksId.IsValid())
+		{
+			EMaterialProperty SavedMaterialProperty = MaterialProperty;
+			TArray<FMaterialFunctionCompileState> SavedFunctionStack = FunctionStack;
+
+			SetMaterialProperty(MP_CustomizedUVs0, SF_Vertex);
+			BlendFactorsCode = GetParameterCode(AddCodeChunk(MCT_Float4,
+				TEXT("GFSDK_WaveWorks_GetBlendFactors(length(Parameters.WorldPosition.xyz - View.ViewOrigin.xyz) * %g);"), DistanceScale));
+			SetMaterialProperty(SavedMaterialProperty, GetMaterialPropertyShaderFrequency(SavedMaterialProperty));
+			FunctionStack = SavedFunctionStack;
+
+			WaveWorksId = WaveWorks->Id;
+		}
+
+		if (WaveWorksId != WaveWorks->Id)
+		{
+			return Errorf(TEXT("At most one WaveWorks reference allowed per material!"));
+		}
+
+		FString UVCode = CoerceParameter(UVs, MCT_Float2);
+		return AddCodeChunk(MCT_Float3, TEXT("WaveWorks%s(Parameters, %s)"), *OutputName, *UVCode);
 	}
 };
 

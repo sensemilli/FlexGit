@@ -27,6 +27,10 @@ namespace UnrealBuildTool
         [XmlConfig]
         public static bool bCompileFLEX;
 
+        /** Whether to include WaveWorks support */
+        [XmlConfig]
+        public static bool bCompileWaveWorks;
+
         /** Whether to allow runtime cooking of physics */
         [XmlConfig]
         public static bool bRuntimePhysicsCooking;
@@ -208,6 +212,7 @@ namespace UnrealBuildTool
 			bCompilePhysX = true;
 			bCompileAPEX = true;
             bCompileFLEX = true;
+            bCompileWaveWorks = true;
             bRuntimePhysicsCooking = true;
 			bCompileBox2D = true;
 			bCompileICU = true;

@@ -7341,8 +7341,6 @@ UDataTableFactory::UDataTableFactory(const FObjectInitializer& ObjectInitializer
 	: Super(ObjectInitializer)
 {
 	SupportedClass = UDataTable::StaticClass();
-	bCreateNew = true;
-	bEditAfterNew = true;
 }
 
 bool UDataTableFactory::ConfigureProperties()
@@ -7477,6 +7475,20 @@ UObject* UDataTableFactory::FactoryCreateNew(UClass* Class, UObject* InParent, F
 	return DataTable;
 }
 
+/*------------------------------------------------------------------------------
+UWaveWorksFactoryNew implementation.
+------------------------------------------------------------------------------*/
+UWaveWorksFactoryNew::UWaveWorksFactoryNew(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	SupportedClass = UWaveWorks::StaticClass();
+	bCreateNew = true;
+	bEditAfterNew = true;
+}
+UObject* UWaveWorksFactoryNew::FactoryCreateNew(UClass* Class, UObject* InParent, FName Name, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn)
+{
+	return StaticConstructObject(Class, InParent, Name, Flags);
+}
 
 #undef LOCTEXT_NAMESPACE
 

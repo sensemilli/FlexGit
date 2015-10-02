@@ -101,6 +101,12 @@ template struct FRHICommandSetShaderSampler<FGeometryShaderRHIParamRef>;
 template struct FRHICommandSetShaderSampler<FPixelShaderRHIParamRef>;
 template struct FRHICommandSetShaderSampler<FComputeShaderRHIParamRef>;
 
+void FRHICommandSetWaveWorksState::Execute(FRHICommandListBase& CmdList)
+{
+	RHISTAT(SetWaveWorksState);
+	INTERNAL_DECORATOR(SetWaveWorksState)(State, ViewMatrix, ShaderInputMappings);
+}
+
 void FRHICommandDrawPrimitive::Execute(FRHICommandListBase& CmdList)
 {
 	RHISTAT(DrawPrimitive);

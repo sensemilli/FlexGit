@@ -564,6 +564,10 @@ public:
 #endif
 	// NVCHANGE_END: Add HBAO+
 
+	virtual const TArray<WaveWorksShaderInput>& RHIGetWaveWorksShaderInput() final override;
+	virtual FWaveWorksRHIRef RHICreateWaveWorks(const struct GFSDK_WaveWorks_Simulation_Settings& Settings, const struct GFSDK_WaveWorks_Simulation_Params& Params) final override;
+	virtual void RHISetWaveWorksState(FWaveWorksRHIParamRef State, const FMatrix& ViewMatrix, const TArray<uint32>& ShaderInputMappings) final override;
+
 	// Accessors.
 	ID3D11Device* GetDevice() const
 	{

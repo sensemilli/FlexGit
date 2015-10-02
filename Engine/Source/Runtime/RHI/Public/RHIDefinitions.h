@@ -481,7 +481,7 @@ enum ERHIResourceType
 	RRT_Viewport,
 	RRT_UnorderedAccessView,
 	RRT_ShaderResourceView,
-
+	RRT_WaveWorks,
 	RRT_Num
 };
 
@@ -790,5 +790,12 @@ inline bool IsUniformBufferResourceType(EUniformBufferBaseType BaseType)
 {
 	return BaseType == UBMT_SRV || BaseType == UBMT_UAV || BaseType == UBMT_SAMPLER || BaseType == UBMT_TEXTURE;
 }
+
+struct WaveWorksShaderInput
+{
+	EShaderFrequency Frequency;
+	ERHIResourceType Type;
+	FName Name;
+};
 
 #endif	// __RHIDEFINITIONS_H__

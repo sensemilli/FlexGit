@@ -71,7 +71,8 @@ public class Engine : ModuleRules
 				"Projects",
 				"Niagara",
                 "Internationalization",
-                "PacketHandler"
+                "PacketHandler",
+                "WaveWorks"
 			}
         );
 

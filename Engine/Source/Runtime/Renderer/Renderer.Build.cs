@@ -31,6 +31,7 @@ public class Renderer : ModuleRules
 				"RHI", 
 				"ShaderCore",
 				"UtilityShaders",
+                "WaveWorks"
 			}
             );
 

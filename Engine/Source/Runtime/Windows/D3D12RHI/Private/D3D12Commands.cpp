@@ -2278,3 +2278,23 @@ void FD3D12CommandContext::RHIRenderHBAO(
 
 #endif
 // NVCHANGE_END: Add HBAO+
+
+void FD3D12CommandContext::RHISetWaveWorksState(FWaveWorksRHIParamRef State, const FMatrix& ViewMatrix, const TArray<uint32>& ShaderInputMappings)
+{
+}
+
+namespace
+{
+	TArray<WaveWorksShaderInput> ShaderInput;
+}
+
+const TArray<WaveWorksShaderInput>& FD3D12CommandContext::RHIGetWaveWorksShaderInput()
+{
+	return ShaderInput;
+}
+
+FWaveWorksRHIRef FD3D12CommandContext::RHICreateWaveWorks(const struct GFSDK_WaveWorks_Simulation_Settings& Settings, const struct GFSDK_WaveWorks_Simulation_Params& Params)
+{
+	return nullptr;
+}
+

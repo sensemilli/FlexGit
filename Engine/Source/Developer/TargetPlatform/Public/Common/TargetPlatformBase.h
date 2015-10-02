@@ -124,6 +124,10 @@ public:
 		{
 			TextureFormatName = NameBC4;
 		}
+		else if (Texture->CompressionSettings == TC_UV)
+		{
+			TextureFormatName = NameBGRA8;
+		}
 		else if (Texture->CompressionSettings == TC_DistanceFieldFont)
 		{
 			TextureFormatName = NameG8;

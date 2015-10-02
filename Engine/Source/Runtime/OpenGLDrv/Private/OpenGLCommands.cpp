@@ -3585,3 +3585,22 @@ IRHICommandContextContainer* FOpenGLDynamicRHI::RHIGetCommandContextContainer()
 	return nullptr;
 }
 
+namespace
+{
+	TArray<WaveWorksShaderInput> ShaderInput;
+}
+
+const TArray<WaveWorksShaderInput>& FOpenGLDynamicRHI::RHIGetWaveWorksShaderInput()
+{
+	return ShaderInput;
+}
+
+FWaveWorksRHIRef FOpenGLDynamicRHI::RHICreateWaveWorks(const struct GFSDK_WaveWorks_Simulation_Settings& Settings, const struct GFSDK_WaveWorks_Simulation_Params& Params)
+{
+	return nullptr;
+}
+
+void FOpenGLDynamicRHI::RHISetWaveWorksState(FWaveWorksRHIParamRef State, const FMatrix& ViewMatrix, const TArray<uint32>& ShaderInputMappings)
+{
+}
+

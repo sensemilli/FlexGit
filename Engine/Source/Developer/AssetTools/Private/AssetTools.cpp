@@ -108,6 +108,7 @@ FAssetTools::FAssetTools()
 	RegisterAssetTypeActions(MakeShareable(new FAssetTypeActions_FlexContainer));
 	RegisterAssetTypeActions(MakeShareable(new FAssetTypeActions_FlexFluidSurface));
 	RegisterAssetTypeActions(MakeShareable(new FAssetTypeActions_Hair));
+	RegisterAssetTypeActions(MakeShareable(new FAssetTypeActions_WaveWorks));
 
 	// Note: Please don't add any more actions here!  They belong in an editor-only module that is more tightly
 	// coupled to your new system, and you should not create a dependency on your new system from AssetTools.

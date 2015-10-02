@@ -18,6 +18,7 @@
 #include "ComponentReregisterContext.h"
 #include "ComponentRecreateRenderStateContext.h"
 #include "EngineModule.h"
+#include "WaveWorksResource.h"
 #include "Engine/Font.h"
 
 #include "LocalVertexFactory.h"
@@ -1652,6 +1653,8 @@ void FMaterialRenderProxy::EvaluateUniformExpressions(FUniformExpressionCache& O
 	OutUniformExpressionCache.UniformBuffer = UniformExpressionSet.CreateUniformBuffer(Context, CommandListIfLocalMode, &OutUniformExpressionCache.LocalUniformBuffer);
 
 	OutUniformExpressionCache.ParameterCollections = UniformExpressionSet.ParameterCollections;
+
+	OutUniformExpressionCache.WaveWorks = UniformExpressionSet.WaveWorks;
 
 	OutUniformExpressionCache.bUpToDate = true;
 }
