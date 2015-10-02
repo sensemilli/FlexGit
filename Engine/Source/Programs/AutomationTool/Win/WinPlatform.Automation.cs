@@ -35,6 +35,9 @@ public abstract class BaseWinPlatform : Platform
 			StageExecutable("exe", SC, CommandUtils.CombinePaths(SC.LocalRoot, "Engine/Binaries", SC.PlatformDir), "CrashReportClient.");
 		}
 
+        // Hairworks DLL
+        StageExecutable("dll", SC, CommandUtils.CombinePaths(SC.LocalRoot, "Engine/Binaries/ThirdParty/Hairworks"), "*.", true);
+
         // NVCHANGE_BEGIN: Add VXGI
         StageExecutable("dll", SC, CommandUtils.CombinePaths(SC.LocalRoot, "Engine/Binaries/ThirdParty/GameWorks/VXGI"), "*.", true);
         // NVCHANGE_END: Add VXGI

@@ -214,6 +214,9 @@ ENGINE_API void InitializeHair()
 	if (!HairWorksSdk)
 		return;
 
+	if (GUsingNullRHI)
+		return;
+
 	ID3D11Device* D3D11Device = (ID3D11Device*)GDynamicRHI->RHIGetNativeDevice();
 	ID3D11DeviceContext* D3D11DeviceContext = nullptr;
 	D3D11Device->GetImmediateContext(&D3D11DeviceContext);

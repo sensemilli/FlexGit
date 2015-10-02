@@ -2455,7 +2455,7 @@ UFlexContainerFactory::UFlexContainerFactory(const FObjectInitializer& ObjectIni
 
 UObject* UFlexContainerFactory::FactoryCreateNew(UClass* Class, UObject* InParent, FName Name, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn)
 {
-	return StaticConstructObject(Class, InParent, Name, Flags);
+	return NewObject<UFlexContainer>(InParent, Class, Name, Flags);
 }
 
 /*------------------------------------------------------------------------------
@@ -2472,7 +2472,7 @@ UFlexFluidSurfaceFactory::UFlexFluidSurfaceFactory(const FObjectInitializer& Obj
 
 UObject* UFlexFluidSurfaceFactory::FactoryCreateNew(UClass* Class, UObject* InParent, FName Name, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn)
 {
-	return StaticConstructObject(Class, InParent, Name, Flags);
+	return NewObject<UFlexFluidSurface>(InParent, Class, Name, Flags);
 }
 
 /*------------------------------------------------------------------------------
@@ -6940,7 +6940,7 @@ UObject* UHairFactory::FactoryCreateBinary(
 		return nullptr;
 
 	// Create asset
-	auto* Hair = CastChecked<UHair>(StaticConstructObject(UHair::StaticClass(), InParent, Name, Flags));
+	auto* Hair = NewObject<UHair>(InParent, Name, Flags);
 
 	Hair->AssetData.SetNumUninitialized(BufferEnd - Buffer);
 	FMemory::Memcpy(Hair->AssetData.GetData(), Buffer, Hair->AssetData.Num());
@@ -7487,7 +7487,7 @@ UWaveWorksFactoryNew::UWaveWorksFactoryNew(const FObjectInitializer& ObjectIniti
 }
 UObject* UWaveWorksFactoryNew::FactoryCreateNew(UClass* Class, UObject* InParent, FName Name, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn)
 {
-	return StaticConstructObject(Class, InParent, Name, Flags);
+	return NewObject<UWaveWorks>(InParent, Class, Name, Flags);
 }
 
 #undef LOCTEXT_NAMESPACE

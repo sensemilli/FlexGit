@@ -280,7 +280,7 @@ void SStaticMeshEditorViewport::UpdateFlexPreviewComponent()
 	bool bDisplayFlexParticles = StaticMesh->FlexAsset && StaticMesh->FlexAsset->ContainerTemplate && bDrawFlexPreview;
 	if (bDisplayFlexParticles)
 	{
-		FlexPreviewComponent = ConstructObject<UFlexAssetPreviewComponent>(UFlexAssetPreviewComponent::StaticClass());
+		FlexPreviewComponent = NewObject<UFlexAssetPreviewComponent>(UFlexAssetPreviewComponent::StaticClass());
 		FlexPreviewComponent->FlexAsset = StaticMesh->FlexAsset;
 		PreviewScene.AddComponent(FlexPreviewComponent, FTransform::Identity);
 	}
