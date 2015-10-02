@@ -656,6 +656,19 @@ public:
 	virtual void* LockIndexBuffer_RenderThread(class FRHICommandListImmediate& RHICmdList, FIndexBufferRHIParamRef IndexBuffer, uint32 Offset, uint32 SizeRHI, EResourceLockMode LockMode);
 	virtual void UnlockIndexBuffer_RenderThread(class FRHICommandListImmediate& RHICmdList, FIndexBufferRHIParamRef IndexBuffer);
 	virtual FVertexDeclarationRHIRef CreateVertexDeclaration_RenderThread(class FRHICommandListImmediate& RHICmdList, const FVertexDeclarationElementList& Elements);
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	virtual VXGI::IGlobalIllumination* RHIVXGIGetInterface() { return nullptr; }
+	virtual void RHIVXGIGetGPUTime(float& OutWorldSpaceTime, float& OutScreenSpaceTime) { }
+	virtual void RHIVXGISetVoxelizationParameters(const VXGI::VoxelizationParameters& Parameters) { }
+	virtual void RHIVXGISetPixelShaderResourceAttributes(NVRHI::ShaderHandle PixelShader, const TArray<uint8>& ShaderResourceTable, bool bUsesGlobalCB) { }
+	virtual void RHIVXGIApplyDrawStateButNotShaders(const NVRHI::DrawCallState& DrawCallState) { }
+	virtual void RHIVXGISetCommandList(FRHICommandList& RHICommandList) { }
+	virtual FRHITexture* GetRHITextureFromVXGI(NVRHI::TextureHandle texture) { return nullptr; }
+	virtual NVRHI::TextureHandle GetVXGITextureFromRHI(FRHITexture* texture) { return nullptr; }
+#endif
+	// NVCHANGE_END: Add VXGI
 };
 
 /** A global pointer to the dynamically bound RHI implementation. */
@@ -965,6 +978,30 @@ public:
 	/** Wait for AsyncCompute command stream to finish (no effect if not supported) */
 	virtual void RHIGraphicsWaitOnAsyncComputeJob(uint32 FenceIndex) = 0;
 
+	// NVCHANGE_BEGIN: Add HBAO+
+#if WITH_GFSDK_SSAO
+	virtual void RHIRenderHBAO(
+		const FTextureRHIParamRef SceneDepthTextureRHI,
+		const FMatrix& ProjectionMatrix,
+		const FTextureRHIParamRef SceneNormalTextureRHI,
+		const FMatrix& ViewMatrix,
+		const FTextureRHIParamRef SceneColorTextureRHI,
+		const GFSDK_SSAO_Parameters& AOParams)
+	{
+		checkNoEntry();
+	}
+#endif
+	// NVCHANGE_END: Add HBAO+
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	virtual void RHIVXGICleanupAfterVoxelization() { checkNoEntry(); }
+
+	virtual void RHISetViewportsAndScissorRects(uint32 Count, const FViewportBounds* Viewports, const FScissorRect* ScissorRects) { checkNoEntry(); }
+	virtual void RHIDispatchIndirectComputeShaderStructured(FStructuredBufferRHIParamRef ArgumentBuffer, uint32 ArgumentOffset) { checkNoEntry(); }
+	virtual void RHICopyStructuredBufferData(FStructuredBufferRHIParamRef DestBuffer, uint32 DestOffset, FStructuredBufferRHIParamRef SrcBuffer, uint32 SrcOffset, uint32 DataSize) { checkNoEntry(); }
+#endif
+	// NVCHANGE_END: Add VXGI
 };
 
 

@@ -319,5 +319,12 @@ public class Engine : ModuleRules
 			// module, so it's definitions won't propagate to modules that import Engine.
 			Definitions.Add("WITH_RECAST=0");
 		}
+
+        // NVCHANGE_BEGIN: Add VXGI
+        if ((Target.Platform == UnrealTargetPlatform.Win64) || (Target.Platform == UnrealTargetPlatform.Win32))
+        {
+            PublicDependencyModuleNames.Add("VXGI");
+        }
+        // NVCHANGE_END: Add VXGI
 	}
 }

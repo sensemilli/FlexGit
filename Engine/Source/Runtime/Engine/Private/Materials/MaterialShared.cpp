@@ -777,6 +777,62 @@ bool FMaterialResource::IsUsedWithUI() const
 	return IsUIMaterial();
 }
 
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+
+bool FMaterialResource::IsUsedWithVxgiVoxelization() const
+{
+	return Material->bUsedWithVxgiVoxelization;
+}
+
+bool FMaterialResource::IsVxgiOmniDirectional() const
+{
+	return Material->bVxgiOmniDirectional;
+}
+
+bool FMaterialResource::IsVxgiProportionalEmittance() const
+{
+	return Material->bVxgiProportionalEmittance;
+}
+
+bool FMaterialResource::GetVxgiAllowTesselationDuringVoxelization() const
+{
+	return Material->bVxgiAllowTesselationDuringVoxelization;
+}
+
+float FMaterialResource::GetVxgiVoxelizationThickness() const
+{
+	return Material->VxgiVoxelizationThickness;
+}
+
+FVector2D FMaterialResource::GetVxgiOpacityNoiseScaleBias() const
+{
+	return Material->VxgiOpacityNoiseScaleBias;
+}
+
+bool FMaterialResource::GetVxgiCoverageSupersampling() const
+{
+	return Material->bVxgiCoverageSupersampling;
+}
+
+EVxgiMaterialSamplingRate FMaterialResource::GetVxgiMaterialSamplingRate() const
+{
+	return Material->VxgiMaterialSamplingRate;
+}
+
+bool FMaterialResource::IsPreviewMaterial() const
+{
+	return Material->bIsPreviewMaterial;
+}
+
+bool FMaterialResource::HasEmissiveColorConnected() const
+{
+	return Material->EmissiveColor.IsConnected();
+}
+
+#endif
+// NVCHANGE_END: Add VXGI
+
 EMaterialTessellationMode FMaterialResource::GetTessellationMode() const 
 { 
 	return (EMaterialTessellationMode)Material->D3D11TessellationMode; 

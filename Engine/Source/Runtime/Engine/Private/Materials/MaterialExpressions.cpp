@@ -135,6 +135,10 @@
 #include "Materials/MaterialFunction.h"
 #include "Materials/MaterialParameterCollection.h"
 
+// NVCHANGE_BEGIN: Add VXGI
+#include "Materials/MaterialExpressionVxgiVoxelization.h"
+// NVCHANGE_END: Add VXGI
+
 #include "EditorSupportDelegates.h"
 #include "MaterialCompiler.h"
 #if WITH_EDITOR
@@ -2788,6 +2792,46 @@ bool UMaterialExpressionStaticComponentMaskParameter::IsNamedParameter(FName InP
 
 	return false;
 }
+
+// NVCHANGE_BEGIN: Add VXGI
+
+//
+//	UMaterialExpressionVxgiVoxelization
+//
+
+UMaterialExpressionVxgiVoxelization::UMaterialExpressionVxgiVoxelization(const class FObjectInitializer& PCIP)
+	: Super(PCIP)
+{
+	// Structure to hold one-time initialization
+	struct FConstructorStatics
+	{
+		FText NAME_Constants;
+		FConstructorStatics()
+			: NAME_Constants(LOCTEXT("Constants", "Constants"))
+		{
+		}
+	};
+	static FConstructorStatics ConstructorStatics;
+
+	MenuCategories.Add(ConstructorStatics.NAME_Constants);
+	bShaderInputData = true;
+}
+
+int32 UMaterialExpressionVxgiVoxelization::Compile(class FMaterialCompiler* Compiler, int32 OutputIndex, int32 MultiplexIndex)
+{
+#if WITH_GFSDK_VXGI
+	return Compiler->VxgiVoxelization();
+#else
+	return Compiler->Constant(0);
+#endif
+}
+
+void UMaterialExpressionVxgiVoxelization::GetCaption(TArray<FString>& OutCaptions) const
+{
+	OutCaptions.Add(TEXT("VXGIVoxelization"));
+}
+
+// NVCHANGE_END: Add VXGI
 
 //
 //	UMaterialExpressionTime

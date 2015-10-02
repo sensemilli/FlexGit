@@ -2971,6 +2971,19 @@ void FEditorViewportClient::SetupViewForRendering( FSceneViewFamily& ViewFamily,
 		View.RoughnessOverrideParameter = FVector2D(0.0f, 0.0f);
 	}
 
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	{
+		static const auto CVar = IConsoleManager::Get().FindTConsoleVariableDataFloat(TEXT("r.VXGI.RoughnessOverride"));
+		const float Roughness = CVar->GetValueOnGameThread();
+		if (Roughness != 0.f)
+		{
+			View.RoughnessOverrideParameter = FVector2D(Roughness, 0.0f);
+		}
+	}
+#endif
+	// NVCHANGE_END: Add VXGI
+
 	if (!ViewFamily.EngineShowFlags.Diffuse)
 	{
 		View.DiffuseOverrideParameter = FVector4(0.f, 0.f, 0.f, 0.f);

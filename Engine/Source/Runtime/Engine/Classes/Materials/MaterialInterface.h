@@ -27,6 +27,11 @@ enum EMaterialUsage
 	MATUSAGE_Landscape,
 	MATUSAGE_InstancedStaticMeshes,
 	MATUSAGE_Clothing,
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	MATUSAGE_VxgiVoxelization,
+#endif
+	// NVCHANGE_END: Add VXGI
 	MATUSAGE_MAX,
 };
 

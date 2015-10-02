@@ -826,6 +826,11 @@ public:
 	inline bool AffectsTranslucentLighting() const { return bAffectTranslucentLighting; }
 	inline bool UseRayTracedDistanceFieldShadows() const { return bUseRayTracedDistanceFieldShadows; }
 	inline float GetRayStartOffsetDepthScale() const { return RayStartOffsetDepthScale; }
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	inline bool CastVxgiIndirectLighting() const { return bCastVxgiIndirectLighting; }
+#endif
+	// NVCHANGE_END: Add VXGI
 	inline uint8 GetLightType() const { return LightType; }
 	inline FName GetComponentName() const { return ComponentName; }
 	inline FName GetLevelName() const { return LevelName; }
@@ -949,6 +954,12 @@ protected:
 	const uint32 bUseRayTracedDistanceFieldShadows : 1;
 
 	float RayStartOffsetDepthScale;
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	const uint32 bCastVxgiIndirectLighting : 1;
+#endif
+	// NVCHANGE_END: Add VXGI
 
 	/** The light type (ELightComponentType) */
 	const uint8 LightType;

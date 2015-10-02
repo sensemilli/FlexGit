@@ -355,6 +355,14 @@ void SEditorViewport::BindCommands()
 	MAP_VIEWMODE_ACTION( Commands.VisualizeBufferMode, VMI_VisualizeBuffer );
 	MAP_VIEWMODE_ACTION( Commands.CollisionPawn, VMI_CollisionPawn);
 	MAP_VIEWMODE_ACTION( Commands.CollisionVisibility, VMI_CollisionVisibility);
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	MAP_VIEWMODE_ACTION(Commands.VxgiOpacityVoxelsMode, VMI_VxgiOpacityVoxels);
+	MAP_VIEWMODE_ACTION(Commands.VxgiEmittanceVoxelsMode, VMI_VxgiEmittanceVoxels);
+	MAP_VIEWMODE_ACTION(Commands.VxgiIrradianceVoxelsMode, VMI_VxgiIrradianceVoxels);
+#endif
+	// NVCHANGE_END: Add VXGI
 }
 
 EVisibility SEditorViewport::OnGetViewportContentVisibility() const

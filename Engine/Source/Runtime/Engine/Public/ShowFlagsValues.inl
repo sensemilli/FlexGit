@@ -289,5 +289,25 @@ SHOWFLAG_ALWAYS_ACCESSIBLE(VisualizeSenses, SFG_Advanced, LOCTEXT("VisualizeSens
 /** Visualize the bloom, for developer (by default off): */
 SHOWFLAG_FIXED_IN_SHIPPING(VisualizeBloom, 0, SFG_Visualize, LOCTEXT("VisualizeBloom", "Bloom"))
 
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+
+SHOWFLAG_ALWAYS_ACCESSIBLE(VxgiDiffuse, SFG_LightingComponents, LOCTEXT("VxgiDiffuse", "VXGI Diffuse"))
+SHOWFLAG_ALWAYS_ACCESSIBLE(VxgiSpecular, SFG_LightingComponents, LOCTEXT("VxgiSpecular", "VXGI Specular"))
+
+SHOWFLAG_ALWAYS_ACCESSIBLE(VxgiOpacityVoxels, SFG_Visualize, LOCTEXT("VxgiOpacityVoxels", "VXGI Opacity Voxels"))
+SHOWFLAG_ALWAYS_ACCESSIBLE(VxgiEmittanceVoxels, SFG_Visualize, LOCTEXT("VxgiEmittanceVoxels", "VXGI Emittance Voxels"))
+SHOWFLAG_ALWAYS_ACCESSIBLE(VxgiIrradianceVoxels, SFG_Visualize, LOCTEXT("VxgiIrradianceVoxels", "VXGI Indirect Irradiance Voxels"))
+
+#endif
+// NVCHANGE_END: Add VXGI
+
+// NVCHANGE_BEGIN: Add HBAO+
+
+/** HBAO+ */
+SHOWFLAG_ALWAYS_ACCESSIBLE(HBAO, SFG_LightingComponents, LOCTEXT("HBAO", "HBAO+"))
+
+// NVCHANGE_END: Add HBAO+
+
 #undef SHOWFLAG_ALWAYS_ACCESSIBLE
 #undef SHOWFLAG_FIXED_IN_SHIPPING

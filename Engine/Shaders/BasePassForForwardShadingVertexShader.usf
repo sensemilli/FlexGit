@@ -22,8 +22,85 @@ struct FForwardShadingBasePassVSToPS
 	float4 Position : SV_POSITION;
 };
 
+// NVCHANGE_BEGIN: Add VXGI
+#if VXGI_VOXELIZATION_SHADER
+
+#if USING_TESSELLATION	
+
+	struct FForwardShadingBasePassVSToDS
+	{
+		FVertexFactoryInterpolantsVSToDS FactoryInterpolants;
+		FForwardShadingBasePassInterpolantsVSToPS BasePassInterpolants; //These are the same
+		float4 Position : VS_To_DS_Position;
+		OPTIONAL_VertexID_VS_To_DS
+	};
+	
+	#define FForwardShadingBasePassVSOutput FForwardShadingBasePassVSToDS
+	#define VertexFactoryGetInterpolants VertexFactoryGetInterpolantsVSToDS
+	#define FPassSpecificVSToDS FForwardShadingBasePassVSToDS
+	#define FPassSpecificVSToPS FForwardShadingBasePassVSToPS
+
+	
+	FForwardShadingBasePassVSToDS PassInterpolate(FForwardShadingBasePassVSToDS a, float aInterp, FForwardShadingBasePassVSToDS b, float bInterp)
+	{
+		FForwardShadingBasePassVSToDS O;
+	
+		O.FactoryInterpolants = VertexFactoryInterpolate(a.FactoryInterpolants, aInterp, b.FactoryInterpolants, bInterp);
+
+		#if NEEDS_BASEPASS_FOGGING
+			TESSELLATION_INTERPOLATE_MEMBER(BasePassInterpolants.VertexFog);
+		#endif
+
+		#if USE_WORLD_POSITION_EXCLUDING_SHADER_OFFSETS
+			TESSELLATION_INTERPOLATE_MEMBER(BasePassInterpolants.WorldPositionExcludingWPO);
+		#endif
+
+		return O;
+	}
+
+	FForwardShadingBasePassVSToPS PassFinalizeTessellationOutput(FForwardShadingBasePassVSToDS Interpolants, float4 WorldPosition, FMaterialTessellationParameters MaterialParameters)
+	{
+		FForwardShadingBasePassVSToPS O;
+	
+		O.FactoryInterpolants = VertexFactoryAssignInterpolants(Interpolants.FactoryInterpolants);
+
+		// Copy everything in the shared base class over to the pixel shader input
+		(FForwardShadingBasePassInterpolantsVSToPS)O.BasePassInterpolants = (FForwardShadingBasePassInterpolantsVSToPS)Interpolants.BasePassInterpolants;
+
+		// Transform position to clip-space
+		ISOLATE
+		{
+			O.Position = mul(WorldPosition, View.TranslatedWorldToClip);
+		}
+	
+		// Calc position-dependent interps
+		O.BasePassInterpolants.PixelPosition = WorldPosition;
+
+		#if USE_WORLD_POSITION_EXCLUDING_SHADER_OFFSETS
+			O.BasePassInterpolants.PixelPositionExcludingWPO = float4(Interpolants.BasePassInterpolants.WorldPositionExcludingWPO, 1);
+		#endif
+
+		return O;
+	}
+
+	// This gets us the MainHull and MainDomain shader definitions
+	#include "Tessellation.usf"
+
+#else
+	#define FForwardShadingBasePassVSOutput FForwardShadingBasePassVSToPS
+	#define VertexFactoryGetInterpolants VertexFactoryGetInterpolantsVSToPS
+#endif
+
+
+#else
+// NVCHANGE_END: Add VXGI
+
 #define FForwardShadingBasePassVSOutput FForwardShadingBasePassVSToPS
 #define VertexFactoryGetInterpolants VertexFactoryGetInterpolantsVSToPS
+
+// NVCHANGE_BEGIN: Add VXGI
+#endif
+// NVCHANGE_END: Add VXGI
 
 /** Entry point for the base pass vertex shader. */
 void Main(
@@ -50,6 +127,19 @@ void Main(
 	half3 WorldPositionOffset = GetMaterialWorldPositionOffset(VertexParameters);
 	
 	WorldPosition.xyz += WorldPositionOffset;
+
+// NVCHANGE_BEGIN: Add VXGI
+#if VXGI_VOXELIZATION_SHADER && USING_TESSELLATION
+	// We let the Domain Shader convert to post projection when tessellating
+	Output.Position = WorldPosition;	
+	Output.BasePassInterpolants.PixelPosition = WorldPosition;
+
+	#if USE_WORLD_POSITION_EXCLUDING_SHADER_OFFSETS
+		Output.BasePassInterpolants.WorldPositionExcludingWPO = WorldPositionExcludingWPO;
+	#endif
+#else
+// NVCHANGE_END: Add VXGI
+
 	float4 RasterizedWorldPosition = VertexFactoryGetRasterizedWorldPosition(Input, VFIntermediates, WorldPosition);
 	Output.Position = mul(RasterizedWorldPosition, View.TranslatedWorldToClip);
 	Output.BasePassInterpolants.PixelPosition = WorldPosition;
@@ -57,6 +147,10 @@ void Main(
 #if USE_WORLD_POSITION_EXCLUDING_SHADER_OFFSETS
 	Output.BasePassInterpolants.PixelPositionExcludingWPO = WorldPositionExcludingWPO;
 #endif
+
+// NVCHANGE_BEGIN: Add VXGI
+#endif
+// NVCHANGE_END: Add VXGI
 
 #if USE_VERTEX_FOG
 #if PACK_INTERPOLANTS

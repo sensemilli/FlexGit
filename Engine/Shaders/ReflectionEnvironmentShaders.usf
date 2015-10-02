@@ -493,6 +493,20 @@ void ReflectionApplyPS(
 		float4 SSR = Texture2DSample( ScreenSpaceReflectionsTexture, ScreenSpaceReflectionsSampler, UV );
 #endif
 
+// NVCHANGE_BEGIN: Add VXGI
+#if APPLY_VXGI 
+		// Make the rest of the shader think that VXGI reflections are SSR
+		// Actually combine VXGI with SSR if both are enabled
+#if !APPLY_SSR
+#undef APPLY_SSR
+#define APPLY_SSR 1
+		float4 SSR = 0;
+#endif
+		SSR.rgb = ScreenSpaceData.VxgiSpecular.rgb * (1 - SSR.a) + SSR.rgb;
+		SSR.a = 1 - (1 - ScreenSpaceData.VxgiSpecular.a) * (1 - SSR.a);
+#endif
+// NVCHANGE_END: Add VXGI
+
 		BRANCH
 		if( GBuffer.ShadingModelID == SHADINGMODELID_CLEAR_COAT )
 		{

@@ -76,6 +76,11 @@ public:
 	virtual int32 ReflectionVector() = 0;
 	virtual int32 ReflectionAboutCustomWorldNormal(int32 CustomWorldNormal, int32 bNormalizeCustomWorldNormal) = 0;
 	virtual int32 CameraVector() = 0;
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	virtual int32 VxgiVoxelization() = 0;
+#endif
+	// NVCHANGE_END: Add VXGI
 	virtual int32 LightVector() = 0;
 
 	virtual int32 ScreenPosition() = 0;
@@ -242,6 +247,12 @@ public:
 	virtual int32 ReflectionVector() override { return Compiler->ReflectionVector(); }
 	virtual int32 CameraVector() override { return Compiler->CameraVector(); }
 	virtual int32 LightVector() override { return Compiler->LightVector(); }
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	virtual int32 VxgiVoxelization() override{ return Compiler->VxgiVoxelization(); }
+#endif
+	// NVCHANGE_END: Add VXGI
 
 	virtual int32 ScreenPosition() override { return Compiler->ScreenPosition(); }
 	virtual int32 WorldPosition(EWorldPositionIncludedOffsets WorldPositionIncludedOffsets) override { return Compiler->WorldPosition(WorldPositionIncludedOffsets); }

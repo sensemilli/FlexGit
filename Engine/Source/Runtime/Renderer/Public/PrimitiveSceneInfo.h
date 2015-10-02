@@ -237,6 +237,10 @@ public:
 	/** The number of dynamic point lights for ES2 */
 	int32 NumES2DynamicPointLights;
 
+	// NVCHANGE_BEGIN: Add VXGI
+	int32 VxgiLastVoxelizationPass;
+	// NVCHANGE_END: Add VXGI
+
 	/** Initialization constructor. */
 	FPrimitiveSceneInfo(UPrimitiveComponent* InPrimitive,FScene* InScene);
 

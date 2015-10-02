@@ -516,6 +516,12 @@ public:
 	/** Index of the shadow into FVisibleLightInfo::AllProjectedShadows. */
 	int32 ShadowId;
 
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	int32 CascadeSurfaceIndex;
+#endif
+	// NVCHANGE_END: Add VXGI
+
 	/** A translation that is applied to world-space before transforming by one of the shadow matrices. */
 	FVector PreShadowTranslation;
 
@@ -1098,7 +1104,15 @@ public:
 				FVector4(ShadowBufferSizeValue.X, ShadowBufferSizeValue.Y, 1.0f / ShadowBufferSizeValue.X, 1.0f / ShadowBufferSizeValue.Y));
 		}
 
+		// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+		FTexture2DRHIRef ShadowDepthTextureValue = FSceneRenderTargets::Get(RHICmdList).GetShadowDepthZTexture(ShadowInfo->CascadeSurfaceIndex, ShadowInfo->bAllocatedInPreshadowCache);
+#else
+		// NVCHANGE_END: Add VXGI
 		FTexture2DRHIRef ShadowDepthTextureValue = FSceneRenderTargets::Get(RHICmdList).GetShadowDepthZTexture(ShadowInfo->bAllocatedInPreshadowCache);
+		// NVCHANGE_BEGIN: Add VXGI
+#endif
+		// NVCHANGE_END: Add VXGI
 		FSamplerStateRHIParamRef DepthSamplerState = TStaticSamplerState<SF_Point,AM_Clamp,AM_Clamp,AM_Clamp>::GetRHI();
 
 		SetTextureParameter(RHICmdList, ShaderRHI, ShadowDepthTexture, ShadowDepthTextureSampler, DepthSamplerState, ShadowDepthTextureValue);		
@@ -1447,7 +1461,9 @@ public:
 		return Ar;
 	}
 
+#if !WITH_GFSDK_VXGI
 private:
+#endif
 
 	FShaderResourceParameter ShadowDepthTexture;
 	FShaderResourceParameter ShadowDepthCubeComparisonSampler;

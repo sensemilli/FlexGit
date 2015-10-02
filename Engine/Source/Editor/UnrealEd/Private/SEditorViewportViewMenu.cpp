@@ -209,6 +209,10 @@ TSharedRef<SWidget> SEditorViewportViewMenu::GenerateViewMenuContent() const
 				ViewMenuBuilder.AddMenuEntry( BaseViewportActions.StationaryLightOverlapMode, NAME_None, LOCTEXT("StationaryLightOverlapViewModeDisplayName", "Stationary Light Overlap") );
 				ViewMenuBuilder.AddMenuEntry( BaseViewportActions.LightmapDensityMode, NAME_None, LOCTEXT("LightmapDensityViewModeDisplayName", "Lightmap Density") );
 				ViewMenuBuilder.AddMenuEntry( BaseViewportActions.ReflectionOverrideMode, NAME_None, LOCTEXT("ReflectionOverrideViewModeDisplayName", "Reflections") );
+
+				ViewMenuBuilder.AddMenuEntry(BaseViewportActions.VxgiOpacityVoxelsMode, NAME_None, LOCTEXT("VxgiOpacityVoxelsModeDisplayName", "VXGI Opacity Voxels"));
+				ViewMenuBuilder.AddMenuEntry(BaseViewportActions.VxgiEmittanceVoxelsMode, NAME_None, LOCTEXT("VxgiEmittanceVoxelsModeDisplayName", "VXGI Emittance Voxels"));
+				ViewMenuBuilder.AddMenuEntry(BaseViewportActions.VxgiIrradianceVoxelsMode, NAME_None, LOCTEXT("VxgiIrradianceVoxelsModeDisplayName", "VXGI Irradiance Voxels"));
 			}
 			ViewMenuBuilder.EndSection();
 		}

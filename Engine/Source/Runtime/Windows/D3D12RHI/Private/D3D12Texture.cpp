@@ -203,11 +203,35 @@ TD3D12Texture2D<BaseResourceType>::~TD3D12Texture2D()
 #if PLATFORM_SUPPORTS_VIRTUAL_TEXTURES
 	D3DRHI->DestroyVirtualTexture(GetFlags(), GetRawTextureMemory());
 #endif
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	//Make sure the RHI isn't deleted. This can happen sometimes on exit
+	if (GDynamicRHI)
+	{
+		NVRHI::FRendererInterfaceD3D12* VxgiRenderer = ((FD3D12DynamicRHI*)GDynamicRHI)->VxgiRendererD3D12;
+		if (VxgiRenderer)
+			VxgiRenderer->forgetAboutTexture(this);
+	}
+#endif
+	// NVCHANGE_END: Add VXGI
 }
 
 FD3D12Texture3D::~FD3D12Texture3D()
 {
 	D3D11TextureDeleted(*this);
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	//Make sure the RHI isn't deleted. This can happen sometimes on exit
+	if (GDynamicRHI)
+	{
+		NVRHI::FRendererInterfaceD3D12* VxgiRenderer = ((FD3D12DynamicRHI*)GDynamicRHI)->VxgiRendererD3D12;
+		if (VxgiRenderer)
+			VxgiRenderer->forgetAboutTexture(this);
+	}
+
+#endif
+	// NVCHANGE_END: Add VXGI
 }
 
 uint64 FD3D12DynamicRHI::RHICalcTexture2DPlatformSize(uint32 SizeX, uint32 SizeY, uint8 Format, uint32 NumMips, uint32 NumSamples, uint32 Flags, uint32& OutAlign)
@@ -1041,6 +1065,15 @@ FD3D12Texture3D* FD3D12DynamicRHI::CreateD3D11Texture3D(uint32 SizeX, uint32 Siz
         SizeY,
         SizeZ,
         NumMips);
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	if (TextureDesc.Format == DXGI_FORMAT_R32_FLOAT)
+		TextureDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+	else if (TextureDesc.Format == DXGI_FORMAT_R10G10B10A2_UNORM)
+		TextureDesc.Format = DXGI_FORMAT_R10G10B10A2_TYPELESS;
+#endif
+	// NVCHANGE_END: Add VXGI
 
 	if (Flags & TexCreate_UAV)
 	{

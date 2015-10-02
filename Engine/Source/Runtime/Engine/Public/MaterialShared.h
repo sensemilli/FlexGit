@@ -943,6 +943,21 @@ public:
 	virtual bool IsUsedWithInstancedStaticMeshes() const { return false; }
 	virtual bool IsUsedWithAPEXCloth() const { return false; }
 	virtual bool IsUsedWithUI() const { return false; }
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	virtual bool IsUsedWithVxgiVoxelization() const { return false; }
+	virtual bool IsVxgiOmniDirectional() const { return false; }
+	virtual bool IsVxgiProportionalEmittance() const { return false; }
+	virtual bool GetVxgiAllowTesselationDuringVoxelization() const { return false; }
+	virtual float GetVxgiVoxelizationThickness() const { return 0; }
+	virtual FVector2D GetVxgiOpacityNoiseScaleBias() const { return FVector2D(0, 0); }
+	virtual bool GetVxgiCoverageSupersampling() const { return false; }
+	virtual enum EVxgiMaterialSamplingRate GetVxgiMaterialSamplingRate() const { return (EVxgiMaterialSamplingRate)0; }
+	//This is not normally exposed but we need to check and void this since the preview material compiles with less permutation for quicker feedback
+	virtual bool IsPreviewMaterial() const { return false; }
+	virtual bool HasEmissiveColorConnected() const { return false; }
+#endif
+	// NVCHANGE_END: Add VXGI
 	ENGINE_API virtual enum EMaterialTessellationMode GetTessellationMode() const;
 	virtual bool IsCrackFreeDisplacementEnabled() const { return false; }
 	virtual bool IsAdaptiveTessellationEnabled() const { return false; }
@@ -1507,6 +1522,20 @@ public:
 	ENGINE_API virtual bool IsUsedWithAPEXCloth() const override;
 	DEPRECATED(4.9, "IsUsedWithUI is now replaced by IsUIMaterial")
 	ENGINE_API virtual bool IsUsedWithUI() const override;
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	ENGINE_API virtual bool IsUsedWithVxgiVoxelization() const override;
+	ENGINE_API virtual bool IsVxgiOmniDirectional() const override;
+	ENGINE_API virtual bool IsVxgiProportionalEmittance() const override;
+	ENGINE_API virtual bool GetVxgiAllowTesselationDuringVoxelization() const override;
+	ENGINE_API virtual float GetVxgiVoxelizationThickness() const override;
+	ENGINE_API virtual FVector2D GetVxgiOpacityNoiseScaleBias() const override;
+	ENGINE_API virtual bool GetVxgiCoverageSupersampling() const override;
+	ENGINE_API virtual enum EVxgiMaterialSamplingRate GetVxgiMaterialSamplingRate() const override;
+	ENGINE_API virtual bool IsPreviewMaterial() const override;
+	ENGINE_API virtual bool HasEmissiveColorConnected() const override;
+#endif
+	// NVCHANGE_END: Add VXGI
 	ENGINE_API virtual enum EMaterialTessellationMode GetTessellationMode() const override;
 	ENGINE_API virtual bool IsCrackFreeDisplacementEnabled() const override;
 	ENGINE_API virtual bool IsAdaptiveTessellationEnabled() const override;

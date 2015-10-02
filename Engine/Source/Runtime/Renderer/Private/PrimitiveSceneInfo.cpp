@@ -101,6 +101,9 @@ FPrimitiveSceneInfo::FPrimitiveSceneInfo(UPrimitiveComponent* InComponent,FScene
 	ComponentForDebuggingOnly(InComponent),
 	bNeedsStaticMeshUpdate(false),
 	bNeedsUniformBufferUpdate(false)
+	// NVCHANGE_BEGIN: Add VXGI
+	, VxgiLastVoxelizationPass(0)
+	// NVCHANGE_END: Add VXGI
 {
 	check(ComponentForDebuggingOnly);
 	check(PrimitiveComponentId.IsValid());

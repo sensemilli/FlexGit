@@ -401,7 +401,19 @@ struct FShaderCompilerEnvironment : public FRefCountedObject
 		CompilerFlags.Append(Other.CompilerFlags);
 		ResourceTableMap.Append(Other.ResourceTableMap);
 		ResourceTableLayoutHashes.Append(Other.ResourceTableLayoutHashes);
+		// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+		//merge them in reverse order so that Shader environment overrides Material environment. We need this to be able to turn of tessellation per-shader
+		FShaderCompilerDefinitions NewDefinitions;
+		NewDefinitions.Merge(Other.Definitions);
+		NewDefinitions.Merge(Definitions);
+		Definitions = NewDefinitions;
+#else
+		// NVCHANGE_END: Add VXGI
 		Definitions.Merge(Other.Definitions);
+		// NVCHANGE_BEGIN: Add VXGI
+#endif
+		// NVCHANGE_END: Add VXGI
 		RenderTargetOutputFormatsMap.Append(Other.RenderTargetOutputFormatsMap);
 	}
 
@@ -494,6 +506,11 @@ struct FShaderCompilerOutput
 	:	NumInstructions(0)
 	,	NumTextureSamplers(0)
 	,	bSucceeded(false)
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	, bIsVxgiPS(false)
+#endif
+	// NVCHANGE_END: Add VXGI
 	{
 	}
 
@@ -505,12 +522,31 @@ struct FShaderCompilerOutput
 	uint32 NumInstructions;
 	uint32 NumTextureSamplers;
 	bool bSucceeded;
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	bool bIsVxgiPS;
+	TArray<FShaderParameterMap> ParameterMapForVxgiPSPermutation;
+	TArray<TArray<uint8> > ShaderResouceTableVxgiPSPermutation;
+	TArray<bool> UsesGlobalCBForVxgiPSPermutation;
+	TArray<uint8> VxgiGSCode;
+#endif
+	// NVCHANGE_END: Add VXGI
 
 	/** Generates OutputHash from the compiler output. */
 	SHADERCORE_API void GenerateOutputHash();
 	
 	friend FArchive& operator<<(FArchive& Ar,FShaderCompilerOutput& Output)
 	{
+		// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+		Ar << Output.bIsVxgiPS;
+		Ar << Output.ParameterMapForVxgiPSPermutation;
+		Ar << Output.ShaderResouceTableVxgiPSPermutation;
+		Ar << Output.UsesGlobalCBForVxgiPSPermutation;
+		Ar << Output.VxgiGSCode;
+#endif
+		// NVCHANGE_END: Add VXGI
+
 		// Note: this serialize is used to pass between UE4 and the shader compile worker, recompile both when modifying
 		return Ar << Output.ParameterMap << Output.Errors << Output.Target << Output.Code << Output.NumInstructions << Output.NumTextureSamplers << Output.bSucceeded;
 	}

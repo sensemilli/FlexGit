@@ -59,6 +59,13 @@ enum ESceneTextureId
 	PPI_AmbientOcclusion UMETA(DisplayName="Ambient Occlusion"),
 	/** Scene stencil, contains CustomStencil mesh property of the opaque objects rendered with CustomDepth */
 	PPI_CustomStencil UMETA(DisplayName="CustomStencil"),
+
+	// NVCHANGE_BEGIN: Add VXGI
+	/** VXGI Diffuse Tracing Output */
+	PPI_VxgiDiffuse UMETA(DisplayName = "VXGI Diffuse"),
+	/** VXGI Specular Tracing Output */
+	PPI_VxgiSpecular UMETA(DisplayName = "VXGI Specular"),
+	// NVCHANGE_END: Add VXGI
 };
 
 UCLASS(collapsecategories, hidecategories=Object)

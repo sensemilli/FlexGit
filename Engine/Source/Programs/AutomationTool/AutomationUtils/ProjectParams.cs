@@ -526,7 +526,9 @@ namespace AutomationTool
 			this.ArchiveMetaData = GetParamValueIfNotSpecified(Command, ArchiveMetaData, this.ArchiveMetaData, "archivemetadata");
 			this.CreateAppBundle = GetParamValueIfNotSpecified(Command, CreateAppBundle, true, "createappbundle");
 			this.Distribution = GetParamValueIfNotSpecified(Command, Distribution, this.Distribution, "distribution");
-			this.Prereqs = GetParamValueIfNotSpecified(Command, Prereqs, this.Prereqs, "prereqs");
+            // NVCHANGE_BEGIN: Disable Prereqs because do not have Engine\Extras\Redist\ in our p4.
+            this.Prereqs = false;// GetParamValueIfNotSpecified(Command, Prereqs, this.Prereqs, "prereqs");
+            // NVCHANGE_END: Disable Prereqs because do not have Engine\Extras\Redist\ in our p4
 			this.NoBootstrapExe = GetParamValueIfNotSpecified(Command, NoBootstrapExe, this.NoBootstrapExe, "nobootstrapexe");
             this.Prebuilt = GetParamValueIfNotSpecified(Command, Prebuilt, this.Prebuilt, "prebuilt");
             if (this.Prebuilt)

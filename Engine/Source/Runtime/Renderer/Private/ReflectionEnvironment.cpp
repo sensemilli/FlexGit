@@ -402,7 +402,15 @@ IMPLEMENT_REFLECTION_COMPUTESHADER_TYPE(1, 1, 1, 0);
 IMPLEMENT_REFLECTION_COMPUTESHADER_TYPE(1, 1, 1, 1);
 
 
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+template< uint32 bSSR, uint32 bReflectionEnv, uint32 bSkylight, uint32 bVxgiSpecular >
+#else
+// NVCHANGE_END: Add VXGI
 template< uint32 bSSR, uint32 bReflectionEnv, uint32 bSkylight >
+// NVCHANGE_BEGIN: Add VXGI
+#endif
+// NVCHANGE_END: Add VXGI
 class FReflectionApplyPS : public FGlobalShader
 {
 	DECLARE_SHADER_TYPE(FReflectionApplyPS, Global);
@@ -419,6 +427,11 @@ public:
 		OutEnvironment.SetDefine(TEXT("APPLY_SSR"), bSSR);
 		OutEnvironment.SetDefine(TEXT("APPLY_REFLECTION_ENV"), bReflectionEnv);
 		OutEnvironment.SetDefine(TEXT("APPLY_SKYLIGHT"), bSkylight);
+		// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+		OutEnvironment.SetDefine(TEXT("APPLY_VXGI"), bVxgiSpecular);
+#endif
+		// NVCHANGE_END: Add VXGI
 	}
 
 	/** Default constructor. */
@@ -485,7 +498,33 @@ private:
 	FDistanceFieldAOSpecularOcclusionParameters SpecularOcclusionParameters;
 };
 
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+
 // Typedef is necessary because the C preprocessor thinks the comma in the template parameter list is a comma in the macro parameter list.
+#define IMPLEMENT_REFLECTION_APPLY_PIXELSHADER_TYPE(A, B, C, D) \
+	typedef FReflectionApplyPS<A,B,C,D> FReflectionApplyPS##A##B##C##D; \
+	IMPLEMENT_SHADER_TYPE(template<>,FReflectionApplyPS##A##B##C##D,TEXT("ReflectionEnvironmentShaders"),TEXT("ReflectionApplyPS"),SF_Pixel);
+
+IMPLEMENT_REFLECTION_APPLY_PIXELSHADER_TYPE(0, 0, 0, 0);
+IMPLEMENT_REFLECTION_APPLY_PIXELSHADER_TYPE(0, 0, 1, 0);
+IMPLEMENT_REFLECTION_APPLY_PIXELSHADER_TYPE(0, 1, 0, 0);
+IMPLEMENT_REFLECTION_APPLY_PIXELSHADER_TYPE(0, 1, 1, 0);
+IMPLEMENT_REFLECTION_APPLY_PIXELSHADER_TYPE(1, 0, 0, 0);
+IMPLEMENT_REFLECTION_APPLY_PIXELSHADER_TYPE(1, 0, 1, 0);
+IMPLEMENT_REFLECTION_APPLY_PIXELSHADER_TYPE(1, 1, 0, 0);
+IMPLEMENT_REFLECTION_APPLY_PIXELSHADER_TYPE(1, 1, 1, 0);
+IMPLEMENT_REFLECTION_APPLY_PIXELSHADER_TYPE(0, 0, 0, 1);
+IMPLEMENT_REFLECTION_APPLY_PIXELSHADER_TYPE(0, 0, 1, 1);
+IMPLEMENT_REFLECTION_APPLY_PIXELSHADER_TYPE(0, 1, 0, 1);
+IMPLEMENT_REFLECTION_APPLY_PIXELSHADER_TYPE(0, 1, 1, 1);
+IMPLEMENT_REFLECTION_APPLY_PIXELSHADER_TYPE(1, 0, 0, 1);
+IMPLEMENT_REFLECTION_APPLY_PIXELSHADER_TYPE(1, 0, 1, 1);
+IMPLEMENT_REFLECTION_APPLY_PIXELSHADER_TYPE(1, 1, 0, 1);
+IMPLEMENT_REFLECTION_APPLY_PIXELSHADER_TYPE(1, 1, 1, 1);
+
+#else
+
 #define IMPLEMENT_REFLECTION_APPLY_PIXELSHADER_TYPE(A, B, C) \
 	typedef FReflectionApplyPS<A,B,C> FReflectionApplyPS##A##B##C; \
 	IMPLEMENT_SHADER_TYPE(template<>,FReflectionApplyPS##A##B##C,TEXT("ReflectionEnvironmentShaders"),TEXT("ReflectionApplyPS"),SF_Pixel);
@@ -499,6 +538,8 @@ IMPLEMENT_REFLECTION_APPLY_PIXELSHADER_TYPE(1,0,1);
 IMPLEMENT_REFLECTION_APPLY_PIXELSHADER_TYPE(1,1,0);
 IMPLEMENT_REFLECTION_APPLY_PIXELSHADER_TYPE(1,1,1);
 
+#endif
+// NVCHANGE_END: Add VXGI
 
 class FReflectionCaptureSpecularBouncePS : public FGlobalShader
 {
@@ -1002,6 +1043,17 @@ void FDeferredShadingSceneRenderer::RenderStandardDeferredImageBasedReflections(
 
 		const bool bSSR = DoScreenSpaceReflections(View);
 
+		// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+		const uint32 bVxgiSpecular = !!View.FinalPostProcessSettings.VxgiSpecularTracingEnabled;
+		if (bVxgiSpecular)
+		{
+			bReflectionEnv = false;
+			bRequiresApply = true;
+		}
+#endif
+		// NVCHANGE_END: Add VXGI
+
 		TRefCountPtr<IPooledRenderTarget> SSROutput = GSystemTextures.BlackDummy;
 		if (bSSR)
 		{
@@ -1112,6 +1164,41 @@ void FDeferredShadingSceneRenderer::RenderStandardDeferredImageBasedReflections(
 			// todo: refactor (we abuse another boolean to pass the data through)
 			bReflectionEnv = bReflectionEnv || bEnvironmentMixing;
 
+			// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+#define CASE(A,B,C,D) \
+			case ( (A << 3) | (B << 2) | (C << 1) | D ): \
+									{ \
+			TShaderMapRef< FReflectionApplyPS<A,B,C, D>> PixelShader(View.ShaderMap); \
+			static FGlobalBoundShaderState BoundShaderState; \
+			SetGlobalBoundShaderState(RHICmdList, FeatureLevel, BoundShaderState, GFilterVertexDeclaration.VertexDeclarationRHI, *VertexShader, *PixelShader); \
+			PixelShader->SetParameters(RHICmdList, View, LightAccumulation->GetRenderTargetItem().ShaderResourceTexture, SSROutput->GetRenderTargetItem().ShaderResourceTexture, DynamicBentNormalAO); \
+									}; \
+			break
+
+			switch (((uint32)bSSR << 3) | ((uint32)bReflectionEnv << 2) | ((uint32)bSkyLight << 1) | (uint32)bVxgiSpecular)
+			{
+				CASE(0, 0, 0, 0);
+				CASE(0, 0, 1, 0);
+				CASE(0, 1, 0, 0);
+				CASE(0, 1, 1, 0);
+				CASE(1, 0, 0, 0);
+				CASE(1, 0, 1, 0);
+				CASE(1, 1, 0, 0);
+				CASE(1, 1, 1, 0);
+				CASE(0, 0, 0, 1);
+				CASE(0, 0, 1, 1);
+				CASE(0, 1, 0, 1);
+				CASE(0, 1, 1, 1);
+				CASE(1, 0, 0, 1);
+				CASE(1, 0, 1, 1);
+				CASE(1, 1, 0, 1);
+				CASE(1, 1, 1, 1);
+			}
+#undef CASE
+#else
+			// NVCHANGE_END: Add VXGI
+
 #define CASE(A,B,C) \
 			case ((A << 2) | (B << 1) | C) : \
 			{ \
@@ -1134,6 +1221,10 @@ void FDeferredShadingSceneRenderer::RenderStandardDeferredImageBasedReflections(
 				CASE(1, 1, 1);
 			}
 #undef CASE
+
+			// NVCHANGE_BEGIN: Add VXGI
+#endif
+			// NVCHANGE_END: Add VXGI
 
 			DrawRectangle(
 				RHICmdList,
@@ -1158,10 +1249,20 @@ void FDeferredShadingSceneRenderer::RenderDeferredReflections(FRHICommandListImm
 	}
 
 	bool bAnyViewIsReflectionCapture = false;
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	bool bAnyViewVxgiSpecular = false;
+#endif
+	// NVCHANGE_END: Add VXGI
 	for (int32 ViewIndex = 0, Num = Views.Num(); ViewIndex < Num; ViewIndex++)
 	{
 		const FViewInfo& View = Views[ViewIndex];
 		bAnyViewIsReflectionCapture = bAnyViewIsReflectionCapture || View.bIsReflectionCapture;
+		// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+		bAnyViewVxgiSpecular = bAnyViewVxgiSpecular || !!View.FinalPostProcessSettings.VxgiSpecularTracingEnabled;
+#endif
+		// NVCHANGE_END: Add VXGI
 	}
 
 	// If we're currently capturing a reflection capture, output SpecularColor * IndirectIrradiance for metals so they are not black in reflections,
@@ -1174,8 +1275,17 @@ void FDeferredShadingSceneRenderer::RenderDeferredReflections(FRHICommandListImm
 	{
 		const uint32 bDoTiledReflections = CVarDoTiledReflections.GetValueOnRenderThread() != 0;
 		const bool bReflectionEnvironment = ShouldDoReflectionEnvironment();
+		// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+		// The tiled reflection compute shader doesn't implement VXGI compositing
+		const bool bReflectionsWithCompute = bDoTiledReflections && !bAnyViewVxgiSpecular && (FeatureLevel >= ERHIFeatureLevel::SM5) && bReflectionEnvironment && Scene->ReflectionSceneData.CubemapArray.IsValid();
+#else
+		// NVCHANGE_END: Add VXGI
 		const bool bReflectionsWithCompute = bDoTiledReflections && (FeatureLevel >= ERHIFeatureLevel::SM5) && bReflectionEnvironment && Scene->ReflectionSceneData.CubemapArray.IsValid();
-		
+		// NVCHANGE_BEGIN: Add VXGI
+#endif
+		// NVCHANGE_END: Add VXGI
+
 		if (bReflectionsWithCompute)
 		{
 			RenderTiledDeferredImageBasedReflections(RHICmdList, DynamicBentNormalAO);

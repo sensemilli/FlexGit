@@ -23,8 +23,15 @@ public class D3D12RHI : ModuleRules
 		AddThirdPartyPrivateStaticDependencies(Target, "DX11");
         AddThirdPartyPrivateStaticDependencies(Target, "NVAPI");
         AddThirdPartyPrivateStaticDependencies(Target, "AMD");
-        
-		if (Target.Configuration != UnrealTargetConfiguration.Shipping)
+
+        // NVCHANGE_BEGIN: Add VXGI
+        if ((Target.Platform == UnrealTargetPlatform.Win64) || (Target.Platform == UnrealTargetPlatform.Win32))
+        {
+            AddThirdPartyPrivateStaticDependencies(Target, "VXGI");
+        }
+        // NVCHANGE_END: Add VXGI
+
+        if (Target.Configuration != UnrealTargetConfiguration.Shipping)
 		{
 			PrivateIncludePathModuleNames.AddRange(new string[] { "TaskGraph" });
 		}

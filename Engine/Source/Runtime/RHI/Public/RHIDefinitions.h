@@ -704,6 +704,9 @@ inline bool IsFeatureLevelSupported(EShaderPlatform InShaderPlatform, ERHIFeatur
 	}	
 }
 
+// NVCHANGE_BEGIN: Add VXGI
+#if !WITH_GFSDK_VXGI
+
 inline bool RHISupportsTessellation(const EShaderPlatform Platform)
 {
 	if (IsFeatureLevelSupported(Platform, ERHIFeatureLevel::SM5))
@@ -712,6 +715,9 @@ inline bool RHISupportsTessellation(const EShaderPlatform Platform)
 	}
 	return false;
 }
+
+#endif
+// NVCHANGE_END: Add VXGI
 
 inline bool RHINeedsToSwitchVerticalAxis(EShaderPlatform Platform)
 {

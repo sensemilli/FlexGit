@@ -190,7 +190,11 @@ FSceneRenderTargets::FSceneRenderTargets(const FViewInfo& View, const FSceneRend
 	, ScreenSpaceAO(GRenderTargetPool.MakeSnapshot(SnapshotSource.ScreenSpaceAO))
 	, CustomDepth(GRenderTargetPool.MakeSnapshot(SnapshotSource.CustomDepth))
 	, CustomStencilSRV(SnapshotSource.CustomStencilSRV)
+	// NVCHANGE_BEGIN: Add VXGI
+#if !WITH_GFSDK_VXGI
 	, ShadowDepthZ(GRenderTargetPool.MakeSnapshot(SnapshotSource.ShadowDepthZ))
+#endif
+	// NVCHANGE_END: Add VXGI
 	, OptionalShadowDepthColor(GRenderTargetPool.MakeSnapshot(SnapshotSource.OptionalShadowDepthColor))
 	, PreShadowCacheDepthZ(GRenderTargetPool.MakeSnapshot(SnapshotSource.PreShadowCacheDepthZ))
 	, ReflectiveShadowMapNormal(GRenderTargetPool.MakeSnapshot(SnapshotSource.ReflectiveShadowMapNormal))
@@ -238,6 +242,12 @@ FSceneRenderTargets::FSceneRenderTargets(const FViewInfo& View, const FSceneRend
 	SnapshotArray(TranslucencyLightingVolumeAmbient, SnapshotSource.TranslucencyLightingVolumeAmbient);
 	SnapshotArray(TranslucencyLightingVolumeDirectional, SnapshotSource.TranslucencyLightingVolumeDirectional);
 
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	SnapshotArray(CascadedShadowDepthZ, SnapshotSource.CascadedShadowDepthZ);
+#endif
+	// NVCHANGE_END: Add VXGI
+
 	FSceneViewState* ViewState = (FSceneViewState*)View.State;
 	if (ViewState)
 	{
@@ -267,6 +277,46 @@ inline const TCHAR* GetSceneColorTargetName(FSceneRenderTargets::EShadingPath Sh
 	check((uint32)ShadingPath < sizeof(SceneColorNames));
 	return SceneColorNames[(uint32)ShadingPath];
 }
+
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+
+inline void CreateNonPooledRT(FPooledRenderTargetDesc& Desc, TRefCountPtr<IPooledRenderTarget>& RenderTarget, const TCHAR* DebugName)
+{
+	check(!RenderTarget);
+	FRHIResourceCreateInfo CreateInfo;
+	CreateInfo.ClearValueBinding = Desc.ClearValue;
+	RenderTarget = new FPooledRenderTarget(Desc);
+	RHICreateTargetableShaderResource2D(
+		Desc.Extent.X,
+		Desc.Extent.Y,
+		Desc.Format,
+		Desc.NumMips,
+		Desc.Flags,
+		Desc.TargetableFlags,
+		Desc.bForceSeparateTargetAndShaderResource,
+		CreateInfo,
+		(FTexture2DRHIRef&)RenderTarget->GetRenderTargetItem().TargetableTexture,
+		(FTexture2DRHIRef&)RenderTarget->GetRenderTargetItem().ShaderResourceTexture,
+		Desc.NumSamples
+		);
+	RHIBindDebugLabelName(RenderTarget->GetRenderTargetItem().TargetableTexture, DebugName);
+}
+
+#define VXGI_CREATE_RT_ARRAY(DESC, A, S)\
+	for (int32 Index = 0; Index < ARRAY_COUNT(A); ++Index)\
+			{\
+		CreateNonPooledRT(DESC, A[Index], S);\
+			}
+
+#define VXGI_SAFE_RELEASE_ARRAY(A)\
+	for (int32 Index = 0; Index < ARRAY_COUNT(A); ++Index)\
+			{\
+		A[Index].SafeRelease();\
+			}
+
+#endif
+// NVCHANGE_END: Add VXGI
 
 FIntPoint FSceneRenderTargets::ComputeDesiredSize(const FSceneViewFamily& ViewFamily)
 {
@@ -1119,7 +1169,11 @@ void FSceneRenderTargets::FinishRenderingPrePass(FRHICommandListImmediate& RHICm
 
 void FSceneRenderTargets::BeginRenderingShadowDepth(FRHICommandList& RHICmdList, bool bClear)
 {
+	// NVCHANGE_BEGIN: Add VXGI
+#if !WITH_GFSDK_VXGI
 	GRenderTargetPool.VisualizeTexture.SetCheckPoint(RHICmdList, ShadowDepthZ);
+#endif
+	// NVCHANGE_END: Add VXGI
 
 	//All of the shadow passes are written using 'clear stencil after', so keep stencil as-is
 	FRHISetRenderTargetsInfo Info(0, nullptr, FRHIDepthRenderTargetView(GetShadowDepthZSurface(), 
@@ -1139,6 +1193,39 @@ void FSceneRenderTargets::BeginRenderingShadowDepth(FRHICommandList& RHICmdList,
 
 	RHICmdList.SetRenderTargetsAndClear(Info);
 }
+
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+
+void FSceneRenderTargets::BeginRenderingCascadedShadowDepth(FRHICommandList& RHICmdList, bool bClear, int32 CascadeIndex)
+{
+	//All of the shadow passes are written using 'clear stencil after', so keep stencil as-is
+	FRHISetRenderTargetsInfo Info(0, nullptr, FRHIDepthRenderTargetView(
+		GetShadowDepthZSurface(CascadeIndex),
+		bClear ? ERenderTargetLoadAction::EClear : ERenderTargetLoadAction::ELoad,
+		ERenderTargetStoreAction::EStore,
+		ERenderTargetLoadAction::ELoad,
+		ERenderTargetStoreAction::EStore));
+
+	check(Info.DepthStencilRenderTarget.Texture->GetDepthClearValue() == 1.0f);
+	Info.ColorRenderTarget[0].StoreAction = ERenderTargetStoreAction::ENoAction;
+
+	if (!GSupportsDepthRenderTargetWithoutColorRenderTarget)
+	{
+		Info.NumColorRenderTargets = 1;
+		Info.ColorRenderTarget[0].Texture = GetOptionalShadowDepthColorSurface();
+	}
+
+	RHICmdList.SetRenderTargetsAndClear(Info);
+}
+
+void FSceneRenderTargets::FinishRenderingCascadedShadowDepth(FRHICommandList& RHICmdList, int32 CascadeIndex)
+{
+	RHICmdList.CopyToResolveTarget(GetShadowDepthZSurface(CascadeIndex), GetShadowDepthZTexture(CascadeIndex), false, FResolveParams(FResolveRect()));
+}
+
+#endif
+// NVCHANGE_END: Add VXGI
 
 void FSceneRenderTargets::BeginRenderingCubeShadowDepth(FRHICommandList& RHICmdList, int32 ShadowResolution)
 {
@@ -1480,6 +1567,11 @@ void FSceneRenderTargets::AllocateForwardShadingPathRenderTargets()
 
 void FSceneRenderTargets::AllocateForwardShadingShadowDepthTarget(const FIntPoint& ShadowBufferResolution)
 {
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	checkNoEntry();
+#else
+	// NVCHANGE_END: Add VXGI
 	{
 		FPooledRenderTargetDesc Desc(FPooledRenderTargetDesc::Create2DDesc(ShadowBufferResolution, PF_ShadowDepth, FClearValueBinding::DepthOne, TexCreate_None, TexCreate_DepthStencilTargetable, false));
 		GRenderTargetPool.FindFreeElement(Desc, ShadowDepthZ, TEXT("ShadowDepthZ"));
@@ -1490,6 +1582,9 @@ void FSceneRenderTargets::AllocateForwardShadingShadowDepthTarget(const FIntPoin
 		FPooledRenderTargetDesc Desc(FPooledRenderTargetDesc::Create2DDesc(ShadowBufferResolution, PF_B8G8R8A8, FClearValueBinding::None, TexCreate_None, TexCreate_RenderTargetable, false));
 		GRenderTargetPool.FindFreeElement(Desc, OptionalShadowDepthColor, TEXT("OptionalShadowDepthColor"));
 	}
+	// NVCHANGE_BEGIN: Add VXGI
+#endif
+	// NVCHANGE_END: Add VXGI
 }
 
 // for easier use of "VisualizeTexture"
@@ -1588,8 +1683,29 @@ void FSceneRenderTargets::AllocateCommonDepthTargets()
 		FPooledRenderTargetDesc Desc(FPooledRenderTargetDesc::Create2DDesc(BufferSize, PF_DepthStencil, FClearValueBinding::DepthFar, TexCreate_None, TexCreate_DepthStencilTargetable, false));
 		Desc.NumSamples = GetNumSceneColorMSAASamples(CurrentFeatureLevel);
 		Desc.Flags |= TexCreate_FastVRAM;
+
+		// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+		VXGI_CREATE_RT_ARRAY(Desc, VxgiSceneDepthZArray, TEXT("VxgiSceneDepthZArray"));
+		SceneDepthZ = VxgiSceneDepthZArray[0];
+#else
+		// NVCHANGE_END: Add VXGI
 		GRenderTargetPool.FindFreeElement(Desc, SceneDepthZ, TEXT("SceneDepthZ"));
+		// NVCHANGE_BEGIN: Add VXGI
+#endif
+		// NVCHANGE_END: Add VXGI
 	}
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	if (!VxgiNormalAndRoughness)
+	{
+		FPooledRenderTargetDesc Desc(FPooledRenderTargetDesc::Create2DDesc(BufferSize, PF_FloatRGBA, FClearValueBinding::Black, TexCreate_None, TexCreate_RenderTargetable, false));
+		VXGI_CREATE_RT_ARRAY(Desc, VxgiNormalAndRoughnessArray, TEXT("VxgiNormalAndRoughnessArray"));
+		VxgiNormalAndRoughness = VxgiNormalAndRoughnessArray[0];
+	}
+#endif
+	// NVCHANGE_END: Add VXGI
 
 	// When targeting DX Feature Level 10, create an auxiliary texture to store the resolved scene depth, and a render-targetable surface to hold the unresolved scene depth.
 	if (!AuxiliarySceneDepthZ && !GSupportsDepthFetchDuringDepthTest)
@@ -1644,7 +1760,16 @@ void FSceneRenderTargets::AllocateDeferredShadingPathRenderTargets()
 	//create the shadow depth texture and/or surface
 	{
 		FPooledRenderTargetDesc Desc(FPooledRenderTargetDesc::Create2DDesc(ShadowBufferResolution, PF_ShadowDepth, FClearValueBinding::DepthOne, TexCreate_None, TexCreate_DepthStencilTargetable, false));
+
+		// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+		VXGI_CREATE_RT_ARRAY(Desc, CascadedShadowDepthZ, TEXT("CascadedShadowDepthZ"));
+#else
+		// NVCHANGE_END: Add VXGI
 		GRenderTargetPool.FindFreeElement(Desc, ShadowDepthZ, TEXT("ShadowDepthZ"));
+		// NVCHANGE_BEGIN: Add VXGI
+#endif
+		// NVCHANGE_END: Add VXGI
 	}
 		
 	{
@@ -1830,12 +1955,31 @@ void FSceneRenderTargets::ReleaseAllTargets()
 	ReflectiveShadowMapDiffuse.SafeRelease();
 	ReflectiveShadowMapDepth.SafeRelease();
 
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	VxgiOutputDiffuse.Reset();
+	VxgiOutputSpec.Reset();
+	VxgiNormalAndRoughness.SafeRelease();
+	VXGI_SAFE_RELEASE_ARRAY(VxgiSceneDepthZArray);
+	VXGI_SAFE_RELEASE_ARRAY(VxgiNormalAndRoughnessArray);
+#endif
+	// NVCHANGE_END: Add VXGI
+
 	for (int32 SurfaceIndex = 0; SurfaceIndex < NumTranslucencyShadowSurfaces; SurfaceIndex++)
 	{
 		TranslucencyShadowTransmission[SurfaceIndex].SafeRelease();
 	}
 
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	VXGI_SAFE_RELEASE_ARRAY(CascadedShadowDepthZ);
+#else
+	// NVCHANGE_END: Add VXGI
 	ShadowDepthZ.SafeRelease();
+	// NVCHANGE_BEGIN: Add VXGI
+#endif
+	// NVCHANGE_END: Add VXGI
+
 	OptionalShadowDepthColor.SafeRelease();
 
 	PreShadowCacheDepthZ.SafeRelease();
@@ -2072,7 +2216,15 @@ bool FSceneRenderTargets::AreShadingPathRenderTargetsAllocated(EShadingPath InSh
 		}
 	case EShadingPath::Deferred:
 		{
+			// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+			return (CascadedShadowDepthZ[0] != nullptr);
+#else
+			// NVCHANGE_END: Add VXGI
 			return (ShadowDepthZ != nullptr);
+			// NVCHANGE_BEGIN: Add VXGI
+#endif
+			// NVCHANGE_END: Add VXGI
 		}
 	default:
 		{
@@ -2325,6 +2477,15 @@ void FDeferredPixelShaderParameters::Bind(const FShaderParameterMap& ParameterMa
 	CustomDepthTexture.Bind(ParameterMap,TEXT("CustomDepthTexture"));
 	CustomDepthTextureSampler.Bind(ParameterMap,TEXT("CustomDepthTextureSampler"));
 	CustomStencilTexture.Bind(ParameterMap,TEXT("CustomStencilTexture"));
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	VxgiDiffuseTexture.Bind(ParameterMap, TEXT("VxgiDiffuseTexture"));
+	VxgiDiffuseTextureSampler.Bind(ParameterMap, TEXT("VxgiDiffuseTextureSampler"));
+	VxgiSpecularTexture.Bind(ParameterMap, TEXT("VxgiSpecularTexture"));
+	VxgiSpecularTextureSampler.Bind(ParameterMap, TEXT("VxgiSpecularTextureSampler"));
+#endif
+	// NVCHANGE_END: Add VXGI
 }
 
 bool IsDBufferEnabled();
@@ -2379,6 +2540,13 @@ void FDeferredPixelShaderParameters::Set(FRHICommandList& RHICmdList, const Shad
 			{
 				SetUniformBufferParameter(RHICmdList, ShaderRHI, GBufferResources, SceneContext.GetGBufferResourcesUniformBuffer());
 			}
+
+			// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI	
+			SetTextureParameter(RHICmdList, ShaderRHI, VxgiDiffuseTexture, VxgiDiffuseTextureSampler, TStaticSamplerState<>::GetRHI(), SceneContext.GetVxgiOutputDiffuse(View.VxgiViewIndex));
+			SetTextureParameter(RHICmdList, ShaderRHI, VxgiSpecularTexture, VxgiSpecularTextureSampler, TStaticSamplerState<>::GetRHI(), SceneContext.GetVxgiOutputSpecular(View.VxgiViewIndex));
+#endif
+			// NVCHANGE_END: Add VXGI
 
 			SetTextureParameter(RHICmdList, ShaderRHI, ScreenSpaceAOTexture, ScreenSpaceAOTextureSampler, TStaticSamplerState<>::GetRHI(), ScreenSpaceAO->GetRenderTargetItem().ShaderResourceTexture);
 			SetTextureParameter(RHICmdList, ShaderRHI, ScreenSpaceAOTextureMS, ScreenSpaceAO->GetRenderTargetItem().TargetableTexture);
@@ -2448,6 +2616,15 @@ FArchive& operator<<(FArchive& Ar,FDeferredPixelShaderParameters& Parameters)
 	Ar << Parameters.CustomDepthTexture;
 	Ar << Parameters.CustomDepthTextureSampler;
 	Ar << Parameters.CustomStencilTexture;
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI	
+	Ar << Parameters.VxgiDiffuseTexture;
+	Ar << Parameters.VxgiDiffuseTextureSampler;
+	Ar << Parameters.VxgiSpecularTexture;
+	Ar << Parameters.VxgiSpecularTextureSampler;
+#endif
+	// NVCHANGE_END: Add VXGI
 
 	return Ar;
 }

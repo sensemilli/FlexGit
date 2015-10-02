@@ -188,6 +188,16 @@ struct FEngineShowFlags
 		SetDistanceFieldGI(false);
 
 		SetForceGBuffer(true);
+
+		// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+		SetVxgiDiffuse(false);
+		SetVxgiSpecular(false);
+		SetVxgiOpacityVoxels(false);
+		SetVxgiEmittanceVoxels(false);
+		SetVxgiIrradianceVoxels(false);
+#endif
+		// NVCHANGE_END: Add VXGI
 	}
 
 	// ---------------------------------------------------------
@@ -339,6 +349,14 @@ private:
 		SetForceGBuffer(false);
 		SetVisualizeSSS(false);
 		SetVisualizeBloom(false);
+
+		// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+		SetVxgiOpacityVoxels(false);
+		SetVxgiEmittanceVoxels(false);
+		SetVxgiIrradianceVoxels(false);
+#endif
+		// NVCHANGE_END: Add VXGI
 	}
 
 

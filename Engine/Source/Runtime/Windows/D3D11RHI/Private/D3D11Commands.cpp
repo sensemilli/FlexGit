@@ -2029,3 +2029,76 @@ IRHICommandContextContainer* FD3D11DynamicRHI::RHIGetCommandContextContainer()
 	return nullptr;
 }
 
+// NVCHANGE_BEGIN: Add HBAO+
+#if WITH_GFSDK_SSAO
+
+static TAutoConsoleVariable<int32> CVarHBAOGBufferNormals(
+	TEXT("r.HBAO.GBufferNormals"),
+	1,
+	TEXT(" 0: reconstruct normals from depths\n")
+	TEXT(" 1: fetch GBuffer normals\n"),
+	ECVF_RenderThreadSafe);
+
+static TAutoConsoleVariable<int32> CVarHBAOVisualizeAO(
+	TEXT("r.HBAO.VisualizeAO"),
+	0,
+	TEXT("To visualize the AO only"),
+	ECVF_Cheat | ECVF_RenderThreadSafe);
+
+void FD3D11DynamicRHI::RHIRenderHBAO(
+	const FTextureRHIParamRef SceneDepthTextureRHI,
+	const FMatrix& ProjectionMatrix,
+	const FTextureRHIParamRef SceneNormalTextureRHI,
+	const FMatrix& ViewMatrix,
+	const FTextureRHIParamRef SceneColorTextureRHI,
+	const GFSDK_SSAO_Parameters& BaseParams
+	)
+{
+	if (!HBAOContext)
+	{
+		return;
+	}
+
+	D3D11_VIEWPORT Viewport;
+	uint32 NumViewports = 1;
+	Direct3DDeviceIMContext->RSGetViewports(&NumViewports, &Viewport);
+
+	FD3D11TextureBase* DepthTexture = GetD3D11TextureFromRHITexture(SceneDepthTextureRHI);
+	ID3D11ShaderResourceView* DepthSRV = DepthTexture->GetShaderResourceView();
+
+	FD3D11TextureBase* NewRenderTarget = GetD3D11TextureFromRHITexture(SceneColorTextureRHI);
+	ID3D11RenderTargetView* RenderTargetView = NewRenderTarget->GetRenderTargetView(0, -1);
+
+	GFSDK_SSAO_InputData_D3D11 Input;
+	Input.DepthData.DepthTextureType = GFSDK_SSAO_HARDWARE_DEPTHS;
+	Input.DepthData.pFullResDepthTextureSRV = DepthSRV;
+	Input.DepthData.Viewport.Enable = true;
+	Input.DepthData.Viewport.TopLeftX = uint32(Viewport.TopLeftX);
+	Input.DepthData.Viewport.TopLeftY = uint32(Viewport.TopLeftY);
+	Input.DepthData.Viewport.Width = uint32(Viewport.Width);
+	Input.DepthData.Viewport.Height = uint32(Viewport.Height);
+	Input.DepthData.ProjectionMatrix.Data = GFSDK_SSAO_Float4x4(&ProjectionMatrix.M[0][0]);
+	Input.DepthData.ProjectionMatrix.Layout = GFSDK_SSAO_ROW_MAJOR_ORDER;
+	Input.DepthData.MetersToViewSpaceUnits = 100.f;
+
+	FD3D11TextureBase* NormalTexture = GetD3D11TextureFromRHITexture(SceneNormalTextureRHI);
+	ID3D11ShaderResourceView* NormalSRV = NormalTexture->GetShaderResourceView();
+
+	Input.NormalData.Enable = CVarHBAOGBufferNormals.GetValueOnRenderThread();
+	Input.NormalData.pFullResNormalTextureSRV = NormalSRV;
+	Input.NormalData.DecodeScale = 2.f;
+	Input.NormalData.DecodeBias = -1.f;
+	Input.NormalData.WorldToViewMatrix.Data = GFSDK_SSAO_Float4x4(&ViewMatrix.M[0][0]);
+	Input.NormalData.WorldToViewMatrix.Layout = GFSDK_SSAO_ROW_MAJOR_ORDER;
+
+	GFSDK_SSAO_Parameters_D3D11 Params;
+	FMemory::Memcpy(&Params, &BaseParams, sizeof(BaseParams));
+	Params.Output.BlendMode = CVarHBAOVisualizeAO.GetValueOnRenderThread() ? GFSDK_SSAO_OVERWRITE_RGB : GFSDK_SSAO_MULTIPLY_RGB;
+
+	GFSDK_SSAO_Status Status;
+	Status = HBAOContext->RenderAO(Direct3DDeviceIMContext, &Input, &Params, RenderTargetView);
+	check(Status == GFSDK_SSAO_OK);
+}
+
+#endif
+// NVCHANGE_END: Add HBAO+

@@ -47,6 +47,17 @@
 //Materials also have to opt in to these features.
 #define USE_EDITOR_COMPOSITING (USE_EDITOR_SHADERS && EDITOR_PRIMITIVE_MATERIAL)
 
+// NVCHANGE_BEGIN: Add VXGI
+float GetVxgiVoxelizationActive()
+{
+#if VXGI_VOXELIZATION_SHADER
+	return 1.f;
+#else
+	return 0.f;
+#endif
+}
+// NVCHANGE_END: Add VXGI
+
 /**
  * Parameters used by vertex and pixel shaders to access particle properties.
  */
@@ -1161,6 +1172,14 @@ float4 SceneTextureLookup(float2 UV, int SceneTextureIndex, bool bFiltered)
 		case 23: return ScreenSpaceData.AmbientOcclusion;
 		// PPI_CustomStencil
 		case 24: return ScreenSpaceData.GBuffer.CustomStencil;
+
+		// NVCHANGE_BEGIN: Add VXGI
+		// PPI_VxgiDiffuse
+		case 25: return float4(ScreenSpaceData.VxgiDiffuse, 0);
+		// PPI_VxgiSpecular
+		case 26: return ScreenSpaceData.VxgiSpecular;
+		// NVCHANGE_END: Add VXGI
+
 		default:
 			return float4(0, 0, 0, 0);
 	}

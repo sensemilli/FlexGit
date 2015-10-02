@@ -297,6 +297,14 @@ FSceneView::FSceneView(const FSceneViewInitOptions& InitOptions)
 	, bHasSelectedComponents( false )
 #endif
 	, FeatureLevel(InitOptions.ViewFamily ? InitOptions.ViewFamily->GetFeatureLevel() : GMaxRHIFeatureLevel)
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	, bIsVxgiVoxelization(false)
+	, VxgiVoxelizationPass(0)
+	, VxgiViewIndex(0)
+#endif
+	// NVCHANGE_END: Add VXGI
 {
 	check(UnscaledViewRect.Min.X >= 0);
 	check(UnscaledViewRect.Min.Y >= 0);
@@ -940,6 +948,64 @@ void FSceneView::OverridePostProcessSettings(const FPostProcessSettings& Src, fl
 		LERP_PP(ScreenSpaceReflectionQuality);
 		LERP_PP(ScreenSpaceReflectionIntensity);
 		LERP_PP(ScreenSpaceReflectionMaxRoughness);
+
+		// NVCHANGE_BEGIN: Add HBAO+
+#if WITH_GFSDK_SSAO
+		LERP_PP(HBAOPowerExponent);
+		LERP_PP(HBAORadius);
+		LERP_PP(HBAOBias);
+		LERP_PP(HBAODetailAO);
+		LERP_PP(HBAOBlurSharpness);
+
+		if (Src.bOverride_HBAOBlurRadius)
+		{
+			Dest.HBAOBlurRadius = Src.HBAOBlurRadius;
+		}
+#endif
+		// NVCHANGE_END: Add HBAO+
+
+		// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+#define IF_PP_ASSIGN(NAME) if(Src.bOverride_ ## NAME) Dest . NAME = Src . NAME;
+
+		IF_PP_ASSIGN(VxgiDiffuseTracingEnabled);
+		LERP_PP(VxgiDiffuseTracingIntensity);
+		LERP_PP(VxgiMultiBounceIrradianceScale);
+		LERP_PP(VxgiDiffuseTracingNumCones);
+		IF_PP_ASSIGN(bVxgiDiffuseTracingAutoAngle);
+		LERP_PP(VxgiDiffuseTracingSparsity);
+		LERP_PP(VxgiDiffuseTracingConeAngle);
+		IF_PP_ASSIGN(bVxgiDiffuseTracingConeRotation);
+		IF_PP_ASSIGN(bVxgiDiffuseTracingRandomConeOffsets);
+		LERP_PP(VxgiDiffuseTracingConeNormalGroupingFactor);
+		LERP_PP(VxgiDiffuseTracingMaxSamples);
+		LERP_PP(VxgiDiffuseTracingStep);
+		LERP_PP(VxgiDiffuseTracingOpacityCorrectionFactor);
+		LERP_PP(VxgiDiffuseTracingNormalOffsetFactor);
+		LERP_PP(VxgiDiffuseTracingAmbientColor);
+		LERP_PP(VxgiDiffuseTracingAmbientRange);
+		LERP_PP(VxgiDiffuseTracingEnvironmentMapTint);
+		IF_PP_ASSIGN(VxgiDiffuseTracingEnvironmentMap);
+		LERP_PP(VxgiDiffuseTracingInitialOffsetBias);
+		LERP_PP(VxgiDiffuseTracingInitialOffsetDistanceFactor);
+		IF_PP_ASSIGN(bVxgiDiffuseTracingTemporalReprojectionEnabled);
+		LERP_PP(VxgiDiffuseTracingTemporalReprojectionPreviousFrameWeight);
+		LERP_PP(VxgiDiffuseTracingTemporalReprojectionMaxDistanceInVoxels);
+		LERP_PP(VxgiDiffuseTracingTemporalReprojectionNormalWeightExponent);
+
+		IF_PP_ASSIGN(VxgiSpecularTracingEnabled);
+		LERP_PP(VxgiSpecularTracingIntensity);
+		LERP_PP(VxgiSpecularTracingMaxSamples);
+		LERP_PP(VxgiSpecularTracingTracingStep);
+		LERP_PP(VxgiSpecularTracingOpacityCorrectionFactor);
+		LERP_PP(VxgiSpecularTracingInitialOffsetBias);
+		LERP_PP(VxgiSpecularTracingInitialOffsetDistanceFactor);
+		IF_PP_ASSIGN(VxgiSpecularTracingFilter);
+		LERP_PP(VxgiSpecularTracingEnvironmentMapTint);
+		IF_PP_ASSIGN(VxgiSpecularTracingEnvironmentMap);
+		LERP_PP(VxgiSpecularTracingTangentJitterScale);
+#endif
+		// NVCHANGE_END: Add VXGI
 
 		// cubemaps are getting blended additively - in contrast to other properties, maybe we should make that consistent
 		if (Src.AmbientCubemap && Src.bOverride_AmbientCubemapIntensity)
@@ -1594,6 +1660,37 @@ EShaderPlatform FSceneView::GetShaderPlatform() const
 {
 	return GShaderPlatformForFeatureLevel[GetFeatureLevel()];
 }
+
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+
+bool FSceneView::ApplyVoxelizationMaterialInfo(const VXGI::MaterialInfo& MaterialInfo, bool bUpdateStateWhenConstantsChange) const
+{
+	SCOPE_CYCLE_COUNTER(STAT_VxgiApplyVoxelizationMaterialInfo);
+
+	const bool bStateChanged = MaterialInfo.requiresNewState(VxgiPreviousMaterialInfo);
+
+	if (bStateChanged)
+	{
+		auto Status = GDynamicRHI->RHIVXGIGetInterface()->getVoxelizationState(MaterialInfo, VxgiDrawCallState);
+		check(VXGI_SUCCEEDED(Status));
+	}
+	else if (MaterialInfo.requiresParameterUpdate(VxgiPreviousMaterialInfo))
+	{
+		auto Status = GDynamicRHI->RHIVXGIGetInterface()->updateVoxelizationMaterialParameters(MaterialInfo);
+		check(VXGI_SUCCEEDED(Status));
+
+		if (bUpdateStateWhenConstantsChange)
+			GDynamicRHI->RHIVXGIApplyDrawStateButNotShaders(VxgiDrawCallState);
+	}
+
+	VxgiPreviousMaterialInfo = MaterialInfo;
+
+	return bStateChanged;
+}
+
+#endif
+// NVCHANGE_END: Add VXGI
 
 FSceneViewFamily::FSceneViewFamily( const ConstructionValues& CVS )
 	:

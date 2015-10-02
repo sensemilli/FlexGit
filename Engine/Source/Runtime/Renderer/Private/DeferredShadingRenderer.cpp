@@ -25,6 +25,12 @@
 #include "../../Engine/Private/SkeletalRenderGPUSkin.h"		// GPrevPerBoneMotionBlur
 #include "EngineModule.h"
 
+// NVCHANGE_BEGIN: Add HBAO+
+#if WITH_GFSDK_SSAO
+#include "GFSDK_SSAO.h"
+#endif
+// NVCHANGE_END: Add HBAO+
+
 TAutoConsoleVariable<int32> CVarEarlyZPass(
 	TEXT("r.EarlyZPass"),
 	3,	
@@ -62,6 +68,18 @@ static TAutoConsoleVariable<int32> CVarRHICmdFlushRenderThreadTasksBasePass(
 	TEXT("r.RHICmdFlushRenderThreadTasksBasePass"),
 	0,
 	TEXT("Wait for completion of parallel render thread tasks at the end of the base pass. A more granular version of r.RHICmdFlushRenderThreadTasks. If either r.RHICmdFlushRenderThreadTasks or r.RHICmdFlushRenderThreadTasksBasePass is > 0 we will flush."));
+
+// NVCHANGE_BEGIN: Add HBAO+
+#if WITH_GFSDK_SSAO
+
+static TAutoConsoleVariable<int32> CVarHBAOEnable(
+	TEXT("r.HBAO.Enable"),
+	0,
+	TEXT("Enable HBAO+"),
+	ECVF_RenderThreadSafe);
+
+#endif
+// NVCHANGE_END: Add HBAO+
 
 /*-----------------------------------------------------------------------------
 	FDeferredShadingSceneRenderer
@@ -102,6 +120,12 @@ FDeferredShadingSceneRenderer::FDeferredShadingSceneRenderer(const FSceneViewFam
 	{
 		EarlyZPassMode = DDM_AllOpaque;
 	}
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	InitVxgiRenderingState(InViewFamily);
+#endif
+	// NVCHANGE_END: Add VXGI
 }
 
 extern FGlobalBoundShaderState GClearMRTBoundShaderState[8];
@@ -905,6 +929,15 @@ void FDeferredShadingSceneRenderer::Render(FRHICommandListImmediate& RHICmdList)
 		FGlobalDynamicIndexBuffer::Get().Commit();
 	}
 
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	if (bVxgiTemporalReprojectionEnable)
+	{
+		SceneContext.SwapVxgiInputBuffers();
+	}
+#endif
+	// NVCHANGE_END: Add VXGI
+
 	{
 		QUICK_SCOPE_CYCLE_COUNTER(STAT_FDeferredShadingSceneRenderer_MotionBlurStartFrame);
 		Scene->MotionBlurInfoData.StartFrame(ViewFamily.bWorldIsPaused);
@@ -1125,12 +1158,41 @@ void FDeferredShadingSceneRenderer::Render(FRHICommandListImmediate& RHICmdList)
 		// Clear the translucent lighting volumes before we accumulate
 		ClearTranslucentVolumeLighting(RHICmdList);
 
+		// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+		InitializeVxgiVoxelization(RHICmdList);
+#endif
+		// NVCHANGE_END: Add VXGI
+
 		RHICmdList.SetCurrentStat(GET_STATID(STAT_CLM_Lighting));
 		RenderLights(RHICmdList);
 		RHICmdList.SetCurrentStat(GET_STATID(STAT_CLM_AfterLighting));
 		ServiceLocalQueue();
 
 		GRenderTargetPool.AddPhaseEvent(TEXT("AfterRenderLights"));
+
+		// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+		FinalizeVxgiVoxelization(RHICmdList);
+
+		SceneContext.VxgiOutputDiffuse.Reset(Views.Num());
+		SceneContext.VxgiOutputDiffuse.SetNum(Views.Num());
+		SceneContext.VxgiOutputSpec.Reset(Views.Num());
+		SceneContext.VxgiOutputSpec.SetNum(Views.Num());
+
+		for (int32 ViewIndex = 0; ViewIndex < Views.Num(); ViewIndex++)
+		{
+			Views[ViewIndex].VxgiViewIndex = ViewIndex;
+			PrepareVxgiGBuffer(RHICmdList, Views[ViewIndex]);
+		}
+
+		for (int32 ViewIndex = 0; ViewIndex < Views.Num(); ViewIndex++)
+		{
+			RenderVxgiTracing(RHICmdList, Views[ViewIndex]);
+			CompositeVxgiDiffuseTracing(RHICmdList, Views[ViewIndex]);
+		}
+#endif
+		// NVCHANGE_END: Add VXGI
 
 		InjectAmbientCubemapTranslucentVolumeLighting(RHICmdList);
 		ServiceLocalQueue();
@@ -1168,6 +1230,45 @@ void FDeferredShadingSceneRenderer::Render(FRHICommandListImmediate& RHICmdList)
 		}
 		ServiceLocalQueue();
 	}
+
+	// NVCHANGE_BEGIN: Add HBAO+
+#if WITH_GFSDK_SSAO
+	if (GMaxRHIShaderPlatform == SP_PCD3D_SM5 &&
+		CVarHBAOEnable.GetValueOnRenderThread() &&
+		ViewFamily.EngineShowFlags.HBAO)
+	{
+		for (int32 ViewIndex = 0; ViewIndex < Views.Num(); ++ViewIndex)
+		{
+			const FViewInfo& View = Views[ViewIndex];
+
+			if (View.IsPerspectiveProjection() &&
+				View.FinalPostProcessSettings.HBAOPowerExponent > 0.f)
+			{
+				// Set the viewport to the current view
+				RHICmdList.SetViewport(View.ViewRect.Min.X, View.ViewRect.Min.Y, 0, View.ViewRect.Max.X, View.ViewRect.Max.Y, 1);
+
+				GFSDK_SSAO_Parameters Params;
+				Params.Radius = View.FinalPostProcessSettings.HBAORadius;
+				Params.Bias = View.FinalPostProcessSettings.HBAOBias;
+				Params.PowerExponent = View.FinalPostProcessSettings.HBAOPowerExponent;
+				Params.DetailAO = View.FinalPostProcessSettings.HBAODetailAO;
+				Params.Blur.Enable = View.FinalPostProcessSettings.HBAOBlurRadius != AOBR_BlurRadius0;
+				Params.Blur.Sharpness = View.FinalPostProcessSettings.HBAOBlurSharpness;
+				Params.Blur.Radius = View.FinalPostProcessSettings.HBAOBlurRadius == AOBR_BlurRadius4 ? GFSDK_SSAO_BLUR_RADIUS_4 : GFSDK_SSAO_BLUR_RADIUS_8;
+
+				// Render HBAO and multiply the AO over the SceneColorSurface.RGB, preserving destination alpha
+				RHICmdList.RenderHBAO(
+					SceneContext.GetSceneDepthTexture(),
+					View.ViewMatrices.ProjMatrix,
+					SceneContext.GetGBufferATexture(),
+					View.ViewMatrices.ViewMatrix,
+					SceneContext.GetSceneColorTexture(),
+					Params);
+			}
+		}
+	}
+#endif
+	// NVCHANGE_END: Add HBAO+
 
 	if (ViewFamily.EngineShowFlags.StationaryLightOverlap &&
 		FeatureLevel >= ERHIFeatureLevel::SM4)
@@ -1297,6 +1398,16 @@ void FDeferredShadingSceneRenderer::Render(FRHICommandListImmediate& RHICmdList)
 	SceneContext.ResolveSceneColor(RHICmdList, FResolveRect(0, 0, ViewFamily.FamilySizeX, ViewFamily.FamilySizeY));
 
 	GPrevPerBoneMotionBlur.EndAppend(RHICmdList);
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	for (int32 ViewIndex = 0; ViewIndex < Views.Num(); ViewIndex++)
+	{
+		SCOPED_CONDITIONAL_DRAW_EVENTF(RHICmdList, EventView, Views.Num() > 1, TEXT("View%d"), ViewIndex);
+		RenderVxgiDebug(RHICmdList, Views[ViewIndex]);
+	}
+#endif
+	// NVCHANGE_END: Add VXGI
 
 	// Finish rendering for each view.
 	if (ViewFamily.bResolveScene)

@@ -27,6 +27,26 @@ DEFINE_LOG_CATEGORY_STATIC(LogD3D11ShaderCompiler, Log, All);
 
 #pragma warning(pop)
 
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+#include "GFSDK_VXGI.h"
+
+class TVxgiErrorCallback : public NVRHI::IErrorCallback
+{
+public:
+	TArray<FShaderCompilerError> Errors;
+
+	virtual void signalError(const char* file, int line, const char* errorDesc)
+	{
+		FShaderCompilerError CompileError(*FString(errorDesc));
+		CompileError.ErrorFile = file;
+		CompileError.ErrorLineString = FString::FromInt(line);
+		Errors.Add(CompileError);
+	}
+};
+#endif
+// NVCHANGE_END: Add VXGI
+
 /**
  * TranslateCompilerFlag - translates the platform-independent compiler flags into D3DX defines
  * @param CompilerFlag - the platform-independent compiler flag to translate
@@ -306,6 +326,182 @@ HRESULT D3DCompileWrapper(
 #endif
 }
 
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+void ProcessD3D11ShaderInputBindDesc(
+	const FShaderCompilerInput& Input,
+	ID3D11ShaderReflection* Reflector,
+	TBitArray<>& OutUsedUniformBufferSlots,
+	FShaderParameterMap& OutParameterMap,
+	bool& bOutGlobalUniformBufferUsed,
+	uint32& OutNumSamplers)
+{
+	// Read the constant table description.
+	D3D11_SHADER_DESC ShaderDesc;
+	Reflector->GetDesc(&ShaderDesc);
+
+	bOutGlobalUniformBufferUsed = false;
+	OutNumSamplers = 0;
+
+	// Add parameters for shader resources (constant buffers, textures, samplers, etc. */
+	for (uint32 ResourceIndex = 0; ResourceIndex < ShaderDesc.BoundResources; ResourceIndex++)
+	{
+		D3D11_SHADER_INPUT_BIND_DESC BindDesc;
+		Reflector->GetResourceBindingDesc(ResourceIndex, &BindDesc);
+
+		if (FCStringAnsi::Strncmp(BindDesc.Name, "VXGI::", 6) == 0)
+		{
+			continue; //skip these
+		}
+
+		if (BindDesc.Type == D3D10_SIT_CBUFFER || BindDesc.Type == D3D10_SIT_TBUFFER)
+		{
+			const uint32 CBIndex = BindDesc.BindPoint;
+			ID3D11ShaderReflectionConstantBuffer* ConstantBuffer = Reflector->GetConstantBufferByName(BindDesc.Name);
+			D3D11_SHADER_BUFFER_DESC CBDesc;
+			ConstantBuffer->GetDesc(&CBDesc);
+			bool bGlobalCB = (FCStringAnsi::Strcmp(CBDesc.Name, "$Globals") == 0);
+
+			if (bGlobalCB)
+			{
+				// Track all of the variables in this constant buffer.
+				for (uint32 ConstantIndex = 0; ConstantIndex < CBDesc.Variables; ConstantIndex++)
+				{
+					ID3D11ShaderReflectionVariable* Variable = ConstantBuffer->GetVariableByIndex(ConstantIndex);
+					D3D11_SHADER_VARIABLE_DESC VariableDesc;
+					Variable->GetDesc(&VariableDesc);
+					if (VariableDesc.uFlags & D3D10_SVF_USED)
+					{
+						bOutGlobalUniformBufferUsed = true;
+
+						OutParameterMap.AddParameterAllocation(
+							ANSI_TO_TCHAR(VariableDesc.Name),
+							CBIndex,
+							VariableDesc.StartOffset,
+							VariableDesc.Size
+							);
+						OutUsedUniformBufferSlots[CBIndex] = true;
+					}
+				}
+			}
+			else
+			{
+				// Track just the constant buffer itself.
+				OutParameterMap.AddParameterAllocation(
+					ANSI_TO_TCHAR(CBDesc.Name),
+					CBIndex,
+					0,
+					0
+					);
+				OutUsedUniformBufferSlots[CBIndex] = true;
+			}
+		}
+		else if (BindDesc.Type == D3D10_SIT_TEXTURE || BindDesc.Type == D3D10_SIT_SAMPLER)
+		{
+			TCHAR OfficialName[1024];
+			uint32 BindCount = BindDesc.BindCount;
+			FCString::Strcpy(OfficialName, ANSI_TO_TCHAR(BindDesc.Name));
+
+			if (Input.Target.Platform == SP_PCD3D_SM5)
+			{
+				BindCount = 1;
+
+				// Assign the name and optionally strip any "[#]" suffixes
+				TCHAR *BracketLocation = FCString::Strchr(OfficialName, TEXT('['));
+				if (BracketLocation)
+				{
+					*BracketLocation = 0;
+
+					const int32 NumCharactersBeforeArray = BracketLocation - OfficialName;
+
+					// In SM5, for some reason, array suffixes are included in Name, i.e. "LightMapTextures[0]", rather than "LightMapTextures"
+					// Additionally elements in an array are listed as SEPERATE bound resources.
+					// However, they are always contiguous in resource index, so iterate over the samplers and textures of the initial association
+					// and count them, identifying the bindpoint and bindcounts
+
+					while (ResourceIndex + 1 < ShaderDesc.BoundResources)
+					{
+						D3D11_SHADER_INPUT_BIND_DESC BindDesc2;
+						Reflector->GetResourceBindingDesc(ResourceIndex + 1, &BindDesc2);
+
+						if (BindDesc2.Type == BindDesc.Type && FCStringAnsi::Strncmp(BindDesc2.Name, BindDesc.Name, NumCharactersBeforeArray) == 0)
+						{
+							BindCount++;
+							// Skip over this resource since it is part of an array
+							ResourceIndex++;
+						}
+						else
+						{
+							break;
+						}
+					}
+				}
+			}
+
+			if (BindDesc.Type == D3D10_SIT_SAMPLER)
+			{
+				OutNumSamplers += BindCount;
+			}
+
+			// Add a parameter for the texture only, the sampler index will be invalid
+			OutParameterMap.AddParameterAllocation(
+				OfficialName,
+				0,
+				BindDesc.BindPoint,
+				BindCount
+				);
+		}
+		else if (BindDesc.Type == D3D11_SIT_UAV_RWTYPED || BindDesc.Type == D3D11_SIT_UAV_RWSTRUCTURED ||
+			BindDesc.Type == D3D11_SIT_UAV_RWBYTEADDRESS || BindDesc.Type == D3D11_SIT_UAV_RWSTRUCTURED_WITH_COUNTER ||
+			BindDesc.Type == D3D11_SIT_UAV_APPEND_STRUCTURED)
+		{
+			TCHAR OfficialName[1024];
+			FCString::Strcpy(OfficialName, ANSI_TO_TCHAR(BindDesc.Name));
+
+			OutParameterMap.AddParameterAllocation(
+				OfficialName,
+				0,
+				BindDesc.BindPoint,
+				1
+				);
+		}
+		else if (BindDesc.Type == D3D11_SIT_STRUCTURED || BindDesc.Type == D3D11_SIT_BYTEADDRESS)
+		{
+			TCHAR OfficialName[1024];
+			FCString::Strcpy(OfficialName, ANSI_TO_TCHAR(BindDesc.Name));
+
+			OutParameterMap.AddParameterAllocation(
+				OfficialName,
+				0,
+				BindDesc.BindPoint,
+				1
+				);
+		}
+	}
+}
+
+void BuildD3D11ShaderResourceTable(FD3D11ShaderResourceTable &OutSRT, const FShaderCompilerInput& Input, TBitArray<> &UsedUniformBufferSlots, FShaderParameterMap& ParameterMap)
+{
+	// Build the generic SRT for this shader.
+	FShaderResourceTable GenericSRT;
+	BuildResourceTableMapping(Input.Environment.ResourceTableMap, Input.Environment.ResourceTableLayoutHashes, UsedUniformBufferSlots, ParameterMap, GenericSRT);
+
+	// At runtime textures are just SRVs, so combine them for the purposes of building token streams.
+	GenericSRT.ShaderResourceViewMap.Append(GenericSRT.TextureMap);
+
+	// Copy over the bits indicating which resource tables are active.
+	OutSRT.ResourceTableBits = GenericSRT.ResourceTableBits;
+
+	OutSRT.ResourceTableLayoutHashes = GenericSRT.ResourceTableLayoutHashes;
+
+	// Now build our token streams.
+	BuildResourceTableTokenStream(GenericSRT.ShaderResourceViewMap, GenericSRT.MaxBoundResourceTable, OutSRT.ShaderResourceViewMap);
+	BuildResourceTableTokenStream(GenericSRT.SamplerMap, GenericSRT.MaxBoundResourceTable, OutSRT.SamplerMap);
+	BuildResourceTableTokenStream(GenericSRT.UnorderedAccessViewMap, GenericSRT.MaxBoundResourceTable, OutSRT.UnorderedAccessViewMap);
+}
+#endif
+// NVCHANGE_END: Add VXGI
+
 void CompileD3D11Shader(const FShaderCompilerInput& Input,FShaderCompilerOutput& Output, FShaderCompilerDefinitions& AdditionalDefines, const FString& WorkingDirectory)
 {
 	FString PreprocessedShaderSource;
@@ -345,6 +541,52 @@ void CompileD3D11Shader(const FShaderCompilerInput& Input,FShaderCompilerOutput&
 		}
 	}
 
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	VXGI::IShaderCompiler* VxgiCompiler = NULL;
+	TVxgiErrorCallback VxgiErrorCallback;
+	bool bVxgiTessellationVS = false;
+	bool bVxgiUseCoverageSupersampling = false;
+
+	for (TMap<FString, FString>::TConstIterator DefinitionIt(Input.Environment.GetDefinitions()); DefinitionIt; ++DefinitionIt)
+	{
+		const FString& Name = DefinitionIt.Key();
+		const FString& Definition = DefinitionIt.Value();
+
+		if ((Input.Target.Frequency == SF_Pixel || Input.Target.Frequency == SF_Vertex || Input.Target.Frequency == SF_Domain) && Name == TEXT("VXGI_VOXELIZATION_SHADER") && Definition.ToBool())
+		{
+			LoadVxgiModule();
+
+			VXGI::ShaderCompilerParameters Params;
+			if (!CompilerPath.IsEmpty())
+			{
+				Params.d3dCompilerDLLName = TCHAR_TO_ANSI(*CompilerPath);
+			}
+			else
+			{
+				Params.d3dCompilerDLLName = D3DCOMPILER_DLL_A;
+			}
+
+			Params.errorCallback = &VxgiErrorCallback;
+			Params.multicoreShaderCompilation = false;
+
+			auto Status = VXGI::VFX_VXGI_VerifyInterfaceVersion();
+			check(VXGI_SUCCEEDED(Status));
+			Status = VXGI::VFX_VXGI_CreateShaderCompiler(Params, &VxgiCompiler);
+			check(VXGI_SUCCEEDED(Status));
+		}
+		else if (Input.Target.Frequency == SF_Vertex && Name == TEXT("USING_TESSELLATION") && Definition.ToBool())
+		{
+			bVxgiTessellationVS = true; //Has no SV_Position
+		}
+		else if (Input.Target.Frequency == SF_Pixel && Name == TEXT("VXGI_VOXELIZATION_COVERAGE_SUPERSAMPLING") && Definition.ToBool())
+		{
+			bVxgiUseCoverageSupersampling = true;
+		}
+	}
+#endif
+	// NVCHANGE_END: Add VXGI
+
 	// @TODO - currently d3d11 uses d3d10 shader compiler flags... update when this changes in DXSDK
 	// @TODO - implement different material path to allow us to remove backwards compat flag on sm5 shaders
 	uint32 CompileFlags = D3D10_SHADER_ENABLE_BACKWARDS_COMPATIBILITY
@@ -376,6 +618,110 @@ void CompileD3D11Shader(const FShaderCompilerInput& Input,FShaderCompilerOutput&
 
 	auto AnsiSourceFile = StringCast<ANSICHAR>(*PreprocessedShaderSource);
 	TArray<FString> FilteredErrors;
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	if (VxgiCompiler && Input.Target.Frequency == SF_Pixel)
+	{
+		VXGI::IBlob* VxgiBlobPS = NULL;
+
+		{
+			VXGI::ShaderResources UserShaderResources;
+			UserShaderResources.constantBufferCount = 1;
+			UserShaderResources.constantBufferSlots[0] = 0;
+
+			VXGI::VoxelizationPixelShaderDesc Desc;
+			Desc.source = AnsiSourceFile.Get();
+			Desc.sourceSize = AnsiSourceFile.Length();
+			Desc.entryFunc = TCHAR_TO_ANSI(*Input.EntryPointName);
+			Desc.userShaderCodeResources = &UserShaderResources;
+			Desc.useForOpacity = true;
+			Desc.useForEmittance = true;
+			Desc.useCoverageSupersampling = bVxgiUseCoverageSupersampling;
+
+			VXGI::Status::Enum Status = VxgiCompiler->compileVoxelizationPixelShader(&VxgiBlobPS, Desc);
+			if (VXGI_FAILED(Status))
+			{
+				FilteredErrors.Add(FString::Printf(TEXT("VxgiCompiler->compileVoxelizationPixelShader failed: Status=%d"), (int32)Status));
+			}
+		}
+
+		Output.Errors.Append(VxgiErrorCallback.Errors);
+		Output.bSucceeded = VxgiBlobPS != NULL;
+		Output.bIsVxgiPS = true;
+		Output.Target = Input.Target;
+
+		if (Output.bSucceeded)
+		{
+			size_t NumShaderBytes = VxgiBlobPS->getSize();
+			const void* ShaderBufferPointer = VxgiBlobPS->getData();
+
+#if VXGI_STRIP_SHADERS
+			//Try stripping it
+			VXGI::IBlob* StrippedPS = VxgiCompiler->stripVoxelizationShaderBinary(ShaderBufferPointer, NumShaderBytes);
+			if (StrippedPS)
+			{
+				size_t NumShaderBytesStripped = StrippedPS->getSize();
+				const void* ShaderBufferPointerStripped = StrippedPS->getData();
+				Output.Code.Empty(NumShaderBytesStripped);
+				Output.Code.AddUninitialized(NumShaderBytesStripped);
+				FMemory::Memcpy(Output.Code.GetTypedData(), ShaderBufferPointerStripped, NumShaderBytesStripped);
+				StrippedPS->dispose();
+			}
+			else
+#endif
+			{
+				Output.Code.Empty(NumShaderBytes);
+				Output.Code.AddUninitialized(NumShaderBytes);
+				FMemory::Memcpy(Output.Code.GetData(), ShaderBufferPointer, NumShaderBytes);
+			}
+
+			uint32 NumPermutations = VxgiCompiler->getUserDefinedShaderBinaryPermutationCount(ShaderBufferPointer, NumShaderBytes);
+			Output.ParameterMapForVxgiPSPermutation.SetNum(NumPermutations);
+			Output.UsesGlobalCBForVxgiPSPermutation.SetNum(NumPermutations);
+			Output.ShaderResouceTableVxgiPSPermutation.SetNum(NumPermutations);
+			for (uint32 Permutation = 0; Permutation < NumPermutations; Permutation++)
+			{
+				//Our "handle" in this case is the key to the blob data
+
+				TBitArray<> PermutationUsedUniformBufferSlots;
+				PermutationUsedUniformBufferSlots.Init(false, 32);
+
+				ID3D11ShaderReflection* Reflector = NULL;
+				VXGI::IBlob* VxgiReflectionBlob = VxgiCompiler->getUserDefinedShaderBinaryReflectionData(ShaderBufferPointer, NumShaderBytes, Permutation);
+				HRESULT Result = D3DReflect(VxgiReflectionBlob->getData(), VxgiReflectionBlob->getSize(), IID_ID3D11ShaderReflection, (void**)&Reflector);
+				VxgiReflectionBlob->dispose();
+				if (FAILED(Result))
+				{
+					FilteredErrors.Add(FString::Printf(TEXT("D3DReflect failed: Result=%08x"), Result));
+					continue;
+				}
+
+				ProcessD3D11ShaderInputBindDesc(
+					Input,
+					Reflector,
+					PermutationUsedUniformBufferSlots,
+					Output.ParameterMapForVxgiPSPermutation[Permutation],
+					Output.UsesGlobalCBForVxgiPSPermutation[Permutation],
+					Output.NumTextureSamplers);
+
+				// Reflector is a com interface, so it needs to be released.
+				Reflector->Release();
+
+				//Build the FD3D11ShaderResourceTable
+				FD3D11ShaderResourceTable SRT;
+				BuildD3D11ShaderResourceTable(SRT, Input, PermutationUsedUniformBufferSlots, Output.ParameterMapForVxgiPSPermutation[Permutation]);
+
+				//Store it per permutation. We can't put it directly in the binary since we dont know how VXGI stores things there
+				FMemoryWriter Ar(Output.ShaderResouceTableVxgiPSPermutation[Permutation], true);
+				Ar << SRT;
+			}
+
+			VxgiBlobPS->dispose();
+		}
+	}
+	else
+#endif
+		// NVCHANGE_END: Add VXGI
 	{
 		TRefCountPtr<ID3DBlob> Shader;
 		TRefCountPtr<ID3DBlob> Errors;
@@ -519,26 +865,26 @@ void CompileD3D11Shader(const FShaderCompilerInput& Input,FShaderCompilerOutput&
 
 					if (bGlobalCB)
 					{
-					// Track all of the variables in this constant buffer.
-					for (uint32 ConstantIndex = 0; ConstantIndex < CBDesc.Variables; ConstantIndex++)
-					{
-						ID3D11ShaderReflectionVariable* Variable = ConstantBuffer->GetVariableByIndex(ConstantIndex);
-						D3D11_SHADER_VARIABLE_DESC VariableDesc;
-						Variable->GetDesc(&VariableDesc);
-						if (VariableDesc.uFlags & D3D10_SVF_USED)
+						// Track all of the variables in this constant buffer.
+						for (uint32 ConstantIndex = 0; ConstantIndex < CBDesc.Variables; ConstantIndex++)
 						{
+							ID3D11ShaderReflectionVariable* Variable = ConstantBuffer->GetVariableByIndex(ConstantIndex);
+							D3D11_SHADER_VARIABLE_DESC VariableDesc;
+							Variable->GetDesc(&VariableDesc);
+							if (VariableDesc.uFlags & D3D10_SVF_USED)
+							{
 								bGlobalUniformBufferUsed = true;
 
-							Output.ParameterMap.AddParameterAllocation(
-								ANSI_TO_TCHAR(VariableDesc.Name),
-								CBIndex,
-								VariableDesc.StartOffset,
-								VariableDesc.Size
-								);
-								UsedUniformBufferSlots[CBIndex] = true;
+								Output.ParameterMap.AddParameterAllocation(
+									ANSI_TO_TCHAR(VariableDesc.Name),
+									CBIndex,
+									VariableDesc.StartOffset,
+									VariableDesc.Size
+									);
+									UsedUniformBufferSlots[CBIndex] = true;
+							}
 						}
 					}
-				}
 					else
 					{
 						// Track just the constant buffer itself.
@@ -710,6 +1056,63 @@ void CompileD3D11Shader(const FShaderCompilerInput& Input,FShaderCompilerOutput&
 
 			// Pass the target through to the output.
 			Output.Target = Input.Target;
+
+			// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+			if (VxgiCompiler && ((Input.Target.Frequency == SF_Vertex && !bVxgiTessellationVS) || Input.Target.Frequency == SF_Domain))
+			{
+				VXGI::IBlob* VxgiBlobGS = NULL;
+				if (Input.Target.Frequency == SF_Vertex)
+				{
+					auto Status = VxgiCompiler->compileVoxelizationGeometryShaderFromVS(&VxgiBlobGS, CompressedData->GetBufferPointer(), CompressedData->GetBufferSize());
+					if (VXGI_FAILED(Status))
+					{
+						FilteredErrors.Add(FString::Printf(TEXT("VxgiCompiler->compileVoxelizationGeometryShaderFromVS failed: Status=%d"), (int32)Status));
+					}
+				}
+				else
+				{
+					auto Status = VxgiCompiler->compileVoxelizationGeometryShaderFromDS(&VxgiBlobGS, CompressedData->GetBufferPointer(), CompressedData->GetBufferSize());
+					if (VXGI_FAILED(Status))
+					{
+						FilteredErrors.Add(FString::Printf(TEXT("VxgiCompiler->compileVoxelizationGeometryShaderFromDS failed: Status=%d"), (int32)Status));
+					}
+				}
+
+				Output.Errors.Append(VxgiErrorCallback.Errors);
+				Output.bSucceeded = VxgiBlobGS != NULL;
+
+				if (Output.bSucceeded)
+				{
+#if VXGI_STRIP_SHADERS
+					if (VxgiBlobGS)
+					{
+						//Try stripping it
+						size_t NumShaderBytes = VxgiBlobGS->getSize();
+						const void* ShaderBufferPointer = VxgiBlobGS->getData();
+						VXGI::IBlob* StrippedGS = VxgiCompiler->stripUserDefinedShaderBinary(ShaderBufferPointer, NumShaderBytes);
+						if (StrippedGS)
+						{
+							VxgiBlobGS->dispose();
+							VxgiBlobGS = StrippedGS;
+						}
+					}
+#endif
+					if (VxgiBlobGS)
+					{
+						size_t NumShaderBytes = VxgiBlobGS->getSize();
+						const void* ShaderBufferPointer = VxgiBlobGS->getData();
+
+						Output.VxgiGSCode.Empty(NumShaderBytes);
+						Output.VxgiGSCode.AddUninitialized(NumShaderBytes);
+						FMemory::Memcpy(Output.VxgiGSCode.GetData(), ShaderBufferPointer, NumShaderBytes);
+
+						VxgiBlobGS->dispose();
+					}
+				}
+			}
+#endif
+			// NVCHANGE_END: Add VXGI
 		}
 
 		if (Input.Target.Platform == SP_PCD3D_ES2)
@@ -773,6 +1176,16 @@ void CompileD3D11Shader(const FShaderCompilerInput& Input,FShaderCompilerOutput&
 			Output.Errors.Add(NewError);
 		}
 	}
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	if (VxgiCompiler)
+	{
+		VXGI::VFX_VXGI_DestroyShaderCompiler(VxgiCompiler);
+		UnloadVxgiModule();
+	}
+#endif
+	// NVCHANGE_END: Add VXGI
 }
 
 void CompileShader_Windows_SM5(const FShaderCompilerInput& Input,FShaderCompilerOutput& Output,const FString& WorkingDirectory)

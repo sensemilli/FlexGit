@@ -322,6 +322,12 @@ void FD3DGPUProfiler::BeginFrame(FD3D11DynamicRHI* InRHI)
 	// latch the bools from the game thread into our private copy
 	bLatchedGProfilingGPU = GTriggerGPUProfile;
 	bLatchedGProfilingGPUHitches = GTriggerGPUHitchProfile;
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI 
+	bLatchedRequestProfileForStatUnitVxgi = bRequestProfileForStatUnitVxgi;
+	bRequestProfileForStatUnitVxgi = false;
+#endif
+	// NVCHANGE_END: Add VXGI
 	if (bLatchedGProfilingGPUHitches)
 	{
 		bLatchedGProfilingGPU = false; // we do NOT permit an ordinary GPU profile during hitch profiles
@@ -335,12 +341,28 @@ void FD3DGPUProfiler::BeginFrame(FD3D11DynamicRHI* InRHI)
 	}
 
 	// if we are starting a hitch profile or this frame is a gpu profile, then save off the state of the draw events
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI 
+	if (bLatchedGProfilingGPU || (!bPreviousLatchedGProfilingGPUHitches && bLatchedGProfilingGPUHitches) || bLatchedRequestProfileForStatUnitVxgi)
+#else
+	// NVCHANGE_END: Add VXGI
 	if (bLatchedGProfilingGPU || (!bPreviousLatchedGProfilingGPUHitches && bLatchedGProfilingGPUHitches))
+	// NVCHANGE_BEGIN: Add VXGI
+#endif
+	// NVCHANGE_END: Add VXGI
 	{
 		bOriginalGEmitDrawEvents = GEmitDrawEvents;
 	}
 
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI 
+	if (bLatchedGProfilingGPU || bLatchedGProfilingGPUHitches || bLatchedRequestProfileForStatUnitVxgi)
+#else
+	// NVCHANGE_END: Add VXGI
 	if (bLatchedGProfilingGPU || bLatchedGProfilingGPUHitches)
+	// NVCHANGE_BEGIN: Add VXGI
+#endif
+	// NVCHANGE_END: Add VXGI
 	{
 		if (bLatchedGProfilingGPUHitches && GPUHitchDebounce)
 		{
@@ -382,6 +404,33 @@ void FD3D11DynamicRHI::RHIEndFrame()
 	CurrentComputeShader = nullptr;
 }
 
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI 
+void GatherVxgiGPUTimes(FGPUProfilerEventNode* Node, int32 Depth, float& OutVxgiWorldSpaceTime, float& OutVxgiScreenSpaceTime)
+{
+	//UE_LOG(LogD3D11RHI, Display, TEXT("%d: %s"), Depth, *Node->Name);
+
+	if (Node->Name.StartsWith(TEXT("VXGI")))
+	{
+		Node->TimingResult = Node->GetTiming() * 1000.f;
+
+		if (Node->Name == TEXT("VXGITracing") || Node->Name == TEXT("VXGICompositeDiffuse"))
+			OutVxgiScreenSpaceTime += Node->TimingResult;
+		else
+			OutVxgiWorldSpaceTime += Node->TimingResult;
+	}
+	else
+	{
+		int32 NumChildren = Node->Children.Num();
+		for (int32 Child = 0; Child < NumChildren; Child++)
+		{
+			GatherVxgiGPUTimes(Node->Children[Child], Depth + 1, OutVxgiWorldSpaceTime, OutVxgiScreenSpaceTime);
+		}
+	}
+}
+#endif
+// NVCHANGE_END: Add VXGI
+
 void FD3DGPUProfiler::EndFrame()
 {
 	if (GEmitDrawEvents)
@@ -414,7 +463,15 @@ void FD3DGPUProfiler::EndFrame()
 		CurrentEventNodeFrame->EndFrame();
 	}
 
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI 
+	check(!bTrackingEvents || bLatchedGProfilingGPU || bLatchedGProfilingGPUHitches || bLatchedRequestProfileForStatUnitVxgi);
+#else
+	// NVCHANGE_END: Add VXGI
 	check(!bTrackingEvents || bLatchedGProfilingGPU || bLatchedGProfilingGPUHitches);
+	// NVCHANGE_BEGIN: Add VXGI
+#endif
+	// NVCHANGE_END: Add VXGI
 	check(!bTrackingEvents || CurrentEventNodeFrame);
 	if (bLatchedGProfilingGPU)
 	{
@@ -491,6 +548,30 @@ void FD3DGPUProfiler::EndFrame()
 		}
 		LastTime = Now;
 	}
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI 
+	else if (bLatchedRequestProfileForStatUnitVxgi)
+	{
+		// Use local variables for accumulation because the members are read from a different thread
+		float WorldSpaceTime = 0.f;
+		float ScreenSpaceTime = 0.f;
+
+		if (CurrentEventNodeFrame)
+		{
+			int32 NumEvents = CurrentEventNodeFrame->EventTree.Num();
+			for (int32 Event = 0; Event < NumEvents; Event++)
+			{
+				GatherVxgiGPUTimes(CurrentEventNodeFrame->EventTree[Event], 0, WorldSpaceTime, ScreenSpaceTime);
+			}
+		}
+
+		VxgiWorldSpaceTime = WorldSpaceTime;
+		VxgiScreenSpaceTime = ScreenSpaceTime;
+	}
+#endif
+	// NVCHANGE_END: Add VXGI
+
 	bTrackingEvents = false;
 	delete CurrentEventNodeFrame;
 	CurrentEventNodeFrame = NULL;

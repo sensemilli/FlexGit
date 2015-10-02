@@ -2256,3 +2256,22 @@ void FD3D12CommandContext::RHISubmitCommandsHint()
 {
 
 }
+
+// NVCHANGE_BEGIN: Add HBAO+
+#if WITH_GFSDK_SSAO
+
+void FD3D12CommandContext::RHIRenderHBAO(
+	const FTextureRHIParamRef SceneDepthTextureRHI,
+	const FMatrix& ProjectionMatrix,
+	const FTextureRHIParamRef SceneNormalTextureRHI,
+	const FMatrix& ViewMatrix,
+	const FTextureRHIParamRef SceneColorTextureRHI,
+	const GFSDK_SSAO_Parameters& BaseParams
+	)
+{
+	// Empty method because HBAO+ doesn't support DX12 yet.
+	// Just override the base so that the engine doesn't crash.
+}
+
+#endif
+// NVCHANGE_END: Add HBAO+

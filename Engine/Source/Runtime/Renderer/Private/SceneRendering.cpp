@@ -270,6 +270,9 @@ FViewInfo::FViewInfo(const FSceneViewInitOptions& InitOptions)
 	:	FSceneView(InitOptions)
 	,	IndividualOcclusionQueries((FSceneViewState*)InitOptions.SceneViewStateInterface, 1)
 	,	GroupedOcclusionQueries((FSceneViewState*)InitOptions.SceneViewStateInterface, FOcclusionQueryBatcher::OccludedPrimitiveQueryBatchSize)
+	// NVCHANGE_BEGIN: Add VXGI
+	, CustomVisibilityQuery(nullptr)
+	// NVCHANGE_END: Add VXGI
 {
 	Init();
 }
@@ -984,7 +987,15 @@ void FViewInfo::InitRHIResources(const TArray<FProjectedShadowInfo*, SceneRender
 		DynamicResources[ResourceIndex]->InitPrimitiveResource();
 	}
 
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	if (CVarForwardLighting.GetValueOnRenderThread() && !bIsVxgiVoxelization)
+#else
+	// NVCHANGE_END: Add VXGI
 	if(CVarForwardLighting.GetValueOnRenderThread())
+		// NVCHANGE_BEGIN: Add VXGI
+#endif
+		// NVCHANGE_END: Add VXGI
 	{
 		CreateLightGrid();
 	}

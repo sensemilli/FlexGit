@@ -55,6 +55,18 @@ FD3D11DynamicRHI::FD3D11DynamicRHI(IDXGIFactory1* InDXGIFactory1,D3D_FEATURE_LEV
 	PendingIndexDataStride(0),
 	GPUProfilingData(this),
 	ChosenAdapter(InChosenAdapter)
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	, VxgiInterface(NULL)
+	, VxgiRendererD3D11(NULL)
+#endif
+	// NVCHANGE_END: Add VXGI
+	// NVCHANGE_BEGIN: Add HBAO+
+#if WITH_GFSDK_SSAO
+	, HBAOContext(NULL)
+	, HBAOModuleHandle(NULL)
+#endif
+	// NVCHANGE_END: Add HBAO+
 {
 	// This should be called once at the start 
 	check(ChosenAdapter >= 0);
@@ -435,6 +447,21 @@ void FD3D11DynamicRHI::CleanupD3DDevice()
 		extern void EmptyD3DSamplerStateCache();
 		EmptyD3DSamplerStateCache();
 
+		// NVCHANGE_BEGIN: Add HBAO+
+#if WITH_GFSDK_SSAO
+		if (HBAOContext)
+		{
+			HBAOContext->Release();
+			HBAOContext = NULL;
+		}
+		if (HBAOModuleHandle)
+		{
+			FreeLibrary(HBAOModuleHandle);
+			HBAOModuleHandle = NULL;
+		}
+#endif
+		// NVCHANGE_END: Add HBAO+
+
 		// release our dynamic VB and IB buffers
 		DynamicVB = NULL;
 		DynamicIB = NULL;
@@ -467,6 +494,13 @@ void FD3D11DynamicRHI::CleanupD3DDevice()
 		Direct3DDeviceIMContext = NULL;
 
 		Direct3DDevice = NULL;
+
+		// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+		ReleaseVxgiInterface();
+		UnloadVxgiModule();
+#endif
+		// NVCHANGE_END: Add VXGI
 	}
 }
 

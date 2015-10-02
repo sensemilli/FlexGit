@@ -379,6 +379,12 @@ void FD3D12DynamicRHI::Init()
     PresentCount = 0;
 #endif
 	InitD3DDevices();
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	CreateVxgiInterface();
+#endif
+	// NVCHANGE_END: Add VXGI
 }
 
 void FD3D12DynamicRHI::PostInit()

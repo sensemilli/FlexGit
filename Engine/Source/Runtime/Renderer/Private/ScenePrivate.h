@@ -109,6 +109,10 @@ public:
 #include "GlobalDistanceFieldParameters.h"
 #include "LightPropagationVolume.h"
 
+// NVCHANGE_BEGIN: Add VXGI
+#include "VxgiRendering.h"
+// NVCHANGE_END: Add VXGI
+
 /** Factor by which to grow occlusion tests **/
 #define OCCLUSION_SLOP (1.0f)
 
@@ -599,6 +603,26 @@ public:
 	 */
 	FLightPropagationVolume* GetLightPropagationVolume(ERHIFeatureLevel::Type InFeatureLevel, bool bIncludeStereo = false) const;
 
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+private:
+	// We should keep on in here instead of global so that we don't trash texture rendering previews
+	mutable VXGI::IViewTracer* ViewTracer;
+public:
+	VXGI::IViewTracer* GetVXGITracer() const
+	{
+		check(IsInRenderingThread());
+		//Create this on demand since many views don't need one
+		if (!ViewTracer)
+		{
+			auto Status = GDynamicRHI->RHIVXGIGetInterface()->createNewTracer(&ViewTracer);
+			check(VXGI_SUCCEEDED(Status));
+		}
+		return ViewTracer;
+	}
+#endif
+	// NVCHANGE_END: Add VXGI
+
 	/** Default constructor. */
 	FSceneViewState();
 
@@ -720,6 +744,16 @@ public:
 		{
 			GlobalDistanceFieldClipmapState[CascadeIndex].VolumeTexture.SafeRelease();
 		}
+
+		// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+		if (ViewTracer)
+		{
+			GDynamicRHI->RHIVXGIGetInterface()->destroyTracer(ViewTracer);
+			ViewTracer = NULL;
+		}
+#endif
+		// NVCHANGE_END: Add VXGI
 	}
 
 	// FSceneViewStateInterface
@@ -1465,6 +1499,23 @@ public:
 	/** Maps a light-map type to the appropriate base pass draw list. */
 	template<typename LightMapPolicyType>
 	TStaticMeshDrawList<TBasePassForForwardShadingDrawingPolicy<LightMapPolicyType,0> >& GetForwardShadingBasePassDrawList(EBasePassDrawListType DrawType);
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	/** Voxelization draw lists */
+	enum EVoxelizationPassDrawListType
+	{
+		EVoxelizationPass_Default = 0,
+		EVoxelizationPass_EmissiveMaterial,
+		EVoxelizationPass_MAX
+	};
+	TStaticMeshDrawList<TVXGIVoxelizationDrawingPolicy< FVXGIVoxelizationNoLightMapPolicy> > VxgiVoxelizationNoLightMapDrawList[EVoxelizationPass_MAX];
+
+	/** Maps a light-map type to the appropriate voxelization draw list. */
+	template<typename LightMapPolicyType>
+	TStaticMeshDrawList<TVXGIVoxelizationDrawingPolicy<LightMapPolicyType> >& GetVoxelizationDrawList(EVoxelizationPassDrawListType DrawType);
+#endif
+	// NVCHANGE_END: Add VXGI
 
 	/**
 	 * The following arrays are densely packed primitive data needed by various

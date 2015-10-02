@@ -13,6 +13,12 @@
 // For FShaderUniformBufferParameter
 #include "ShaderParameters.h"
 
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+#include "GFSDK_VXGI.h"
+#endif
+// NVCHANGE_END: Add VXGI
+
 class FShaderType;
 class FVertexFactoryParameterRef;
 
@@ -27,7 +33,7 @@ class FShaderResourceId
 {
 public:
 
-	FShaderResourceId() {}
+	FShaderResourceId() { SpecificShaderTypeName = nullptr; }
 
 	FShaderResourceId(const FShaderCompilerOutput& Output, const TCHAR* InSpecificShaderTypeName) :
 		Target(Output.Target),
@@ -174,6 +180,16 @@ public:
 	/** Returns true if and only if TargetPlatform is compatible for use with CurrentPlatform. */
 	SHADERCORE_API static bool ArePlatformsCompatible(EShaderPlatform CurrentPlatform, EShaderPlatform TargetPlatform);
 	
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	VXGI::IUserDefinedShaderSet* GetVxgiVoxelizationPixelShaderSet();
+	//This works on VS or DS if they are compiled with the right flag
+	VXGI::IUserDefinedShaderSet* GetVxgiVoxelizationGeometryShaderSet();
+
+	const TArray<FShaderParameterMap>& GetParameterMapsForVoxelizationPS() const { return ParameterMapForVxgiPSPermutation; }
+#endif
+	// NVCHANGE_END: Add VXGI
+
 private:
 
 	/** Reference to the RHI shader.  Only one of these is ever valid, and it is the one corresponding to Target.Frequency. */
@@ -183,6 +199,18 @@ private:
 	FDomainShaderRHIRef DomainShader;
 	FGeometryShaderRHIRef GeometryShader;
 	FComputeShaderRHIRef ComputeShader;
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	VXGI::IUserDefinedShaderSet* VxgiVoxelizationPixelShader;
+	VXGI::IUserDefinedShaderSet* VxgiVoxelizationGeometryShader;
+	bool bIsVxgiPS;
+	TArray<FShaderParameterMap> ParameterMapForVxgiPSPermutation;
+	TArray<TArray<uint8> > ShaderResouceTableVxgiPSPermutation;
+	TArray<bool> UsesGlobalCBForVxgiPSPermutation;
+	TArray<uint8> VxgiGSCode;
+#endif
+	// NVCHANGE_END: Add VXGI
 
 	/** Target platform and frequency. */
 	FShaderTarget Target;
@@ -496,6 +524,11 @@ public:
 	{
 		return Resource->GetVertexShader();
 	}
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	virtual // We need to make GetPixelShader virtual to override it in TVXGIVoxelizationShaderPermutationPS
+#endif
+		// NVCHANGE_END: Add VXGI
 	/** @return the shader's pixel shader */
 	inline const FPixelShaderRHIParamRef GetPixelShader()
 	{
@@ -522,6 +555,20 @@ public:
 		return Resource->GetComputeShader();
 	}
 	
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	VXGI::IUserDefinedShaderSet* GetVxgiVoxelizationPixelShaderSet()
+	{
+		return Resource->GetVxgiVoxelizationPixelShaderSet();
+	}
+	//This works on VS or DS if they are compiled with the right flag
+	VXGI::IUserDefinedShaderSet* GetVxgiVoxelizationGeometryShaderSet()
+	{
+		return Resource->GetVxgiVoxelizationGeometryShaderSet();
+	}
+#endif
+	// NVCHANGE_END: Add VXGI
+
 	// Accessors.
 	FShaderType* GetType() const { return Type; }
 	uint32 GetNumInstructions() const { return Resource->NumInstructions; }
@@ -758,6 +805,11 @@ public:
 	FShader* ConstructForDeserialization() const;
 
 	/** Calculates a Hash based on this shader type's source code and includes */
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	virtual //We need to override this to add the VXGI hash
+#endif
+		// NVCHANGE_END: Add VXGI
 	const FSHAHash& GetSourceHash() const;
 
 	/** Serializes a shader type reference by name. */

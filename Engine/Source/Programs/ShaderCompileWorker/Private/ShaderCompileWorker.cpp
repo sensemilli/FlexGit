@@ -14,7 +14,15 @@
 #define DEBUG_USING_CONSOLE	0
 
 const int32 ShaderCompileWorkerInputVersion = 3;
+
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+// This version number is checked at load time in Engine\Source\Runtime\Engine\Private\ShaderCompiler\ShaderCompiler.cpp
+const int32 ShaderCompileWorkerOutputVersion = 1000;
+#else
 const int32 ShaderCompileWorkerOutputVersion = 1;
+#endif
+// NVCHANGE_END: Add VXGI
 
 double LastCompileTime = 0.0;
 

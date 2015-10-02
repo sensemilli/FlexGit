@@ -107,6 +107,11 @@ FSceneViewState::FSceneViewState()
 	ShadowOcclusionQueryMaps.AddZeroed(FOcclusionQueryHelpers::MaxBufferedOcclusionFrames);	
 
 	bValidEyeAdaptation = false;
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	ViewTracer = NULL;
+#endif
+	// NVCHANGE_END: Add VXGI
 }
 
 void DestroyRenderResource(FRenderResource* RenderResource)
@@ -1872,6 +1877,15 @@ void FScene::UpdateStaticDrawListsForMaterials_RenderThread(FRHICommandListImmed
 		}
 	}
 
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	for (int32 DrawType = 0; DrawType < EVoxelizationPass_MAX; DrawType++)
+	{
+		VxgiVoxelizationNoLightMapDrawList[DrawType].GetUsedPrimitivesBasedOnMaterials(FeatureLevel, Materials, PrimitivesToUpdate);
+	}
+#endif
+	// NVCHANGE_END: Add VXGI
+
 	PositionOnlyDepthDrawList.GetUsedPrimitivesBasedOnMaterials(SceneFeatureLevel, Materials, PrimitivesToUpdate);
 	DepthDrawList.GetUsedPrimitivesBasedOnMaterials(SceneFeatureLevel, Materials, PrimitivesToUpdate);
 	MaskedDepthDrawList.GetUsedPrimitivesBasedOnMaterials(SceneFeatureLevel, Materials, PrimitivesToUpdate);
@@ -2073,6 +2087,13 @@ void FScene::DumpStaticMeshDrawListStats() const
 	DUMP_DRAW_LIST(BasePassSelfShadowedCachedPointIndirectTranslucencyDrawList[EBasePass_Default]);
 	DUMP_DRAW_LIST(BasePassSelfShadowedCachedPointIndirectTranslucencyDrawList[EBasePass_Masked]);
 
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	DUMP_DRAW_LIST(VxgiVoxelizationNoLightMapDrawList[EVoxelizationPass_Default]);
+	DUMP_DRAW_LIST(VxgiVoxelizationNoLightMapDrawList[EVoxelizationPass_EmissiveMaterial]);
+#endif
+	// NVCHANGE_END: Add VXGI
+
 	DUMP_DRAW_LIST(BasePassForForwardShadingNoLightMapDrawList[EBasePass_Default]);
 	DUMP_DRAW_LIST(BasePassForForwardShadingNoLightMapDrawList[EBasePass_Masked]);
 	DUMP_DRAW_LIST(BasePassForForwardShadingLowQualityLightMapDrawList[EBasePass_Default]);
@@ -2261,6 +2282,12 @@ void FScene::ApplyWorldOffset_RenderThread(FVector InOffset)
 	StaticMeshDrawListApplyWorldOffset(BasePassForForwardShadingMovableDirectionalLightCSMDrawList, InOffset);
 	StaticMeshDrawListApplyWorldOffset(BasePassForForwardShadingMovableDirectionalLightLightmapDrawList, InOffset);
 	StaticMeshDrawListApplyWorldOffset(BasePassForForwardShadingMovableDirectionalLightCSMLightmapDrawList, InOffset);
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	StaticMeshDrawListApplyWorldOffset(VxgiVoxelizationNoLightMapDrawList, InOffset);
+#endif
+	// NVCHANGE_END: Add VXGI
 
 	// Motion blur 
 	MotionBlurInfoData.ApplyOffset(InOffset);
@@ -2576,6 +2603,16 @@ TStaticMeshDrawList<TBasePassForForwardShadingDrawingPolicy<FMovableDirectionalL
 {
 	return BasePassForForwardShadingMovableDirectionalLightCSMLightmapDrawList[DrawType];
 }
+
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+template<>
+TStaticMeshDrawList<TVXGIVoxelizationDrawingPolicy<FVXGIVoxelizationNoLightMapPolicy> >& FScene::GetVoxelizationDrawList<FVXGIVoxelizationNoLightMapPolicy>(EVoxelizationPassDrawListType DrawType)
+{
+	return VxgiVoxelizationNoLightMapDrawList[DrawType];
+}
+#endif
+// NVCHANGE_END: Add VXGI
 
 /*-----------------------------------------------------------------------------
 	MotionBlurInfoData

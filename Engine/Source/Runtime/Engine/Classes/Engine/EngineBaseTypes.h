@@ -735,6 +735,15 @@ enum EViewModeIndex
 
 	VMI_CollisionPawn = 15, 
 	VMI_CollisionVisibility = 16, 
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	VMI_VxgiOpacityVoxels = 17,
+	VMI_VxgiEmittanceVoxels = 18,
+	VMI_VxgiIrradianceVoxels = 19,
+#endif
+	// NVCHANGE_END: Add VXGI
+
 	VMI_Max UMETA(Hidden),
 
 	VMI_Unknown = 255 UMETA(Hidden),

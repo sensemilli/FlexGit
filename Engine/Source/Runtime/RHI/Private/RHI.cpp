@@ -246,6 +246,23 @@ RHI_API EShaderPlatform GMaxRHIShaderPlatform = SP_PCD3D_SM5;
 /** The maximum feature level supported on this machine */
 RHI_API ERHIFeatureLevel::Type GMaxRHIFeatureLevel = ERHIFeatureLevel::SM5;
 
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+static bool bTessOn = true;
+
+RHI_API void RHIAllowTessellation(bool bAllowTessellation)
+{
+	bTessOn = bAllowTessellation;
+}
+
+RHI_API bool RHITessellationAllowed()
+{
+	return bTessOn;
+}
+
+#endif
+// NVCHANGE_END: Add VXGI
+
 FName FeatureLevelNames[] = 
 {
 	FName(TEXT("ES2")),

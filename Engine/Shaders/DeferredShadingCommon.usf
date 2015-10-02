@@ -319,6 +319,12 @@ struct FScreenSpaceData
 	float AmbientOcclusion;
 
 	float2 DirectionalOcclusion;
+
+	// NVCHANGE_BEGIN: Add VXGI
+	float3 VxgiDiffuse;
+	float4 VxgiSpecular;
+	// NVCHANGE_END: Add VXGI
+
 };
 
 /** Populates OutGBufferA, B and C */
@@ -539,6 +545,13 @@ Texture2D<uint2> CustomStencilTexture;
 Texture2D		DirectionalOcclusionTexture;
 SamplerState	DirectionalOcclusionSampler;
 
+// NVCHANGE_BEGIN: Add VXGI
+Texture2D VxgiDiffuseTexture;
+SamplerState VxgiDiffuseTextureSampler;
+Texture2D VxgiSpecularTexture;
+SamplerState VxgiSpecularTextureSampler;
+// NVCHANGE_END: Add VXGI
+
 #if FEATURE_LEVEL >= FEATURE_LEVEL_SM4
 	// In all but SM5 we need to explicitly declare how many samples are in a multisampled texture.
 	#if FEATURE_LEVEL >= FEATURE_LEVEL_SM5
@@ -609,6 +622,11 @@ SamplerState	DirectionalOcclusionSampler;
 
 			Out.AmbientOcclusion = ScreenSpaceAO.r;
 		}
+
+		// NVCHANGE_BEGIN: Add VXGI
+		Out.VxgiDiffuse = VxgiDiffuseTexture.Load(int3(PixelPos, 0)).rgb;
+		Out.VxgiSpecular = VxgiSpecularTexture.Load(int3(PixelPos, 0)).rgba;
+		// NVCHANGE_END: Add VXGI
 
 		{
 			uint width;
@@ -709,6 +727,12 @@ FScreenSpaceData GetScreenSpaceData(float2 UV, bool bGetNormalizedNormal = true)
 	Out.AmbientOcclusion = ScreenSpaceAO.r;
 
 	Out.DirectionalOcclusion = Texture2DSampleLevel( DirectionalOcclusionTexture, DirectionalOcclusionSampler, UV, 0 ).rg;
+
+	// NVCHANGE_BEGIN: Add VXGI
+	Out.VxgiDiffuse = Texture2DSampleLevel(VxgiDiffuseTexture, VxgiDiffuseTextureSampler, UV, 0).rgb;
+	Out.VxgiSpecular = Texture2DSampleLevel(VxgiSpecularTexture, VxgiSpecularTextureSampler, UV, 0).rgba;
+	// NVCHANGE_END: Add VXGI
+
 	return Out;
 }
 

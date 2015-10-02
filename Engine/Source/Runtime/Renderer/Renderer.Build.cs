@@ -36,5 +36,12 @@ public class Renderer : ModuleRules
 
         PrivateIncludePathModuleNames.AddRange(new string[] { "HeadMountedDisplay", "LightPropagationVolumeRuntime" });
         DynamicallyLoadedModuleNames.AddRange(new string[] { "HeadMountedDisplay" });
+
+        // NVCHANGE_BEGIN: Add VXGI
+        if ((Target.Platform == UnrealTargetPlatform.Win64) || (Target.Platform == UnrealTargetPlatform.Win32))
+        {
+            PublicDependencyModuleNames.Add("VXGI");
+        }
+        // NVCHANGE_END: Add VXGI
 	}
 }

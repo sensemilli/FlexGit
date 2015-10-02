@@ -9,6 +9,20 @@ public class RHI : ModuleRules
 	{
 		PrivateDependencyModuleNames.Add("Core");
 
+        // NVCHANGE_BEGIN: Add VXGI
+        if ((Target.Platform == UnrealTargetPlatform.Win64) || (Target.Platform == UnrealTargetPlatform.Win32))
+        {
+            PublicDependencyModuleNames.Add("VXGI");
+        }
+        // NVCHANGE_END: Add VXGI
+
+        // NVCHANGE_BEGIN: Add HBAO+
+        if ((Target.Platform == UnrealTargetPlatform.Win64) || (Target.Platform == UnrealTargetPlatform.Win32))
+        {
+            PublicDependencyModuleNames.Add("GFSDK_SSAO");
+        }
+        // NVCHANGE_END: Add HBAO+
+
 		if (UEBuildConfiguration.bCompileAgainstEngine)
 		{
             DynamicallyLoadedModuleNames.Add("NullDrv");

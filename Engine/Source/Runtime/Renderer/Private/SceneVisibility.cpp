@@ -303,6 +303,56 @@ static int32 FrustumCull(const FScene* Scene, FViewInfo& View)
 						MaxDrawDistance = FLT_MAX;
 					}
 
+					// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+					if (View.bIsVxgiVoxelization)
+					{
+						bool bIsVisible = false;
+
+						FBox VxgiClipmapBox = FBox(GDynamicRHI->RHIVXGIGetInterface()->getLastUpdatedWorldRegion());
+						FBox PrimitiveBox = FBox::BuildAABB(Bounds.Origin, Bounds.BoxExtent);
+
+						if (VxgiClipmapBox.Intersect(PrimitiveBox))
+						{
+							if (View.VxgiEmittanceVoxelizationArgs.LightSceneInfo)
+							{
+								FPrimitiveSceneInfo* PrimitiveSceneInfo = Scene->Primitives[Index];
+								FPrimitiveSceneInfoCompact PrimitiveSceneInfoCompact(PrimitiveSceneInfo);
+
+								FLightSceneInfo* LightSceneInfo = (FLightSceneInfo*)View.VxgiEmittanceVoxelizationArgs.LightSceneInfo;
+								FLightSceneInfoCompact LightSceneInfoCompact(LightSceneInfo);
+
+								if (LightSceneInfoCompact.AffectsPrimitive(PrimitiveSceneInfoCompact))
+								{
+									bIsVisible = true;
+								}
+							}
+							else if (View.VxgiVoxelizationPass == VXGI::VoxelizationPass::EMISSIVE_AND_IRRADIANCE)
+							{
+								// For the emissive/irradiance pass, only the primitives not voxelized earlier are visible
+								bIsVisible = (Scene->Primitives[Index]->VxgiLastVoxelizationPass == VXGI::VoxelizationPass::OPACITY);
+							}
+							else
+							{
+								bIsVisible = true;
+							}
+						}
+
+						if (!bIsVisible)
+						{
+							STAT(NumCulledPrimitives.Increment());
+						}
+						else
+						{
+							// The primitive is visible!
+							VisBits |= Mask;
+						}
+					}
+					else
+					{
+#endif
+						// NVCHANGE_END: Add VXGI
+
 					// The primitive is always culled if it exceeds the max fade distance or lay outside the view frustum.
 					if (DistanceSquared > FMath::Square(MaxDrawDistance + FadeRadius) ||
 						DistanceSquared < Bounds.MinDrawDistanceSq || 
@@ -328,6 +378,11 @@ static int32 FrustumCull(const FScene* Scene, FViewInfo& View)
 							}
 						}
 					}
+					// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+					}
+#endif
+					// NVCHANGE_END: Add VXGI
 				}
 				if (FadingBits)
 				{
@@ -1368,13 +1423,26 @@ float Halton( int32 Index, int32 Base )
 	return Result;
 }
 
-void FSceneRenderer::PreVisibilityFrameSetup(FRHICommandListImmediate& RHICmdList)
+// NVCHANGE_BEGIN: Add VXGI
+void FSceneRenderer::PreVisibilityFrameSetup(FRHICommandListImmediate& RHICmdList, TArray<FViewInfo> *ViewArrayPtr)
 {
+	TArray<FViewInfo> &Views = ViewArrayPtr ? *ViewArrayPtr : FSceneRenderer::Views;
+	// NVCHANGE_END: Add VXGI
+
 	// Notify the RHI we are beginning to render a scene.
 	RHICmdList.BeginScene();
 
 	// Notify the FX system that the scene is about to perform visibility checks.
+
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	if (Scene->FXSystem && !Views[0].bIsVxgiVoxelization)
+#else
+// NVCHANGE_END: Add VXGI
 	if (Scene->FXSystem)
+// NVCHANGE_BEGIN: Add VXGI
+#endif
+// NVCHANGE_END: Add VXGI
 	{
 		Scene->FXSystem->PreInitViews();
 	}
@@ -1677,8 +1745,12 @@ static TAutoConsoleVariable<int32> CVarAlsoUseSphereForFrustumCull(
 	ECVF_RenderThreadSafe
 	);
 
-void FSceneRenderer::ComputeViewVisibility(FRHICommandListImmediate& RHICmdList)
+// NVCHANGE_BEGIN: Add VXGI
+void FSceneRenderer::ComputeViewVisibility(FRHICommandListImmediate& RHICmdList, TArray<FViewInfo> *ViewArrayPtr)
 {
+	TArray<FViewInfo> &Views = ViewArrayPtr ? *ViewArrayPtr : FSceneRenderer::Views;
+	// NVCHANGE_END: Add VXGI
+
 	SCOPE_CYCLE_COUNTER(STAT_ViewVisibilityTime);
 
 	STAT(int32 NumProcessedPrimitives = 0);
@@ -1944,8 +2016,12 @@ void FSceneRenderer::ComputeViewVisibility(FRHICommandListImmediate& RHICmdList)
 	INC_DWORD_STAT_BY(STAT_OccludedPrimitives,NumOccludedPrimitives);
 }
 
-void FSceneRenderer::PostVisibilityFrameSetup()
+// NVCHANGE_BEGIN: Add VXGI
+void FSceneRenderer::PostVisibilityFrameSetup(TArray<FViewInfo> *ViewArrayPtr)
 {
+	TArray<FViewInfo> &Views = ViewArrayPtr ? *ViewArrayPtr : FSceneRenderer::Views;
+	// NVCHANGE_END: Add VXGI
+
 	for (int32 ViewIndex = 0; ViewIndex < Views.Num(); ViewIndex++)
 	{		
 		FViewInfo& View = Views[ViewIndex];
