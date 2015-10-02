@@ -2105,6 +2105,33 @@ protected:
 		return AddInlinedCodeChunk(MCT_Float2,TEXT("Parameters.Particle.Size"));
 	}
 
+	virtual int32 FlexFluidSurfaceThickness(int32 Offset, int32 UV, bool bUseOffset) override
+	{
+		if (Offset == INDEX_NONE && bUseOffset)
+		{
+			return INDEX_NONE;
+		}
+
+		if (ShaderFrequency != SF_Pixel)
+		{
+			return NonPixelShaderExpressionError();
+		}
+
+		if (ErrorUnlessFeatureLevelSupported(ERHIFeatureLevel::SM4) == INDEX_NONE)
+		{
+			return INDEX_NONE;
+		}
+
+		MaterialCompilationOutput.bRequiresSceneColorCopy = true;
+
+		int32 ScreenUVCode = GetScreenAlignedUV(Offset, UV, bUseOffset);
+		return AddCodeChunk(
+			MCT_Float,
+			TEXT("CalcFlexFluidSurfaceThicknessForMaterialNode(%s)"),
+			*GetParameterCode(ScreenUVCode)
+			);
+	}
+
 	virtual int32 WorldPosition(EWorldPositionIncludedOffsets WorldPositionIncludedOffsets) override
 	{
 		FString FunctionNamePattern;

@@ -172,6 +172,10 @@
 #define USE_CLEARCOAT									0
 #endif
 
+#ifndef FLEX_FLUID_SURFACE_FACTORY
+#define FLEX_FLUID_SURFACE_FACTORY						0
+#endif
+
 #if SM5_PROFILE || COMPILER_SUPPORTS_ATTRIBUTES
 /** Avoids flow control constructs. */
 #define UNROLL											[unroll]

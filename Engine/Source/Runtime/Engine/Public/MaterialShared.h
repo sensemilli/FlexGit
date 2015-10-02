@@ -938,8 +938,10 @@ public:
 	virtual bool IsUsedWithBeamTrails() const { return false; }
 	virtual bool IsUsedWithMeshParticles() const { return false; }
 	virtual bool IsUsedWithStaticLighting() const { return false; }
+	virtual bool IsUsedWithFlexFluidSurfaces() const { return false; }
 	virtual	bool IsUsedWithMorphTargets() const { return false; }
 	virtual bool IsUsedWithSplineMeshes() const { return false; }
+	virtual bool IsUsedWithFlexMeshes() const { return false; }
 	virtual bool IsUsedWithInstancedStaticMeshes() const { return false; }
 	virtual bool IsUsedWithAPEXCloth() const { return false; }
 	virtual bool IsUsedWithUI() const { return false; }
@@ -1516,8 +1518,10 @@ public:
 	ENGINE_API virtual bool IsUsedWithBeamTrails() const override;
 	ENGINE_API virtual bool IsUsedWithMeshParticles() const override;
 	ENGINE_API virtual bool IsUsedWithStaticLighting() const override;
+	ENGINE_API virtual bool IsUsedWithFlexFluidSurfaces() const override;
 	ENGINE_API virtual bool IsUsedWithMorphTargets() const override;
 	ENGINE_API virtual bool IsUsedWithSplineMeshes() const override;
+	ENGINE_API virtual bool IsUsedWithFlexMeshes() const override;
 	ENGINE_API virtual bool IsUsedWithInstancedStaticMeshes() const override;
 	ENGINE_API virtual bool IsUsedWithAPEXCloth() const override;
 	DEPRECATED(4.9, "IsUsedWithUI is now replaced by IsUIMaterial")

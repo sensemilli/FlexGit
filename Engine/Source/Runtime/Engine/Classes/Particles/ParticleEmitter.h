@@ -7,6 +7,9 @@
 
 #pragma once
 #include "Components/SceneComponent.h"
+
+#include "PhysicsEngine/FlexAsset.h"
+
 #include "ParticleEmitterInstances.h"
 #include "Scalability.h"
 #include "ParticleEmitter.generated.h"
@@ -156,6 +159,22 @@ class UParticleEmitter : public UObject
 	UPROPERTY(EditAnywhere, Category=Cascade)
 	uint32 bCollapsed:1;
 #endif // WITH_EDITORONLY_DATA
+
+	/** The Flex container to emit into */
+	UPROPERTY(EditAnywhere, Category = Flex)
+	class UFlexContainer* FlexContainerTemplate;
+
+	/** Phase assigned to spawned Flex particles */
+	UPROPERTY(EditAnywhere, Category = Flex)
+	FFlexPhase Phase;
+
+	/** Mass assigned to Flex particles */
+	UPROPERTY(EditAnywhere, Category = Flex)
+	float Mass;
+
+	/** Optional Flex fluid surface for rendering */
+	UPROPERTY(EditAnywhere, Category = Flex)
+	class UFlexFluidSurface* FlexFluidSurfaceTemplate;
 
 	/** If true, then show only this emitter in the editor */
 	UPROPERTY(transient)

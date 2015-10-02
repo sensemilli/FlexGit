@@ -581,6 +581,25 @@ bool ExecPhysCommands(const TCHAR* Cmd, FOutputDevice* Ar, UWorld* InWorld)
 		return 1;
 	}
 
+#if WITH_FLEX
+	if (FParse::Command(&Cmd, TEXT("FLEXVIS")))
+	{
+		FFlexContainerInstance::sGlobalDebugDraw = !FFlexContainerInstance::sGlobalDebugDraw;
+	}
+	else if (FParse::Command(&Cmd, TEXT("FLEXSTARTRECORD")))
+	{
+		FPhysScene* Scene = InWorld->GetPhysicsScene();
+		if (Scene)
+			Scene->StartFlexRecord();
+	}
+	else if (FParse::Command(&Cmd, TEXT("FLEXSTOPRECORD")))
+	{
+		FPhysScene* Scene = InWorld->GetPhysicsScene();
+		if (Scene)
+			Scene->StopFlexRecord();
+	}
+#endif
+
 #endif // WITH_PHYSX
 
 	return 0;

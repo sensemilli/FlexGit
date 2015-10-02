@@ -25,6 +25,11 @@
 #include "EditorFramework/AssetImportData.h"
 #include "AI/Navigation/NavCollision.h"
 
+#if WITH_FLEX
+#include "PhysicsEngine/FlexAsset.h"
+#include "PhysicsEngine/FlexAssetSoft.h"
+#endif
+
 DEFINE_LOG_CATEGORY(LogStaticMesh);	
 
 DECLARE_MEMORY_STAT( TEXT( "StaticMesh Total Memory" ), STAT_StaticMeshTotalMemory2, STATGROUP_MemoryStaticMesh );
@@ -290,6 +295,16 @@ void FStaticMeshLODResources::Serialize(FArchive& Ar, UObject* Owner, int32 Inde
 	// On cooked platforms we never need the resource data.
 	// TODO: Not needed in uncooked games either after PostLoad!
 	bool bNeedsCPUAccess = !FPlatformProperties::RequiresCookedData();
+
+#if WITH_FLEX
+	// soft bodies currently need access to data on the CPU until we move skinning to GPU
+	UStaticMesh* StaticMesh = Cast<UStaticMesh>(Owner);
+	if (StaticMesh)
+	{
+		if (StaticMesh->FlexAsset && Cast<UFlexAssetSoft>(StaticMesh->FlexAsset))
+			bNeedsCPUAccess = true;
+	}
+#endif
 
 	bHasAdjacencyInfo = false;
 
@@ -1445,6 +1460,14 @@ void UStaticMesh::AddReferencedObjects(UObject* InThis, FReferenceCollector& Col
 	{
 		Collector.AddReferencedObject( This->NavCollision, This );
 	}
+
+#if WITH_FLEX
+	if (This->FlexAsset != NULL)
+	{
+		Collector.AddReferencedObject(This->FlexAsset, This);
+	}
+#endif
+
 	Super::AddReferencedObjects( This, Collector );
 }
 
@@ -1494,6 +1517,13 @@ void UStaticMesh::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedE
 	EnforceLightmapRestrictions();
 
 	Build(/*bSilent=*/ true);
+
+#if WITH_FLEX
+	if (FlexAsset)
+	{
+		FlexAsset->ReImport(this);
+	}
+#endif
 
 	// Only unbuild lighting for properties which affect static lighting
 	if (!PropertyThatChanged 
@@ -1821,6 +1851,15 @@ void UStaticMesh::Serialize(FArchive& Ar)
 	{
 		Ar << NavCollision;
 	}
+
+#if 0// WITH_FLEX
+	// make old static meshs load until they can be resaved
+	if (Ar.UE4Ver() == VER_UE4_INTERPCURVE_SUPPORTS_LOOPING)
+	{
+		UFlexAsset* Dummy;
+		Ar << Dummy;
+	}
+#endif
 
 #if WITH_EDITORONLY_DATA
 	if( !StripFlags.IsEditorDataStripped() )

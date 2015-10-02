@@ -52,6 +52,9 @@
 #include "ApexDestructibleAssetImport.h"
 #endif // WITH_APEX
 
+#include "PhysicsEngine/FlexContainer.h"
+#include "PhysicsEngine/FlexFluidSurface.h"
+
 #if PLATFORM_WINDOWS
 // Needed for DDS support.
 #include "AllowWindowsPlatformTypes.h"
@@ -2432,6 +2435,40 @@ UPhysicalMaterialFactoryNew::UPhysicalMaterialFactoryNew(const FObjectInitialize
 UObject* UPhysicalMaterialFactoryNew::FactoryCreateNew(UClass* Class,UObject* InParent,FName Name,EObjectFlags Flags,UObject* Context,FFeedbackContext* Warn)
 {
 	return NewObject<UObject>(InParent, Class, Name, Flags);
+}
+
+/*------------------------------------------------------------------------------
+UFlexContainerFactory
+------------------------------------------------------------------------------*/
+UFlexContainerFactory::UFlexContainerFactory(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+
+	SupportedClass = UFlexContainer::StaticClass();
+	bCreateNew = true;
+	bEditAfterNew = true;
+}
+
+UObject* UFlexContainerFactory::FactoryCreateNew(UClass* Class, UObject* InParent, FName Name, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn)
+{
+	return StaticConstructObject(Class, InParent, Name, Flags);
+}
+
+/*------------------------------------------------------------------------------
+UFlexFluidSurfaceFactory
+------------------------------------------------------------------------------*/
+UFlexFluidSurfaceFactory::UFlexFluidSurfaceFactory(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+
+	SupportedClass = UFlexFluidSurface::StaticClass();
+	bCreateNew = true;
+	bEditAfterNew = true;
+}
+
+UObject* UFlexFluidSurfaceFactory::FactoryCreateNew(UClass* Class, UObject* InParent, FName Name, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn)
+{
+	return StaticConstructObject(Class, InParent, Name, Flags);
 }
 
 /*------------------------------------------------------------------------------

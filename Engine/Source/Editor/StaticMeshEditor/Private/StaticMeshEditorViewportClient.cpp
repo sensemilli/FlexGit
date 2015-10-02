@@ -798,6 +798,18 @@ void FStaticMeshEditorViewportClient::DrawCanvas( FViewport& InViewport, FSceneV
 			FText::Format(NSLOCTEXT("UnrealEd", "NumPrimitives_F", "Num Primitives:  {0}"), FText::AsNumber(StaticMesh->BodySetup->AggGeom.GetElementCount()))));
 	}
 
+	if (StaticMesh->FlexAsset)
+	{
+		TextItems.Add(SStaticMeshEditorViewport::FOverlayTextItem(
+			FText::Format(FText::FromString(TEXT("Flex Num Particles: {0}")), FText::AsNumber(StaticMesh->FlexAsset->Particles.Num())), "TextBlock.HighlighColor"));
+
+		TextItems.Add(SStaticMeshEditorViewport::FOverlayTextItem(
+			FText::Format(FText::FromString(TEXT("Flex Num Shapes: {0}")), FText::AsNumber(StaticMesh->FlexAsset->ShapeCenters.Num())), "TextBlock.HighlighColor"));
+
+		TextItems.Add(SStaticMeshEditorViewport::FOverlayTextItem(
+			FText::Format(FText::FromString(TEXT("Flex Num Springs: {0}")), FText::AsNumber(StaticMesh->FlexAsset->SpringCoefficients.Num())), "TextBlock.HighlighColor"));
+	}
+
 	StaticMeshEditorViewport->PopulateOverlayText(TextItems);
 
 	if(bDrawUVs)

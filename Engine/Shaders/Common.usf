@@ -175,6 +175,11 @@
 #define FCOLOR_COMPONENT_SWIZZLE
 #endif
 
+#if FLEX_FLUID_SURFACE_FACTORY
+Texture2D FlexFluidSurfaceThicknessTexture;
+SamplerState FlexFluidSurfaceThicknessTextureSampler;
+#endif
+
 // Whether the platform supports independent texture and samplers
 // When enabled, different texture lookups can share samplers to allow more artist samplers in the base pass
 // Ideally this would just be enabled for all SM4 and above feature level platforms
@@ -802,6 +807,16 @@ float3 DecodeSceneColorForMaterialNode(float2 ScreenUV)
 
 	// Undo the function in EncodeSceneColorForMaterialNode
 	return pow(EncodedSceneColor.rgb, 4) * 10;
+#endif
+}
+
+// Returns thickness provided for flex fluid surface rendering
+float CalcFlexFluidSurfaceThicknessForMaterialNode(float2 ScreenUV)
+{
+#if FLEX_FLUID_SURFACE_FACTORY
+	return Texture2DSampleLevel(FlexFluidSurfaceThicknessTexture, FlexFluidSurfaceThicknessTextureSampler, ScreenUV, 0);
+#else
+	return 0.0f;
 #endif
 }
 

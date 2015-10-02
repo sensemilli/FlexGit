@@ -445,6 +445,11 @@ public:
 	/** Pre-build navigation collision */
 	UPROPERTY(VisibleAnywhere, transient, duplicatetransient, Instanced, Category = Navigation)
 	class UNavCollision* NavCollision;
+
+	/** Properties for the associated Flex object */
+	UPROPERTY(EditAnywhere, Instanced, Category = Flex)
+	class UFlexAsset* FlexAsset;
+
 public:
 	/**
 	 * Default constructor

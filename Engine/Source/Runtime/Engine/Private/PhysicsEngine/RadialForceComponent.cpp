@@ -77,6 +77,18 @@ void URadialForceComponent::TickComponent(float DeltaTime, enum ELevelTick TickT
 				}
 			}
 		}
+
+#if WITH_FLEX
+		if (ForceStrength != 0.0f)
+		{
+			FPhysScene* PhysScene = GetWorld()->GetPhysicsScene();
+			const uint32 FlexBit = ECC_TO_BITFIELD(ECC_Flex);
+			if (PhysScene && (CollisionObjectQueryParams.GetQueryBitfield() & FlexBit) != 0)
+			{
+				PhysScene->AddRadialForceToFlex(Origin, Radius, ForceStrength, Falloff);
+			}
+		}
+#endif
 	}
 }
 
@@ -138,6 +150,18 @@ void URadialForceComponent::FireImpulse()
 			}
 		}
 	}
+
+#if WITH_FLEX
+	if (ImpulseStrength != 0.0f)
+	{
+		FPhysScene* PhysScene = GetWorld()->GetPhysicsScene();
+		const uint32 FlexBit = ECC_TO_BITFIELD(ECC_Flex);
+		if (PhysScene && (CollisionObjectQueryParams.GetQueryBitfield() & FlexBit) != 0)
+		{
+			PhysScene->AddRadialImpulseToFlex(Origin, Radius, ImpulseStrength, Falloff, bImpulseVelChange);
+		}
+	}
+#endif
 }
 
 void URadialForceComponent::AddCollisionChannelToAffect(enum ECollisionChannel CollisionChannel)

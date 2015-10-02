@@ -630,10 +630,18 @@ void Main(
    ,in uint InCoverage : SV_Coverage
    ,out uint OutCoverage : SV_Coverage
 #endif
+
+#if FLEX_FLUID_SURFACE_FACTORY
+   ,out float OutDepth : SV_DEPTH
+#endif
    )
 {
 #if EDITOR_ALPHA2COVERAGE != 0
 	OutCoverage = InCoverage;
+#endif
+
+#if FLEX_FLUID_SURFACE_FACTORY
+	GetFlexFluidSurfaceCoverageAndClipping(Interpolants);
 #endif
 
 	FMaterialPixelParameters MaterialParameters = GetMaterialPixelParameters(Interpolants, BasePassInterpolants.PixelPosition);
@@ -654,11 +662,15 @@ void Main(
 	ApplyPixelDepthOffsetForBasePass(MaterialParameters, BasePassInterpolants, OutDepth);
 #endif
 
+#if !FLEX_FLUID_SURFACE_FACTORY
+
 	//Clip if the blend mode requires it.
 	if(!bEditorWeightedZBuffering)
 	{
 		GetMaterialCoverageAndClipping(MaterialParameters);
 	}
+
+#endif
 
 #if HQ_TEXTURE_LIGHTMAP && USES_AO_MATERIAL_MASK && !MATERIAL_SHADINGMODEL_UNLIT
 	float2 LightmapUV0, LightmapUV1;
@@ -930,4 +942,8 @@ void Main(
 			clip(OutColor.a - GetMaterialOpacityMaskClipValue());
 		#endif
 	}
+
+#if FLEX_FLUID_SURFACE_FACTORY
+	OutDepth = GetFlexFluidSurfaceDepth(Interpolants);
+#endif
 }

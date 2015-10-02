@@ -18,6 +18,10 @@
 	#define APEX_STATICALLY_LINKED	0
 #endif
 
+#if WITH_FLEX
+// fwd declare error func
+void FlexErrorFunc(FlexErrorSeverity level, const char* msg, const char* file, int line);
+#endif
 
 /** Physics stats */
 
@@ -478,11 +482,27 @@ void InitGamePhys()
 
 #endif // #if WITH_APEX
 
+#if WITH_FLEX
+	if (flexInit(FLEX_VERSION, FlexErrorFunc) == eFlexErrorNone)
+	{
+		GFlexIsInitialized = true;
+	}
+#endif // WITH_FLEX
+
 #endif // WITH_PHYSX
 }
 
 void TermGamePhys()
 {
+
+#if WITH_FLEX
+	if (GFlexIsInitialized)
+	{
+		flexShutdown();
+		GFlexIsInitialized = false;
+	}
+#endif // WITH_FLEX
+
 #if WITH_BOX2D
 	FPhysicsIntegration2D::ShutdownPhysics();
 #endif

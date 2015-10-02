@@ -35,6 +35,10 @@ ENGINE_API NxModule*				GApexModuleLegacy = NULL;
 ENGINE_API NxModuleClothing*		GApexModuleClothing		= NULL;	
 #endif //WITH_APEX_CLOTHING
 
+#if WITH_FLEX
+ENGINE_API bool						GFlexIsInitialized = false;
+#endif //WITH_FLEX
+
 TMap<int16, NxApexScene*>				GPhysXSceneMap;
 FApexNullRenderResourceManager		GApexNullRenderResourceManager;
 FApexResourceCallback				GApexResourceCallback;

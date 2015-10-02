@@ -51,6 +51,7 @@
 #include "Distributions/DistributionFloatConstantCurve.h"
 #include "Engine/InterpCurveEdSetup.h"
 #include "GameFramework/GameState.h"
+#include "PhysicsEngine/FlexFluidSurfaceComponent.h"
 
 
 #define LOCTEXT_NAMESPACE "ParticleComponents"
@@ -697,6 +698,8 @@ UParticleEmitter::UParticleEmitter(const FObjectInitializer& ObjectInitializer)
 	EmitterEditorColor = FColor(0, 150, 150, 255);
 #endif // WITH_EDITORONLY_DATA
 
+	// Flex
+	Mass = 1.0f;
 }
 
 FParticleEmitterInstance* UParticleEmitter::CreateInstance(UParticleSystemComponent* InComponent)
@@ -3237,6 +3240,16 @@ FParticleDynamicData* UParticleSystemComponent::CreateDynamicData()
 							NewEmitterReplayFrame->OriginalEmitterIndex = EmitterIndex;
 							NewEmitterReplayFrame->FrameState = NewEmitterReplayData;
 						}
+
+#if WITH_FLEX
+						// Update fluid surface proxy with new dynamic emitter data
+						if (EmitterInst->SpriteTemplate->FlexFluidSurfaceTemplate)
+						{
+							UFlexFluidSurfaceComponent* SurfaceComponent = GetWorld()->GetFlexFluidSurface(EmitterInst->SpriteTemplate->FlexFluidSurfaceTemplate);
+							check(SurfaceComponent);
+							SurfaceComponent->SendRenderEmitterDynamicData_Concurrent(NewDynamicEmitterData, EmitterInst, (FParticleSystemSceneProxy*)SceneProxy);
+						}
+#endif
 					}
 				}
 			}

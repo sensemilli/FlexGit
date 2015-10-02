@@ -1389,6 +1389,8 @@ struct FDynamicSpriteEmitterReplayDataBase
 	uint8						EmitterRenderMode;
 	uint8						EmitterNormalsMode;
 	FVector2D					PivotOffset;
+	int32						FlexDataOffset;
+	bool						bFlexAnisotropyData;
 
 	/** Constructor */
 	FDynamicSpriteEmitterReplayDataBase()
@@ -1411,6 +1413,8 @@ struct FDynamicSpriteEmitterReplayDataBase
 		, EmitterRenderMode(0)
 		, EmitterNormalsMode(0)
 		, PivotOffset(-0.5f, -0.5f)
+		, FlexDataOffset(0)
+		, bFlexAnisotropyData(false)
 	{
 	}
 

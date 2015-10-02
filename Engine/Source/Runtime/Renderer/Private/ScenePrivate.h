@@ -108,6 +108,7 @@ public:
 #include "AtmosphereRendering.h"
 #include "GlobalDistanceFieldParameters.h"
 #include "LightPropagationVolume.h"
+#include "FlexFluidSurfaceRendering.h"
 
 // NVCHANGE_BEGIN: Add VXGI
 #include "VxgiRendering.h"

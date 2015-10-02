@@ -793,6 +793,8 @@ bool UMaterial::GetUsageByFlag(EMaterialUsage Usage) const
 		case MATUSAGE_SplineMesh: UsageValue = bUsedWithSplineMeshes; break;
 		case MATUSAGE_InstancedStaticMeshes: UsageValue = bUsedWithInstancedStaticMeshes; break;
 		case MATUSAGE_Clothing: UsageValue = bUsedWithClothing; break;
+		case MATUSAGE_FlexFluidSurfaces: UsageValue = bUsedWithFlexFluidSurfaces; break;
+		case MATUSAGE_FlexMeshes: UsageValue = bUsedWithFlexMeshes; break;
 
 		// NVCHANGE_BEGIN: Add VXGI
 #if WITH_GFSDK_VXGI
@@ -882,6 +884,14 @@ void UMaterial::SetUsageByFlag(EMaterialUsage Usage, bool NewValue)
 		{
 			bUsedWithClothing = NewValue; break;
 		}
+		case MATUSAGE_FlexFluidSurfaces:
+		{
+			bUsedWithFlexFluidSurfaces = NewValue; break;
+		}
+		case MATUSAGE_FlexMeshes:
+		{
+			bUsedWithFlexMeshes = NewValue; break;
+		}
 
 		// NVCHANGE_BEGIN: Add VXGI
 #if WITH_GFSDK_VXGI
@@ -915,6 +925,8 @@ FString UMaterial::GetUsageName(EMaterialUsage Usage) const
 		case MATUSAGE_SplineMesh: UsageName = TEXT("bUsedWithSplineMeshes"); break;
 		case MATUSAGE_InstancedStaticMeshes: UsageName = TEXT("bUsedWithInstancedStaticMeshes"); break;
 		case MATUSAGE_Clothing: UsageName = TEXT("bUsedWithClothing"); break;
+		case MATUSAGE_FlexFluidSurfaces: UsageName = TEXT("bUsedWithFlexFluidSurfaces"); break;
+		case MATUSAGE_FlexMeshes: UsageName = TEXT("bUsedWithFlexMeshes"); break;
 
 		// NVCHANGE_BEGIN: Add VXGI
 #if WITH_GFSDK_VXGI
@@ -993,7 +1005,9 @@ static bool IsPrimitiveTypeUsageFlag(EMaterialUsage Usage)
 		|| Usage == MATUSAGE_MorphTargets
 		|| Usage == MATUSAGE_SplineMesh
 		|| Usage == MATUSAGE_InstancedStaticMeshes
-		|| Usage == MATUSAGE_Clothing;
+		|| Usage == MATUSAGE_Clothing
+		|| Usage == MATUSAGE_FlexFluidSurfaces
+		|| Usage == MATUSAGE_FlexMeshes;
 }
 
 bool UMaterial::NeedsSetMaterialUsage_Concurrent(bool &bOutHasUsage, EMaterialUsage Usage) const
@@ -2680,6 +2694,9 @@ void UMaterial::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEve
 
 	//If we can be sure this material would be the same opaque as it is masked then allow it to be assumed opaque.
 	bCanMaskedBeAssumedOpaque = !OpacityMask.Expression && !(OpacityMask.UseConstant && OpacityMask.Constant < 0.999f) && !bUseMaterialAttributes;
+
+	//Flex fluid surfaces can never be considered fully opaque.
+	bCanMaskedBeAssumedOpaque &= !bUsedWithFlexFluidSurfaces;
 
 	bool bRequiresCompilation = true;
 	if( PropertyThatChanged ) 

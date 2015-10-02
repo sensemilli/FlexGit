@@ -352,6 +352,16 @@ namespace UnrealBuildTool
 				Definitions.Add("WITH_APEX=0");
 			}
 
+            if (UEBuildConfiguration.bCompileFLEX == true)
+            {
+                AddThirdPartyPrivateStaticDependencies(Target, "FLEX");
+                Definitions.Add("WITH_FLEX=1");
+            }
+            else
+            {
+                Definitions.Add("WITH_FLEX=0");
+            }
+
             if(UEBuildConfiguration.bRuntimePhysicsCooking == true)
             {
                 Definitions.Add("WITH_RUNTIME_PHYSICS_COOKING");

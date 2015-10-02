@@ -33,6 +33,12 @@
 #endif
 #include "Engine/StaticMeshSocket.h"
 
+#if WITH_FLEX
+#include "Runtime/Engine/Classes/PhysicsEngine/FlexAssetPreviewComponent.h"
+#include "Runtime/Engine/Classes/PhysicsEngine/FlexAsset.h"
+#include "Runtime/Engine/Classes/PhysicsEngine/FlexContainer.h"
+#endif
+
 #define HITPROXY_SOCKET	1
 
 ///////////////////////////////////////////////////////////
@@ -114,10 +120,22 @@ void SStaticMeshEditorViewport::Construct(const FArguments& InArgs)
 
 	FCoreUObjectDelegates::OnObjectPropertyChanged.AddRaw(this, &SStaticMeshEditorViewport::OnObjectPropertyChanged);
 
+#if WITH_FLEX
+	FlexPreviewComponent = NULL;
+	bDrawFlexPreview = true;
+	UpdateFlexPreviewComponent();
+#endif
 }
 
 SStaticMeshEditorViewport::~SStaticMeshEditorViewport()
 {
+#if WITH_FLEX
+	if (FlexPreviewComponent)
+	{
+		PreviewScene.RemoveComponent(FlexPreviewComponent);
+	}
+#endif
+
 	FCoreUObjectDelegates::OnObjectPropertyChanged.RemoveAll(this);
 	if (EditorViewportClient.IsValid())
 	{
@@ -196,6 +214,13 @@ void SStaticMeshEditorViewport::OnObjectPropertyChanged(UObject* ObjectBeingModi
 			RefreshViewport();
 		}
 	}
+
+#if WITH_FLEX
+	if (ObjectBeingModified == StaticMesh->FlexAsset || (StaticMesh->FlexAsset && ObjectBeingModified == StaticMesh->FlexAsset->ContainerTemplate))
+	{
+		UpdateFlexPreviewComponent();
+	}
+#endif
 }
 
 void SStaticMeshEditorViewport::UpdatePreviewSocketMeshes()
@@ -242,6 +267,27 @@ void SStaticMeshEditorViewport::UpdatePreviewSocketMeshes()
 		}
 	}
 }
+
+#if WITH_FLEX
+void SStaticMeshEditorViewport::UpdateFlexPreviewComponent()
+{
+	if (FlexPreviewComponent)
+	{
+		PreviewScene.RemoveComponent(FlexPreviewComponent);
+		FlexPreviewComponent = NULL;
+	}
+
+	bool bDisplayFlexParticles = StaticMesh->FlexAsset && StaticMesh->FlexAsset->ContainerTemplate && bDrawFlexPreview;
+	if (bDisplayFlexParticles)
+	{
+		FlexPreviewComponent = ConstructObject<UFlexAssetPreviewComponent>(UFlexAssetPreviewComponent::StaticClass());
+		FlexPreviewComponent->FlexAsset = StaticMesh->FlexAsset;
+		PreviewScene.AddComponent(FlexPreviewComponent, FTransform::Identity);
+	}
+
+	RefreshViewport();
+}
+#endif
 
 void SStaticMeshEditorViewport::SetPreviewMesh(UStaticMesh* InStaticMesh)
 {
@@ -359,6 +405,24 @@ bool SStaticMeshEditorViewport::IsInViewModeVertexColorChecked() const
 	return EditorViewportClient->EngineShowFlags.VertexColors;
 }
 
+#if WITH_FLEX
+void SStaticMeshEditorViewport::SetDrawFlexPreview()
+{
+	bDrawFlexPreview = !bDrawFlexPreview;
+	UpdateFlexPreviewComponent();
+	if (FEngineAnalytics::IsAvailable())
+	{
+		FEngineAnalytics::GetProvider().RecordEvent(TEXT("Editor.Usage.StaticMesh.Toolbar"), FAnalyticsEventAttribute(TEXT("FlexPreview"), bDrawFlexPreview));
+	}
+	SceneViewport->Invalidate();
+}
+
+bool SStaticMeshEditorViewport::IsSetDrawFlexPreviewChecked() const
+{
+	return bDrawFlexPreview;
+}
+#endif
+
 void SStaticMeshEditorViewport::ForceLODLevel(int32 InForcedLOD)
 {
 	PreviewMeshComponent->ForcedLodModel = InForcedLOD;
@@ -418,6 +482,14 @@ void SStaticMeshEditorViewport::BindCommands()
 		FExecuteAction::CreateSP( this, &SStaticMeshEditorViewport::SetViewModeVertexColor ),
 		FCanExecuteAction(),
 		FIsActionChecked::CreateSP( this, &SStaticMeshEditorViewport::IsInViewModeVertexColorChecked ) );
+
+#if WITH_FLEX
+	CommandList->MapAction(
+		Commands.SetDrawFlexPreview,
+		FExecuteAction::CreateSP(this, &SStaticMeshEditorViewport::SetDrawFlexPreview),
+		FCanExecuteAction(),
+		FIsActionChecked::CreateSP(this, &SStaticMeshEditorViewport::IsSetDrawFlexPreviewChecked));
+#endif
 
 	CommandList->MapAction(
 		Commands.ResetCamera,

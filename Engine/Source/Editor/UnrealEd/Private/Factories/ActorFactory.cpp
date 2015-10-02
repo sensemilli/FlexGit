@@ -67,6 +67,8 @@ ActorFactory.cpp:
 #include "Kismet2/ComponentEditorUtils.h"
 #include "Components/BillboardComponent.h"
 
+#include "PhysicsEngine/FlexActor.h"
+
 DEFINE_LOG_CATEGORY_STATIC(LogActorFactory, Log, All);
 
 #define LOCTEXT_NAMESPACE "ActorFactory"
@@ -1653,6 +1655,46 @@ UActorFactoryInteractiveFoliage::UActorFactoryInteractiveFoliage(const FObjectIn
 {
 	DisplayName = LOCTEXT("InteractiveFoliageDisplayName", "Interactive Foliage");
 	NewActorClass = AInteractiveFoliageActor::StaticClass();
+}
+
+/*-----------------------------------------------------------------------------
+UActorFactoryFlex
+-----------------------------------------------------------------------------*/
+UActorFactoryFlex::UActorFactoryFlex(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	DisplayName = LOCTEXT("FlexDisplayName", "Flex Actor");
+	NewActorClass = AFlexActor::StaticClass();
+}
+
+bool UActorFactoryFlex::CanCreateActorFrom(const FAssetData& AssetData, FText& OutErrorMsg)
+{
+	return true;
+}
+
+void UActorFactoryFlex::PostSpawnActor(UObject* Asset, AActor* NewActor)
+{
+	Super::PostSpawnActor(Asset, NewActor);
+
+	UStaticMesh* StaticMesh = Cast<UStaticMesh>(Asset);
+
+	if (StaticMesh)
+	{
+		UE_LOG(LogActorFactory, Log, TEXT("Actor Factory created %s"), *StaticMesh->GetName());
+
+		// Change properties
+		AFlexActor* FlexActor = CastChecked<AFlexActor>(NewActor);
+		UStaticMeshComponent* StaticMeshComponent = FlexActor->GetStaticMeshComponent();
+		check(StaticMeshComponent);
+
+		StaticMeshComponent->UnregisterComponent();
+
+		StaticMeshComponent->StaticMesh = StaticMesh;
+		StaticMeshComponent->StaticMeshDerivedDataKey = StaticMesh->RenderData->DerivedDataKey;
+
+		// Init Component
+		StaticMeshComponent->RegisterComponent();
+	}
 }
 
 /*-----------------------------------------------------------------------------

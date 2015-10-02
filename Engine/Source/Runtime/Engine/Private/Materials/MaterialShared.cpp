@@ -752,6 +752,11 @@ bool FMaterialResource::IsUsedWithStaticLighting() const
 	return Material->bUsedWithStaticLighting;
 }
 
+bool FMaterialResource::IsUsedWithFlexFluidSurfaces() const
+{
+	return Material->bUsedWithFlexFluidSurfaces;
+}
+
 bool FMaterialResource::IsUsedWithMorphTargets() const
 {
 	return Material->bUsedWithMorphTargets;
@@ -760,6 +765,11 @@ bool FMaterialResource::IsUsedWithMorphTargets() const
 bool FMaterialResource::IsUsedWithSplineMeshes() const
 {
 	return Material->bUsedWithSplineMeshes;
+}
+
+bool FMaterialResource::IsUsedWithFlexMeshes() const
+{
+	return Material->bUsedWithFlexMeshes;
 }
 
 bool FMaterialResource::IsUsedWithInstancedStaticMeshes() const

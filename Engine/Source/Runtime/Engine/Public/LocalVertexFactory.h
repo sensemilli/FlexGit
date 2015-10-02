@@ -64,6 +64,21 @@ public:
 	static FVertexFactoryShaderParameters* ConstructShaderParameters(EShaderFrequency ShaderFrequency);
 
 protected:
+
+	/**
+	* Add the decl elements for the streams
+	* @param InData - type with stream components
+	* @param OutElements - vertex decl list to modify
+	*/
+	virtual void AddVertexElements(DataType& InData, FVertexDeclarationElementList& OutElements);
+
+	/**
+	* Add the decl elements for the position only streams
+	* @param InData - type with stream components
+	* @param OutElements - vertex decl list to modify
+	*/
+	virtual void AddVertexPositionElements(DataType& InData, FVertexDeclarationElementList& OutElements);
+
 	DataType Data;
 };
 

@@ -28,6 +28,11 @@
 				HMODULE APEX_Clothing_GPUHandle = 0;
 		#endif  //WITH_APEX_CLOTHING
 	#endif	//WITH_APEX
+	#if WITH_FLEX
+		HMODULE CudaRtHandle = 0;
+		HMODULE FLEXCoreHandle = 0;
+		HMODULE FLEXExtHandle = 0;
+	#endif // WITH_FLEX
 #endif
 
 /**
@@ -43,12 +48,14 @@ void LoadPhysXModules()
 #if PLATFORM_WINDOWS
 	FString PhysXBinariesRoot = FPaths::EngineDir() / TEXT("Binaries/ThirdParty/PhysX/PhysX-3.3/");
 	FString APEXBinariesRoot = FPaths::EngineDir() / TEXT("Binaries/ThirdParty/PhysX/APEX-1.3/");
+	FString FLEXBinariesRoot = FPaths::EngineDir() / TEXT("Binaries/ThirdParty/PhysX/FLEX-0.9.0/");
 
 	#if PLATFORM_64BITS
 
 		FString RootPhysXPath(PhysXBinariesRoot + TEXT("Win64/VS2013/"));
 		FString RootAPEXPath(APEXBinariesRoot + TEXT("Win64/VS2013/"));
 
+		FString RootFLEXPath(FLEXBinariesRoot + TEXT("Win64/"));
 
 		#if UE_BUILD_DEBUG && !defined(NDEBUG)	// Use !defined(NDEBUG) to check to see if we actually are linking with Debug third party libraries (bDebugBuildsActuallyUseDebugCRT)
 
@@ -69,6 +76,12 @@ void LoadPhysXModules()
 
 			#endif	//WITH_APEX
 
+			#if WITH_FLEX
+				CudaRtHandle = LoadLibraryW(*(RootFLEXPath + "cudart64_70.dll"));
+				FLEXCoreHandle = LoadLibraryW(*(RootFLEXPath + "flexDebug_x64.dll"));
+				FLEXExtHandle = LoadLibraryW(*(RootFLEXPath + "flexExtDebug_x64.dll"));
+			#endif // WITH_FLEX
+
 		#elif (UE_BUILD_SHIPPING || UE_BUILD_TEST) && SHIPPING_BUILDS_ACTUALLY_USE_SHIPPING_PHYSX_LIBRARIES
 
 			PhysX3CommonHandle = LoadLibraryW(*(RootPhysXPath + "PhysX3Common_x64.dll"));
@@ -85,6 +98,11 @@ void LoadPhysXModules()
 					APEX_ClothingHandle = LoadLibraryW(*(RootAPEXPath + "APEX_Clothing_x64.dll"));
 					APEX_Clothing_GPUHandle = LoadLibraryW(*(RootAPEXPath + "APEX_ClothingGPU_x64.dll"));					
 				#endif //WITH_APEX_CLOTHING
+				#if WITH_FLEX
+					CudaRtHandle = LoadLibraryW(*(RootFLEXPath + "cudart64_70.dll"));
+					FLEXCoreHandle = LoadLibraryW(*(RootFLEXPath + "flexRelease_x64.dll"));
+					FLEXExtHandle = LoadLibraryW(*(RootFLEXPath + "flexExtRelease_x64.dll"));
+				#endif // WITH_FLEX
 			#endif	//WITH_APEX
 
 		#else	//UE_BUILD_DEBUG
@@ -104,7 +122,11 @@ void LoadPhysXModules()
 					APEX_Clothing_GPUHandle = LoadLibraryW(*(RootAPEXPath + "APEX_ClothingGPUPROFILE_x64.dll"));					
 				#endif //WITH_APEX_CLOTHING
 			#endif	//WITH_APEX
-
+			#if WITH_FLEX
+				CudaRtHandle = LoadLibraryW(*(RootFLEXPath + "cudart64_70.dll"));
+				FLEXCoreHandle = LoadLibraryW(*(RootFLEXPath + "flexRelease_x64.dll"));
+				FLEXExtHandle = LoadLibraryW(*(RootFLEXPath + "flexExtRelease_x64.dll"));
+			#endif // WITH_FLEX
 		#endif	//UE_BUILD_DEBUG
 	#else	//PLATFORM_64BITS
 
@@ -115,6 +137,8 @@ void LoadPhysXModules()
 			FString RootPhysXPath(PhysXBinariesRoot + TEXT("Win32/VS2012/"));
 			FString RootAPEXPath(APEXBinariesRoot + TEXT("Win32/VS2012/"));
 		#endif
+
+		FString RootFLEXPath(FLEXBinariesRoot + TEXT("Win32/"));
 
 		#if UE_BUILD_DEBUG && !defined(NDEBUG)	// Use !defined(NDEBUG) to check to see if we actually are linking with Debug third party libraries (bDebugBuildsActuallyUseDebugCRT)
 
@@ -133,6 +157,11 @@ void LoadPhysXModules()
 					APEX_Clothing_GPUHandle = LoadLibraryW(*(RootAPEXPath + "APEX_ClothingGPUDEBUG_x86.dll"));
 				#endif //WITH_APEX_CLOTHING
 			#endif	//WITH_APEX
+			#if WITH_FLEX
+				CudaRtHandle = LoadLibraryW(*(RootFLEXPath + "cudart32_70.dll"));
+				FLEXCoreHandle = LoadLibraryW(*(RootFLEXPath + "flexDebug_x86.dll"));
+				FLEXExtHandle = LoadLibraryW(*(RootFLEXPath + "flexExtDebug_x86.dll"));
+			#endif // WITH_FLEX
 
 		#elif (UE_BUILD_SHIPPING || UE_BUILD_TEST) && SHIPPING_BUILDS_ACTUALLY_USE_SHIPPING_PHYSX_LIBRARIES
 
@@ -169,7 +198,11 @@ void LoadPhysXModules()
 						APEX_Clothing_GPUHandle = LoadLibraryW(*(RootAPEXPath + "APEX_ClothingGPUPROFILE_x86.dll"));
 					#endif //WITH_APEX_CLOTHING
 			#endif	//WITH_APEX
-
+			#if WITH_FLEX
+				CudaRtHandle = LoadLibraryW(*(RootFLEXPath + "cudart32_70.dll"));
+				FLEXCoreHandle = LoadLibraryW(*(RootFLEXPath + "flexRelease_x86.dll"));
+				FLEXExtHandle = LoadLibraryW(*(RootFLEXPath + "flexExtRelease_x86.dll"));
+			#endif // WITH_FLEX
 		#endif	//UE_BUILD_DEBUG
 	#endif	//PLATFORM_64BITS
 #endif	//PLATFORM_WINDOWS
@@ -195,6 +228,11 @@ void UnloadPhysXModules()
 			FreeLibrary(APEX_Clothing_GPUHandle);
 		#endif //WITH_APEX_CLOTHING
 	#endif	//WITH_APEX
+	#if WITH_FLEX
+		FreeLibrary(CudaRtHandle);
+		FreeLibrary(FLEXCoreHandle);
+		FreeLibrary(FLEXExtHandle);
+	#endif // WITH_FLEX
 #endif
 }
 

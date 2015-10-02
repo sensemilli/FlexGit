@@ -451,7 +451,7 @@ void FDeferredShadingSceneRenderer::RenderBasePassDynamicData(FRHICommandList& R
 		const FMeshBatchAndRelevance& MeshBatchAndRelevance = View.DynamicMeshElements[MeshBatchIndex];
 
 		if ((MeshBatchAndRelevance.bHasOpaqueOrMaskedMaterial || ViewFamily.EngineShowFlags.Wireframe)
-			&& MeshBatchAndRelevance.bRenderInMainPass)
+			&& MeshBatchAndRelevance.bRenderInMainPass && !MeshBatchAndRelevance.PrimitiveSceneProxy->IsFlexFluidSurface())
 		{
 			const FMeshBatch& MeshBatch = *MeshBatchAndRelevance.Mesh;
 			FBasePassOpaqueDrawingPolicyFactory::DrawDynamicMesh(RHICmdList, View, Context, MeshBatch, false, true, MeshBatchAndRelevance.PrimitiveSceneProxy, MeshBatch.BatchHitProxyId);
@@ -1021,6 +1021,10 @@ void FDeferredShadingSceneRenderer::Render(FRHICommandListImmediate& RHICmdList)
 		ServiceLocalQueue();
 	}
 
+#if WITH_FLEX
+	GFlexFluidSurfaceRenderer.UpdateProxiesAndResources(RHICmdList, Views[0].DynamicMeshElements);
+#endif
+
 	// Clear the G Buffer render targets
 	bool bIsGBufferCurrent = false;
 	if (bRequiresRHIClear)
@@ -1054,6 +1058,12 @@ void FDeferredShadingSceneRenderer::Render(FRHICommandListImmediate& RHICmdList)
 	RenderBasePass(RHICmdList);
 	RHICmdList.SetCurrentStat(GET_STATID(STAT_CLM_AfterBasePass));
 	ServiceLocalQueue();
+
+#if WITH_FLEX
+	GFlexFluidSurfaceRenderer.RenderParticles(RHICmdList, Views[0]);
+	FSceneRenderTargets::Get(RHICmdList).BeginRenderingGBuffer(RHICmdList, ERenderTargetLoadAction::ENoAction, ERenderTargetLoadAction::ENoAction);
+	GFlexFluidSurfaceRenderer.RenderBasePass(RHICmdList, Views[0]);
+#endif
 
 	if (ViewFamily.EngineShowFlags.VisualizeLightCulling)
 	{
@@ -1393,6 +1403,10 @@ void FDeferredShadingSceneRenderer::Render(FRHICommandListImmediate& RHICmdList)
 		RenderMeshDistanceFieldVisualization(RHICmdList, FDistanceFieldAOParameters(GDefaultDFAOMaxOcclusionDistance));
 		ServiceLocalQueue();
 	}
+
+#if WITH_FLEX
+	GFlexFluidSurfaceRenderer.Cleanup();
+#endif
 
 	// Resolve the scene color for post processing.
 	SceneContext.ResolveSceneColor(RHICmdList, FResolveRect(0, 0, ViewFamily.FamilySizeX, ViewFamily.FamilySizeY));
