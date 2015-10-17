@@ -78,21 +78,21 @@ namespace NVRHI
 		{ Format::D32,                  PF_R32_FLOAT,         DXGI_FORMAT_R32_TYPELESS,           DXGI_FORMAT_R32_FLOAT,              DXGI_FORMAT_D32_FLOAT,              4, true },
 	};
 
-	const FormatMapping& GetFormatMapping(Format::Enum abstractFormat)
+	const FormatMapping& GetFormatMappingD3D12(Format::Enum abstractFormat)
 	{
 		const FormatMapping& mapping = FormatMappings[abstractFormat];
 		check(mapping.abstractFormat == abstractFormat);
 		return mapping;
 	}
 
-	bool GetSSE42Support()
+	bool GetSSE42SupportD3D12()
 	{
 		int cpui[4];
 		__cpuidex(cpui, 1, 0);
 		return !!(cpui[2] & 0x100000);
 	}
 
-	static const bool CpuSupportsSSE42 = GetSSE42Support();
+	static const bool CpuSupportsSSE42 = GetSSE42SupportD3D12();
 
 	class CrcHash
 	{
@@ -179,7 +179,7 @@ namespace NVRHI
 		TextureHandle texture = new Texture();
 		texture->Desc = d;
 
-		const FormatMapping& mapping = GetFormatMapping(d.format);
+		const FormatMapping& mapping = GetFormatMappingD3D12(d.format);
 
 		uint32 flags = TexCreate_None;
 
@@ -552,7 +552,7 @@ namespace NVRHI
 		shader->Release();
 	}
 
-	ESamplerAddressMode convertSamplerAddressMode(SamplerDesc::WrapMode mode)
+	ESamplerAddressMode convertSamplerAddressModeD3D12(SamplerDesc::WrapMode mode)
 	{
 		switch (mode)
 		{
@@ -576,9 +576,9 @@ namespace NVRHI
 		else
 			Desc.Filter = SF_Point;
 
-		Desc.AddressU = convertSamplerAddressMode(d.wrapMode[0]);
-		Desc.AddressV = convertSamplerAddressMode(d.wrapMode[1]);
-		Desc.AddressW = convertSamplerAddressMode(d.wrapMode[2]);
+		Desc.AddressU = convertSamplerAddressModeD3D12(d.wrapMode[0]);
+		Desc.AddressV = convertSamplerAddressModeD3D12(d.wrapMode[1]);
+		Desc.AddressW = convertSamplerAddressModeD3D12(d.wrapMode[2]);
 
 		Desc.MipBias = d.mipBias;
 		Desc.MaxAnisotropy = d.anisotropy;
@@ -649,7 +649,7 @@ namespace NVRHI
 		return nullptr;
 	}
 
-	void convertPrimTypeAndCount(PrimitiveType::Enum primType, uint32 vertexCount, uint32& unrealPrimType, uint32& primCount)
+	void convertPrimTypeAndCountD3D12(PrimitiveType::Enum primType, uint32 vertexCount, uint32& unrealPrimType, uint32& primCount)
 	{
 		unrealPrimType = PT_TriangleList;
 		primCount = 0;
@@ -694,7 +694,7 @@ namespace NVRHI
 			uint32 PrimitiveType = 0;
 			uint32 PrimitiveCount = 0;
 
-			convertPrimTypeAndCount(state.primType, args[n].vertexCount, PrimitiveType, PrimitiveCount);
+			convertPrimTypeAndCountD3D12(state.primType, args[n].vertexCount, PrimitiveType, PrimitiveCount);
 
 			m_RHICmdList->DrawPrimitive(PrimitiveType, args[n].startVertexLocation, PrimitiveCount, args[n].instanceCount);
 		}
@@ -804,7 +804,7 @@ namespace NVRHI
 
 		D3D12_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
 
-		SRVDesc.Format = GetFormatMapping(format).srvFormat;
+		SRVDesc.Format = GetFormatMappingD3D12(format).srvFormat;
 		SRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 
 		uint32 firstMip = mipLevel >= t->Desc.mipLevels ? 0 : mipLevel;
@@ -879,7 +879,7 @@ namespace NVRHI
 
 		D3D12_UNORDERED_ACCESS_VIEW_DESC UAVDesc = {};
 
-		const FormatMapping& mapping = GetFormatMapping(format);
+		const FormatMapping& mapping = GetFormatMappingD3D12(format);
 		UAVDesc.Format = mapping.srvFormat;
 
 		if (t->Desc.isArray || t->Desc.isCubeMap)
@@ -929,7 +929,7 @@ namespace NVRHI
 		}
 		else
 		{
-			const FormatMapping& mapping = GetFormatMapping(format == Format::UNKNOWN ? Format::R32_UINT : format);
+			const FormatMapping& mapping = GetFormatMappingD3D12(format == Format::UNKNOWN ? Format::R32_UINT : format);
 
 			EffectiveStride = mapping.bytesPerPixel;
 			SRVDesc.Format = mapping.srvFormat;
@@ -963,7 +963,7 @@ namespace NVRHI
 		}
 		else
 		{
-			const FormatMapping& mapping = GetFormatMapping(format == Format::UNKNOWN ? Format::R32_UINT : format);
+			const FormatMapping& mapping = GetFormatMappingD3D12(format == Format::UNKNOWN ? Format::R32_UINT : format);
 
 			EffectiveStride = mapping.bytesPerPixel;
 			UAVDesc.Format = mapping.srvFormat;
