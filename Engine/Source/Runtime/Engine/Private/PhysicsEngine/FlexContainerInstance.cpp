@@ -779,11 +779,13 @@ void FFlexContainerInstance::Simulate(float DeltaTime)
 	FMemory::Memset(&Timers, 0, sizeof(Timers));
 	FlexTimers* TimersPtr = NULL;
 
+#if STATS
 	// only gather GPU stats if enabled as this has a high perf. overhead
 	static TStatId GatherEnable = IStatGroupEnableManager::Get().GetHighPerformanceEnableForStat(FName(), STAT_GROUP_TO_FStatGroup(STATGROUP_FlexGpu)::GetGroupName(), STAT_GROUP_TO_FStatGroup(STATGROUP_UObjects)::GetGroupCategory(), STAT_GROUP_TO_FStatGroup(STATGROUP_FlexGpu)::DefaultEnable, true, EStatDataType::ST_int64, TEXT("Flex GPU Stats"), true);
-	
+
 	if (!GatherEnable.IsNone())
 		TimersPtr = &Timers;
+#endif
 
 	float Dt;
 	int32 NumSubsteps;

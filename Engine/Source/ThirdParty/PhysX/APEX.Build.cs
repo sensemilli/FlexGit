@@ -127,7 +127,7 @@ public class APEX : ModuleRules
 				"APEX_Loader{0}_x64.dll",
 				"APEX_Particles{0}_x64.dll",
                 // NVCHANGE_BEGIN : JCAO - Add Turbulence Module
-                "APEX_Turbulence{0}_x64.dll",
+                "APEX_TurbulenceFS{0}_x64.dll",
                 // NVCHANGE_END: JCAO - Add Turbulence Module
 				"ApexFramework{0}_x64.dll",
 			};
@@ -154,7 +154,7 @@ public class APEX : ModuleRules
 				"APEX_Loader{0}_x86.dll",
 				"APEX_Particles{0}_x86.dll",
                 // NVCHANGE_BEGIN : JCAO - Add Turbulence Module
-                "APEX_Turbulence{0}_x86.dll",
+                "APEX_TurbulenceFS{0}_x86.dll",
                 // NVCHANGE_END: JCAO - Add Turbulence Module
 				"ApexFramework{0}_x86.dll",
 			};
