@@ -9,6 +9,8 @@
 #include "Hair.h"
 #include "HairSceneProxy.h"
 
+DEFINE_LOG_CATEGORY(LogHairWorks);
+
 // Debug render console variables.
 #define HairVisualizerCVarDefine(name)	\
 	static TAutoConsoleVariable<int> CVarHairVisualize##name(TEXT("r.Hair.Visualize")TEXT(#name),	0, TEXT(""), ECVF_RenderThreadSafe)
@@ -39,6 +41,32 @@ static TAutoConsoleVariable<float> CVarHairShadowTexelsScale(TEXT("r.Hair.Shadow
 #define _CPP
 #endif
 #include "../../../../Shaders/GFSDK_HairWorks_ShaderCommon.usf"
+
+class CustomLogHandler : public GFSDK_HAIR_LogHandler {
+public:
+	~CustomLogHandler()
+	{
+		UE_LOG(LogHairWorks, Log, TEXT("log handler destroyed\n"));
+	}
+
+	void Log(GFSDK_HAIR_LOG_TYPES logType, const char* message, const char* file, int line)
+	{
+		switch (logType)
+		{
+		case GFSDK_HAIR_LOG_ERROR:
+			UE_LOG(LogHairWorks, Error, TEXT("%S"), message);
+			break;
+		case GFSDK_HAIR_LOG_WARNING:
+			UE_LOG(LogHairWorks, Warning, TEXT("%S"), message);
+			break;
+		case GFSDK_HAIR_LOG_INFO:
+			UE_LOG(LogHairWorks, Log, TEXT("%S"), message);
+			break;
+		};
+	}
+};
+
+static CustomLogHandler s_logger;
 
 // Pixel shaders
 class FHairWorksPs : public FGlobalShader
@@ -210,12 +238,14 @@ ENGINE_API void InitializeHair()
 
 	LibPath += TEXT(".dll");
 
-	HairWorksSdk = GFSDK_LoadHairSDK(TCHAR_TO_ANSI(*LibPath));
+	HairWorksSdk = GFSDK_LoadHairSDK(TCHAR_TO_ANSI(*LibPath), GFSDK_HAIRWORKS_VERSION, 0, &s_logger);
 	if (!HairWorksSdk)
 		return;
 
 	if (GUsingNullRHI)
 		return;
+
+	UE_LOG(LogHairWorks, Log, TEXT("HairWorks: %S"), GFSDK_HAIRWORKS_FILE_VERSION_STRING);
 
 	ID3D11Device* D3D11Device = (ID3D11Device*)GDynamicRHI->RHIGetNativeDevice();
 	ID3D11DeviceContext* D3D11DeviceContext = nullptr;

@@ -9,6 +9,8 @@
 
 #include "HideWindowsPlatformTypes.h"
 
+DECLARE_LOG_CATEGORY_EXTERN(LogHairWorks, Log, All);
+
 class UHair;
 
 /**
