@@ -24,8 +24,9 @@ public class WaveWorks : ModuleRules
         }
 
         string FileName = "gfsdk_waveworks";
-        if (Target.Configuration == UnrealTargetConfiguration.Debug)
-            FileName += "_debug";
+        // @GalaxyMan: Removed debug as no debug libraries for WaveWorks
+        //if (Target.Configuration == UnrealTargetConfiguration.Debug)
+        //    FileName += "_debug";
         FileName += "." + Platform;
 
         PublicIncludePaths.Add(WaveWorksDir + "inc");
