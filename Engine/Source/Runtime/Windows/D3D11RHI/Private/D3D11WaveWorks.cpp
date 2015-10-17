@@ -13,7 +13,7 @@ namespace
 {
 	FString Platform = PLATFORM_64BITS ? TEXT("win64") : TEXT("win32");
 	FString WaveWorksBinariesDir = FPaths::EngineDir() / TEXT("Binaries/ThirdParty/WaveWorks/") + Platform;
-	FString WaveWorksDLLName = FString("gfsdk_waveworks") + (UE_BUILD_DEBUG ? "_debug." : ".") + Platform + ".dll";
+	FString WaveWorksDLLName = FString("gfsdk_waveworks") + /*(UE_BUILD_DEBUG ? "_debug." : ".") +*/ "." + Platform + ".dll";
 	FString CuFFTDLLName = FString("cufft") + Platform.Right(2) + "_55.dll";
 
 	struct DllHandle

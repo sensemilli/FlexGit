@@ -337,16 +337,18 @@ enum ECollisionChannel
 	ECC_Vehicle UMETA(DisplayName="Vehicle"),
 	ECC_Flex UMETA(DisplayName = "Flex"),
 	ECC_Destructible UMETA(DisplayName="Destructible"),
+	// NVCHANGE_BEGIN: JCAO - ADD new collision channel for turbulence
+	ECC_Turbulence UMETA(DisplayName = "Turbulence"),
+	// NVCHANGE_END: JCAO - ADD new collision channel for turbulence
 	// @NOTE : when you add more here for predefined engine channel
 	// please change the max in the CollisionProfile
-	// search ECC_Destructible
+	// search ECC_Turbulence
 
 	// Unspecified Engine Trace Channels
 	ECC_EngineTraceChannel1 UMETA(Hidden),
 	ECC_EngineTraceChannel2 UMETA(Hidden),
 	ECC_EngineTraceChannel3 UMETA(Hidden),
 	ECC_EngineTraceChannel4 UMETA(Hidden), 
-	ECC_EngineTraceChannel5 UMETA(Hidden),
 
 	// in order to use this custom channels
 	// we recommend to define in your local file
@@ -626,24 +628,25 @@ struct ENGINE_API FCollisionResponseContainer
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category=CollisionResponseContainer, meta=(DisplayName="Destructible"))
 	TEnumAsByte<enum ECollisionResponse> Destructible;    // 8
 
+	// NVCHANGE_BEGIN: JCAO - ADD new collision channel for turbulence
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = CollisionResponseContainer, meta = (DisplayName = "Turbulence"))
+	TEnumAsByte<enum ECollisionResponse> Turbulence;	// 9
+	// NVCHANGE_END: JCAO - ADD new collision channel for turbulence
 
 	///////////////////////////////////////
 	// Unspecified Engine Trace Channels
 	///////////////////////////////////////
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category=CollisionResponseContainer)
-	TEnumAsByte<enum ECollisionResponse> EngineTraceChannel1;    // 9
+	TEnumAsByte<enum ECollisionResponse> EngineTraceChannel1;    // 10
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category=CollisionResponseContainer)
-	TEnumAsByte<enum ECollisionResponse> EngineTraceChannel2;    // 10
+	TEnumAsByte<enum ECollisionResponse> EngineTraceChannel2;    // 11
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category=CollisionResponseContainer)
-	TEnumAsByte<enum ECollisionResponse> EngineTraceChannel3;    // 11
+	TEnumAsByte<enum ECollisionResponse> EngineTraceChannel3;    // 12
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category=CollisionResponseContainer)
-	TEnumAsByte<enum ECollisionResponse> EngineTraceChannel4;    // 12
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category=CollisionResponseContainer)
-	TEnumAsByte<enum ECollisionResponse> EngineTraceChannel5;    // 13
+	TEnumAsByte<enum ECollisionResponse> EngineTraceChannel4;    // 13
 
 	///////////////////////////////////////
 	// in order to use this custom channels
@@ -730,13 +733,15 @@ struct ENGINE_API FCollisionResponseContainer
 			uint8 Vehicle;				// 6
 			uint8 Destructible;			// 7
 			uint8 Flex;					// 8
+			// NVCHANGE_BEGIN: JCAO - ADD new collision channel for turbulence
+			uint8 Turbulence;			// 9
+			// NVCHANGE_END: JCAO - ADD new collision channel for turbulence
 
 			// Unspecified Engine Trace Channels
-			uint8 EngineTraceChannel1;   // 9
-			uint8 EngineTraceChannel2;   // 10
-			uint8 EngineTraceChannel3;   // 11
-			uint8 EngineTraceChannel4;   // 12
-			uint8 EngineTraceChannel5;   // 13
+			uint8 EngineTraceChannel1;   // 10
+			uint8 EngineTraceChannel2;   // 11
+			uint8 EngineTraceChannel3;   // 12
+			uint8 EngineTraceChannel4;   // 13
 
 			// Unspecified Game Trace Channels
 			uint8 GameTraceChannel1;     // 14

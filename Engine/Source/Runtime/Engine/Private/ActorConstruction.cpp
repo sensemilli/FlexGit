@@ -431,6 +431,40 @@ void AActor::RerunConstructionScripts()
 	}
 }
 
+// NVCHANGE_BEGIN: JCAO - Check if to enable the component by the defined PhysX Level
+void AActor::CheckComponentsByPhysXLevel()
+{
+	// Only Run in Game and PIE. Don't remove the component when it was in editor.
+	if (GIsEditor && !FApp::IsGame())
+	{
+		return;
+	}
+
+	TArray<UActorComponent*> PreviouslyAttachedComponents;
+	GetComponents(PreviouslyAttachedComponents);
+
+	for (int32 ComponentIndex = 0; ComponentIndex < PreviouslyAttachedComponents.Num(); ++ComponentIndex)
+	{
+		UActorComponent*& Component = PreviouslyAttachedComponents[ComponentIndex];
+		if (Component)
+		{
+			if (GEngine->GetPhysXLevel() == 0 && !Component->bEnableForPhysXLevel0)
+			{
+				Component->DestroyComponent();
+			}
+			if (GEngine->GetPhysXLevel() == 1 && !Component->bEnableForPhysXLevel1)
+			{
+				Component->DestroyComponent();
+			}
+			if (GEngine->GetPhysXLevel() == 2 && !Component->bEnableForPhysXLevel2)
+			{
+				Component->DestroyComponent();
+			}
+		}
+	}
+}
+// NVCHANGE_END: JCAO - Check if to enable the component by the defined PhysX Level
+
 void AActor::ExecuteConstruction(const FTransform& Transform, const FComponentInstanceDataCache* InstanceDataCache, bool bIsDefaultTransform)
 {
 	check(!IsPendingKill());
@@ -529,6 +563,10 @@ void AActor::ExecuteConstruction(const FTransform& Transform, const FComponentIn
 
 	// Now run virtual notification
 	OnConstruction(Transform);
+
+	// NVCHANGE_BEGIN: JCAO - Check if to enable the component by the defined PhysX Level
+	CheckComponentsByPhysXLevel();
+	// NVCHANGE_END: JCAO - Check if to enable the component by the defined PhysX Level
 }
 
 void AActor::ProcessUserConstructionScript()

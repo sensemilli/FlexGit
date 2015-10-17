@@ -36,6 +36,11 @@ PRAGMA_DISABLE_SHADOW_VARIABLE_WARNINGS
 #include "PxMeshQuery.h"
 #include "PxTriangle.h"
 
+// NVCHANGE_BEGIN: JCAO - Create CudaContextManager to support D3D11 interop with APEX
+#include "PxTask/PxCudaContextManager.h"
+#include "PxTask/PxGpuDispatcher.h"
+// NVCHANGE_END: JCAO - Create CudaContextManager to support D3D11 interop with APEX
+
 // APEX
 #if WITH_APEX
 
@@ -58,6 +63,26 @@ PRAGMA_DISABLE_SHADOW_VARIABLE_WARNINGS
 #if WITH_APEX_LEGACY
 #include "NxModuleLegacy.h"
 #endif
+
+// NVCHANGE_BEGIN : JCAO - Add Turbulence Module
+#if WITH_APEX_TURBULENCE
+#include "NxModuleTurbulenceFS.h"
+#include "NxModuleParticles.h"
+#include "NxModuleBasicFS.h"
+#include "NxModuleFieldSampler.h"
+#include "NxTurbulenceFSAsset.h"
+#include "NxBasicFSAsset.h"
+#include "NxAttractorFSActor.h"
+#include "NxJetFSActor.h"
+#include "NxNoiseFSActor.h"
+#include "NxTurbulenceFSActor.h"
+#include "NxVortexFSActor.h"
+#include "NxHeatSourceAsset.h"
+#include "NxHeatSourceActor.h"
+#include "NxVelocitySourceAsset.h"
+#include "NxVelocitySourceActor.h"
+#endif //WITH_APEX_TURBULENCE
+// NVCHANGE_END : JCAO - Add Turbulence Module
 
 // Utilities
 #include "NxParamUtils.h"

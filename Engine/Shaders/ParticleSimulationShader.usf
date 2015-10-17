@@ -86,6 +86,10 @@ float2 LocalToWorldScale;
 /** Amount of time by which to simulate particles. */
 float DeltaSeconds;
 
+// NVCHANGE_BEGIN: JCAO - Support Force Type Noise
+float TotalSeconds;
+// NVCHANGE_END: JCAO - Support Force Type Noise
+
 /** Texture from which to read particle position. */
 Texture2D PositionTexture;
 SamplerState PositionTextureSampler;
@@ -149,6 +153,230 @@ float3 ComputeOrbitVelocity(float Time, float RandomOrbit)
 	return Texture3DSample(VectorFieldTextures3, VectorFieldTexturesSampler3, UV).xyz;
  }
 
+ // NVCHANGE_BEGIN: JCAO - Replace vector fields with APEX turbulence velocity fields
+#if WITH_APEX_TURBULENCE
+// NVCHANGE_BEGIN: JCAO - Add Attractor working with GPU particles
+void EvaluateAttractorFS(out float4 OutVelocity, float3 Position)
+{
+	float3 WeightedVelocity = 0;
+	float Weight = 0;
+
+	if (AttractorFieldSamplers.Count > 0)
+	{
+		float3 DirectionToPoint = AttractorFieldSamplers.Origin - Position;
+		const float3 RadiusAndStrength = AttractorFieldSamplers.RadiusAndStrength;
+		const float Radius = RadiusAndStrength.x;
+		const float ConstFieldStrength = RadiusAndStrength.y;
+		const float VariableFieldStrength = RadiusAndStrength.z;
+
+		float Distance = length(DirectionToPoint) / Radius;
+
+		float Result = ConstFieldStrength;
+		if (Distance >= 0.4f)
+		{
+			Result += VariableFieldStrength / Distance;
+		}
+		
+		WeightedVelocity = Result * normalize(DirectionToPoint);
+		Weight = saturate((1.0f - Distance) / 0.00001f);
+	}
+
+	OutVelocity.xyz = WeightedVelocity;
+	OutVelocity.w = Weight;
+}
+// NVCHANGE_END: JCAO - Add Attractor working with GPU particles
+/**
+* Compute the influence of velocity field on a particle at the given position.
+ */
+void EvaluateVelocityFields(out float4 OutVelocity, float3 Position, float PerParticleScale)
+{
+	float3 WeightedVelocity = 0;
+	float TotalWeight = 0;
+	float FinalWeight = 0;
+
+	for (int VectorFieldIndex = VectorFields.VectorFieldCount; VectorFieldIndex < (VectorFields.VectorFieldCount + VectorFields.VelocityFieldCount); ++VectorFieldIndex)
+	{
+		const float2 IntensityAndTightness = VectorFields.IntensityAndTightness[VectorFieldIndex];
+		const float Multiplier = IntensityAndTightness.x;
+		const float Weight = IntensityAndTightness.y;
+		const float3 VolumeSize = VectorFields.VolumeSize[VectorFieldIndex];
+		float3 VolumeUV = mul(float4(Position.xyz,1), VectorFields.WorldToVolume[VectorFieldIndex]).xyz;
+
+		const float3 AxisWeights = 
+			saturate(VolumeUV * VolumeSize.xyz) *
+			saturate((1.0f - VolumeUV) * VolumeSize.xyz);
+		const float DistanceWeight = min(AxisWeights.x, min(AxisWeights.y, AxisWeights.z));
+
+		const float3 VectorSample = SampleVectorFieldTexture(VectorFieldIndex, saturate(VolumeUV));
+		WeightedVelocity += (VectorSample * Multiplier * DistanceWeight * Weight);
+		TotalWeight += (DistanceWeight * Weight);
+		FinalWeight = max(FinalWeight, DistanceWeight * Weight);
+	}
+
+	OutVelocity.xyz = WeightedVelocity / (TotalWeight + 0.001f);
+	OutVelocity.w = FinalWeight;
+}
+
+// NVCHANGE_BEGIN: JCAO - Support Force Type Noise
+static const int X_NOISE_GEN = 1619;
+static const int Y_NOISE_GEN = 31337;
+static const int Z_NOISE_GEN = 6971;
+static const int W_NOISE_GEN = 1999;
+static const int SEED_NOISE_GEN = 1013;
+static const int SHIFT_NOISE_GEN = 8;
+
+int Fastfloor(float x)
+{
+	return (x >= 0) ? (int)x : (int)(x - 1);
+}
+
+// 4D simplex noise
+// returns: (x,y,z) = noise grad, w = noise value
+float4 Eval4D(float x, float y, float z, float w, int seed)
+{
+	// The skewing and unskewing factors are hairy again for the 4D case
+	float sq = sqrt(5.0f);
+	const float F4 = (sq - 1.0f) / 4.0f;
+	const float G4 = (5.0f - sq) / 20.0f;
+	// Skew the (x,y,z,w) space to determine which cell of 24 simplices we're in
+	float s = (x + y + z + w) * F4; // Factor for 4D skewing
+	int ix = Fastfloor(x + s);
+	int iy = Fastfloor(y + s);
+	int iz = Fastfloor(z + s);
+	int iw = Fastfloor(w + s);
+	float t = (ix + iy + iz + iw) * G4; // Factor for 4D unskewing
+	// Unskew the cell origin back to (x,y,z,w) space
+	float x0 = x - (ix - t); // The x,y,z,w distances from the cell origin
+	float y0 = y - (iy - t);
+	float z0 = z - (iz - t);
+	float w0 = w - (iw - t);
+
+	int c  = (x0 > y0) ? (1 << 0) : (1 << 2);
+	c += (x0 > z0) ? (1 << 0) : (1 << 4);
+	c += (x0 > w0) ? (1 << 0) : (1 << 6);
+	c += (y0 > z0) ? (1 << 2) : (1 << 4);
+	c += (y0 > w0) ? (1 << 2) : (1 << 6);
+	c += (z0 > w0) ? (1 << 4) : (1 << 6);
+
+	float4 res = 0;
+
+	// Calculate the contribution from the five corners
+	for (int p = 4; p >= 0; --p)
+	{
+		int ixp = ((c >> 0) & 3) >= p ? 1 : 0;
+		int iyp = ((c >> 2) & 3) >= p ? 1 : 0;
+		int izp = ((c >> 4) & 3) >= p ? 1 : 0;
+		int iwp = ((c >> 6) & 3) >= p ? 1 : 0;
+
+		float xp = x0 - ixp + (4 - p) * G4;
+		float yp = y0 - iyp + (4 - p) * G4;
+		float zp = z0 - izp + (4 - p) * G4;
+		float wp = w0 - iwp + (4 - p) * G4;
+
+		float t = 0.6f - xp * xp - yp * yp - zp * zp - wp * wp;
+		if (t > 0)
+		{
+			//get index
+			int gradIndex = (
+				                X_NOISE_GEN    * (ix + ixp)
+				                + Y_NOISE_GEN    * (iy + iyp)
+				                + Z_NOISE_GEN    * (iz + izp)
+				                + W_NOISE_GEN    * (iw + iwp)
+				                + SEED_NOISE_GEN * seed)
+				            & 0xffffffff;
+			gradIndex ^= (gradIndex >> SHIFT_NOISE_GEN);
+			gradIndex &= 31;
+
+			float4 g;
+			{
+				const int h = gradIndex;
+				const int hs = 2 - (h >> 4);
+				const int h1 = (h >> 3);
+				g.x = (h1 == 0) ? 0.0f : ((h & 4)       ? -1.0f : 1.0f);
+				g.y = (h1 == 1) ? 0.0f : ((h & (hs << 1)) ? -1.0f : 1.0f);
+				g.z = (h1 == 2) ? 0.0f : ((h & hs)      ? -1.0f : 1.0f);
+				g.w = (h1 == 3) ? 0.0f : ((h &  1)      ? -1.0f : 1.0f);
+			}
+			float gdot = (g.x * xp + g.y * yp + g.z * zp + g.w * wp);
+
+			float t2 = t * t;
+			float t3 = t2 * t;
+			float t4 = t3 * t;
+
+			float dt4gdot = 8 * t3 * gdot;
+
+			res.x += t4 * g.x - dt4gdot * xp;
+			res.y += t4 * g.y - dt4gdot * yp;
+			res.z += t4 * g.z - dt4gdot * zp;
+			res.w += t4 * gdot;
+		}
+	}
+	// scale the result to cover the range [-1,1]
+	res *= 27;
+	return res;
+}
+
+void EvaluateNoiseFS(out float3 OutForce, float3 Position)
+{
+	float3 Force = 0;
+	if (NoiseFieldSamplers.Count > 0)
+	{
+		float NoiseStrength = NoiseFieldSamplers.NoiseStrengthAndTimeFreq.x;
+		float Time = NoiseFieldSamplers.NoiseStrengthAndTimeFreq.y * TotalSeconds;
+		float NoiseStrengthOctaveMultiplier = NoiseFieldSamplers.NoiseStrengthAndTimeFreq.z;
+		float NoiseTimeFreqOctaveMultiplier = NoiseFieldSamplers.NoiseStrengthAndTimeFreq.w;
+
+		float3 Point = float3(NoiseFieldSamplers.NoiseSpaceFreq.x * Position.x, NoiseFieldSamplers.NoiseSpaceFreq.y * Position.y, NoiseFieldSamplers.NoiseSpaceFreq.z * Position.z);
+		float Amp = 1.0f;
+		int Seed = NoiseFieldSamplers.NoiseSeed;
+
+		if (NoiseFieldSamplers.NoiseType == 1)
+		{
+			float4 dFx = 0;
+			float4 dFy = 0;
+			float4 dFz = 0;
+			for (int i = 0; i < NoiseFieldSamplers.NoiseOctaves; ++i)
+			{
+				dFx += Amp * Eval4D(Point.x, Point.y, Point.z, Time, ++Seed);
+				dFy += Amp * Eval4D(Point.x, Point.y, Point.z, Time, ++Seed);
+				dFz += Amp * Eval4D(Point.x, Point.y, Point.z, Time, ++Seed);
+
+				Amp *= NoiseStrengthOctaveMultiplier;
+				Point.x *= NoiseFieldSamplers.NoiseSpaceFreqOctaveMultiplier.x;
+				Point.y *= NoiseFieldSamplers.NoiseSpaceFreqOctaveMultiplier.y;
+				Point.z *= NoiseFieldSamplers.NoiseSpaceFreqOctaveMultiplier.z;
+				Time *= NoiseTimeFreqOctaveMultiplier;
+			}
+			//build curl noise as a result
+			Force.x = dFz.y - dFy.z;
+			Force.y = dFx.z - dFz.x;
+			Force.z = dFy.x - dFx.y;
+		}
+		else
+		{
+			float4 noise = 0;
+			for (int i = 0; i < NoiseFieldSamplers.NoiseOctaves; ++i)
+			{
+				noise += Amp * Eval4D(Point.x, Point.y, Point.z, Time, ++Seed);
+
+				Amp *= NoiseStrengthOctaveMultiplier;
+				Point.x *= NoiseFieldSamplers.NoiseSpaceFreqOctaveMultiplier.x;
+				Point.y *= NoiseFieldSamplers.NoiseSpaceFreqOctaveMultiplier.y;
+				Point.z *= NoiseFieldSamplers.NoiseSpaceFreqOctaveMultiplier.z;
+				Time *= NoiseTimeFreqOctaveMultiplier;
+			}
+			//get noise gradient as a result
+			Force = noise.xyz;
+		}
+
+		Force *= NoiseStrength;
+	}
+	OutForce = Force;
+}
+// NVCHANGE_END: JCAO - Support Force Type Noise
+#endif
+ // NVCHANGE_END: JCAO - Replace vector fields with APEX turbulence velocity fields
+
 /**
  * Compute the influence of vector fields on a particle at the given position.
  * @param OutForce - Force to apply to the particle.
@@ -163,7 +391,9 @@ void EvaluateVectorFields(out float3 OutForce, out float4 OutVelocity, float3 Po
 	float TotalWeight = 0;
 	float FinalWeight = 0;
 
-	for (int VectorFieldIndex = 0; VectorFieldIndex < VectorFields.Count; ++VectorFieldIndex)
+	// NVCHANGE_BEGIN: JCAO - Replace vector fields with APEX turbulence velocity fields
+	for (int VectorFieldIndex = 0; VectorFieldIndex < VectorFields.VectorFieldCount; ++VectorFieldIndex)
+	// NVCHANGE_END: JCAO - Replace vector fields with APEX turbulence velocity fields
 	{
 		float2 IntensityAndTightness = VectorFields.IntensityAndTightness[VectorFieldIndex];
 		float Intensity = IntensityAndTightness.x * PerParticleScale;
@@ -439,8 +669,34 @@ void PixelMain(
 	float4 FieldVelocity = 0;
 	EvaluateVectorFields(FieldForce, FieldVelocity, Position.xyz, PerParticleVectorFieldScale);
 
+	// NVCHANGE_BEGIN: JCAO - Replace vector fields with APEX turbulence velocity fields
+#if WITH_APEX_TURBULENCE
+	if (VectorFields.VelocityFieldCount > 0)
+	{
+		EvaluateVelocityFields(FieldVelocity, Position.xyz, PerParticleVectorFieldScale);
+	}
+#endif
+	// NVCHANGE_END: JCAO - Replace vector fields with APEX turbulence velocity fields
+
 	// Add in force from vector fields.
 	Force += FieldForce;
+
+	// NVCHANGE_BEGIN: JCAO - Support Force Type Noise
+#if WITH_APEX_TURBULENCE
+	float3 NoiseForce = 0;
+	// Add in noise force
+	EvaluateNoiseFS(NoiseForce, Position.xyz);
+	Force = lerp(NoiseForce, Force, FieldVelocity.w);
+#endif
+	// NVCHANGE_END: JCAO - Support Force Type Noise
+
+	// NVCHANGE_BEGIN: JCAO - Add Attractor working with GPU particles
+#if WITH_APEX_TURBULENCE
+	float4 AttractorVelocity = 0;
+	EvaluateAttractorFS(AttractorVelocity, Position.xyz);
+	Velocity.xyz = lerp(Velocity.xyz, AttractorVelocity.xyz, AttractorVelocity.w);
+#endif // WITH_APEX_TURBULENCE
+	// NVCHANGE_END: JCAO - Add Attractor working with GPU particles
 
 	// Account for direct velocity.
 	const float DirectVelocityAmount = FieldVelocity.w;

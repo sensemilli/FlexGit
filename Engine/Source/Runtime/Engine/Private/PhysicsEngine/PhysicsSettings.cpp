@@ -12,7 +12,9 @@ UPhysicsSettings::UPhysicsSettings(const FObjectInitializer& ObjectInitializer)
 	, DefaultFluidFriction(0.3f)
 	, RagdollAggregateThreshold(4)
 	, TriangleMeshTriangleMinAreaThreshold(5.0f)
-	, bEnableAsyncScene(false)
+	// NVCHANGE_BEGIN: JCAO - APEX Turbulence: Enable Async Scene by default
+	, bEnableAsyncScene(true)
+	// NVCHANGE_END: JCAO - APEX Turbulence: Enable Async Scene by default
 	, bEnableShapeSharing(false)
 	, bEnablePCM(false)
 	, bWarnMissingLocks(true)

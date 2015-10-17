@@ -333,6 +333,10 @@ public:
 	// @todo document
 	void UpdateColorModuleClampAlpha(class UParticleModuleColorBase* ColorModule);
 
+	// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+	void UpdateDensityModuleClampAlpha(class UParticleModuleDensityBase* DensityModule);
+	// NVCHANGE_END: JCAO - Grid Density with GPU particles
+
 	/**
 	 *	CalculateMaxActiveParticleCounts
 	 *	Determine the maximum active particles that could occur with each emitter.

@@ -6,7 +6,9 @@ DEFINE_LOG_CATEGORY_STATIC(LogCollisionProfile, Warning, All)
 
 #define MIN_CUSTOMIZABLE_COLLISIONCHANNEL	ECC_GameTraceChannel1
 #define MAX_CUSTOMIZABLE_COLLISIONCHANNEL	ECC_GameTraceChannel18
-#define IS_VALID_COLLISIONCHANNEL(x) ((x)> ECC_Destructible && (x) < ECC_OverlapAll_Deprecated)
+// NVCHANGE_BEGIN: JCAO - ADD new collision channel for turbulence
+#define IS_VALID_COLLISIONCHANNEL(x) ((x)> ECC_Turbulence && (x) < ECC_OverlapAll_Deprecated)
+// NVCHANGE_END: JCAO - ADD new collision channel for turbulence
 
 // do not chnage this name. This value is serialize to other object, if you change, it will mess up serialization, you'll need to fix up name by versioning
 FName UCollisionProfile::CustomCollisionProfileName = FName(TEXT("Custom"));

@@ -7490,5 +7490,147 @@ UObject* UWaveWorksFactoryNew::FactoryCreateNew(UClass* Class, UObject* InParent
 	return NewObject<UWaveWorks>(InParent, Class, Name, Flags);
 }
 
+// NVCHANGE_BEGIN: JCAO - Add Field Sampler Asset
+/*-----------------------------------------------------------------------------
+UGridAssetFactory.
+-----------------------------------------------------------------------------*/
+UGridAssetFactory::UGridAssetFactory(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+
+	SupportedClass = UGridAsset::StaticClass();
+
+	bCreateNew = true;
+	bEditAfterNew = true;
+}
+
+UObject* UGridAssetFactory::FactoryCreateNew(UClass* InClass, UObject* InParent, FName InName, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn)
+{
+	UGridAsset* GridAsset = ConstructObject<UGridAsset>(UGridAsset::StaticClass(), InParent, InName, Flags);
+
+	return GridAsset;
+}
+
+/*-----------------------------------------------------------------------------
+UVortexAssetFactory.
+-----------------------------------------------------------------------------*/
+UVortexAssetFactory::UVortexAssetFactory(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+
+	SupportedClass = UVortexAsset::StaticClass();
+
+	bCreateNew = true;
+	bEditAfterNew = true;
+}
+
+UObject* UVortexAssetFactory::FactoryCreateNew(UClass* InClass, UObject* InParent, FName InName, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn)
+{
+	UVortexAsset* VortexAsset = ConstructObject<UVortexAsset>(UVortexAsset::StaticClass(), InParent, InName, Flags);
+
+	return VortexAsset;
+}
+
+/*-----------------------------------------------------------------------------
+UJetAssetFactory.
+-----------------------------------------------------------------------------*/
+UJetAssetFactory::UJetAssetFactory(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+
+	SupportedClass = UJetAsset::StaticClass();
+
+	bCreateNew = true;
+	bEditAfterNew = true;
+}
+
+UObject* UJetAssetFactory::FactoryCreateNew(UClass* InClass, UObject* InParent, FName InName, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn)
+{
+	UJetAsset* JetAsset = ConstructObject<UJetAsset>(UJetAsset::StaticClass(), InParent, InName, Flags);
+
+	return JetAsset;
+}
+
+/*-----------------------------------------------------------------------------
+UAttractorAssetFactory.
+-----------------------------------------------------------------------------*/
+UAttractorAssetFactory::UAttractorAssetFactory(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+
+	SupportedClass = UAttractorAsset::StaticClass();
+
+	bCreateNew = true;
+	bEditAfterNew = true;
+}
+
+UObject* UAttractorAssetFactory::FactoryCreateNew(UClass* InClass, UObject* InParent, FName InName, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn)
+{
+	UAttractorAsset* AttractorAsset = ConstructObject<UAttractorAsset>(UAttractorAsset::StaticClass(), InParent, InName, Flags);
+
+	return AttractorAsset;
+}
+
+/*-----------------------------------------------------------------------------
+UNoiseAssetFactory.
+-----------------------------------------------------------------------------*/
+UNoiseAssetFactory::UNoiseAssetFactory(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+
+	SupportedClass = UNoiseAsset::StaticClass();
+
+	bCreateNew = true;
+	bEditAfterNew = true;
+}
+
+UObject* UNoiseAssetFactory::FactoryCreateNew(UClass* InClass, UObject* InParent, FName InName, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn)
+{
+	UNoiseAsset* NoiseAsset = ConstructObject<UNoiseAsset>(UNoiseAsset::StaticClass(), InParent, InName, Flags);
+
+	return NoiseAsset;
+}
+
+/*-----------------------------------------------------------------------------
+UHeatSourceAssetFactory.
+-----------------------------------------------------------------------------*/
+UHeatSourceAssetFactory::UHeatSourceAssetFactory(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+
+	SupportedClass = UHeatSourceAsset::StaticClass();
+
+	bCreateNew = true;
+	bEditAfterNew = true;
+}
+
+UObject* UHeatSourceAssetFactory::FactoryCreateNew(UClass* InClass, UObject* InParent, FName InName, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn)
+{
+	UHeatSourceAsset* HeatSourceAsset = ConstructObject<UHeatSourceAsset>(UHeatSourceAsset::StaticClass(), InParent, InName, Flags);
+
+	return HeatSourceAsset;
+}
+
+/*-----------------------------------------------------------------------------
+UVelocitySourceAssetFactory.
+-----------------------------------------------------------------------------*/
+UVelocitySourceAssetFactory::UVelocitySourceAssetFactory(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+
+	SupportedClass = UVelocitySourceAsset::StaticClass();
+
+	bCreateNew = true;
+	bEditAfterNew = true;
+}
+
+UObject* UVelocitySourceAssetFactory::FactoryCreateNew(UClass* InClass, UObject* InParent, FName InName, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn)
+{
+	UVelocitySourceAsset* VelocitySourceAsset = ConstructObject<UVelocitySourceAsset>(UVelocitySourceAsset::StaticClass(), InParent, InName, Flags);
+
+	return VelocitySourceAsset;
+}
+// NVCHANGE_END: JCAO - Add Field Sampler Asset
+
 #undef LOCTEXT_NAMESPACE
 

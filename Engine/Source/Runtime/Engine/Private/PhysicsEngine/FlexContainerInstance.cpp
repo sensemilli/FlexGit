@@ -2,6 +2,7 @@
 
 #include "EnginePrivate.h"
 #include "PhysXSupport.h"
+#include "PhysicsPublic.h"
 #include "FlexContainerInstance.h"
 
 #if WITH_FLEX

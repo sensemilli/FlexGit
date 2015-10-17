@@ -63,6 +63,14 @@ void FPhysCommandHandler::ExecuteCommands()
 			delete CPUDispatcher;
 			break;
 		}
+#if WITH_CUDA_CONTEXT
+		case PhysCommand::DeleteCudaContextManager:
+		{
+			physx::PxCudaContextManager * CudaContextManager = Command.Pointer.CudaContextManager;
+			CudaContextManager->release();
+			break;
+		}
+#endif
 #endif
 		case PhysCommand::Max:	//this is just here because right now all commands are APEX and having a switch with only default is bad
 		default:
@@ -112,6 +120,18 @@ void  FPhysCommandHandler::DeferredDeleteCPUDispathcer(physx::PxCpuDispatcher * 
 
 	EnqueueCommand(Command);
 }
+#if WITH_CUDA_CONTEXT
+void  FPhysCommandHandler::DeferredDeleteCudaContextManager(physx::PxCudaContextManager * CudaContextManager)
+{
+	check(CudaContextManager);
+
+	FPhysPendingCommand Command;
+	Command.Pointer.CudaContextManager = CudaContextManager;
+	Command.CommandType = PhysCommand::DeleteCudaContextManager;
+
+	EnqueueCommand(Command);
+}
+#endif
 #endif
 
 #if WITH_APEX

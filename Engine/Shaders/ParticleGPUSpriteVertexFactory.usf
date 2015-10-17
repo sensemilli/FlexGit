@@ -32,6 +32,11 @@ SamplerState AttributesTextureSampler;
 Texture2D CurveTexture;
 SamplerState CurveTextureSampler;
 
+// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+Texture2D DensityTexture;
+SamplerState DensityTextureSampler;
+// NVCHANGE_END: JCAO - Grid Density with GPU particles
+
 /**
  * Vertex attributes to fetch.
  */
@@ -238,6 +243,34 @@ FVertexFactoryIntermediates GetVertexFactoryIntermediates( FVertexFactoryInput I
 	float2 FlippedUV = Input.TexCoord.xy;
 	FlippedUV.x = UVFlipOffset.x == 0.0 ? 1.0 - FlippedUV.x : FlippedUV.x;
 	FlippedUV.y = UVFlipOffset.y == 0.0 ? 1.0 - FlippedUV.y : FlippedUV.y;
+
+	// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+	BRANCH
+	if ( EmitterUniforms.GridDensityEnabled > 0 )
+	{
+		float  DensitySample = Texture2DSampleLevel(DensityTexture, DensityTextureSampler, ParticleIndex, 0);
+
+		BRANCH
+		if (EmitterUniforms.ColorOverDensityEnabled > 0)
+		{
+			float2 DensityColorCurveTexCoord = EmitterUniforms.DensityColorCurve.xy +
+				EmitterUniforms.DensityColorCurve.zw * DensitySample;
+			float4 DensityColorCurveSample = Texture2DSampleLevel(CurveTexture, CurveTextureSampler, DensityColorCurveTexCoord, 0 );
+			float4 DensityColorScale = DensityColorCurveSample * EmitterUniforms.DensityColorScale + EmitterUniforms.DensityColorBias;
+			Color *= DensityColorScale;
+		}
+
+		BRANCH
+		if (EmitterUniforms.SizeOverDensityEnabled > 0)
+		{
+			float2 DensitySizeCurveTexCoord = EmitterUniforms.DensitySizeCurve.xy +
+				EmitterUniforms.DensitySizeCurve.zw * DensitySample;
+			float2 DensitySizeCurveSample = Texture2DSampleLevel(CurveTexture, CurveTextureSampler, DensitySizeCurveTexCoord, 0 ).xy;
+			float2 DensitySizeScale = DensitySizeCurveSample * EmitterUniforms.DensitySizeScale + EmitterUniforms.DensitySizeBias;
+			Size *= DensitySizeScale;
+		}
+	}
+	// NVCHANGE_END: JCAO - Grid Density with GPU particles
 
 	// SubUV.
 	float SubImageIndex = MiscCurve.z;

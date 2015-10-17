@@ -109,6 +109,15 @@ FAssetTools::FAssetTools()
 	RegisterAssetTypeActions(MakeShareable(new FAssetTypeActions_FlexFluidSurface));
 	RegisterAssetTypeActions(MakeShareable(new FAssetTypeActions_Hair));
 	RegisterAssetTypeActions(MakeShareable(new FAssetTypeActions_WaveWorks));
+	// NVCHANGE_BEGIN: JCAO - Add Field Sampler Asset
+	RegisterAssetTypeActions(MakeShareable(new FAssetTypeActions_AttractorAsset));
+	RegisterAssetTypeActions(MakeShareable(new FAssetTypeActions_JetAsset));
+	RegisterAssetTypeActions(MakeShareable(new FAssetTypeActions_GridAsset));
+	RegisterAssetTypeActions(MakeShareable(new FAssetTypeActions_NoiseAsset));
+	RegisterAssetTypeActions(MakeShareable(new FAssetTypeActions_VortexAsset));
+	RegisterAssetTypeActions(MakeShareable(new FAssetTypeActions_HeatSourceAsset));
+	RegisterAssetTypeActions(MakeShareable(new FAssetTypeActions_VelocitySourceAsset));
+	// NVCHANGE_END: JCAO - Add Field Sampler Asset
 
 	// Note: Please don't add any more actions here!  They belong in an editor-only module that is more tightly
 	// coupled to your new system, and you should not create a dependency on your new system from AssetTools.

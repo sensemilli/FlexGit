@@ -95,6 +95,29 @@ TSharedRef<SWidget> SCascadePreviewViewportToolBar::GenerateViewMenu() const
 			}
 			Menu.EndSection();
 		}
+
+#if WITH_APEX_TURBULENCE
+		static void BuildTurbulenceFSMenu(FMenuBuilder& Menu)
+		{
+			Menu.BeginSection("TurbulenceFS", NSLOCTEXT("Cascade", "TurbulenceFS", "Turbulence FS"));
+			{
+				Menu.AddMenuEntry(FCascadeCommands::Get().ToggleVelocityField);
+				Menu.AddMenuEntry(FCascadeCommands::Get().ToggleStreamLines);
+				Menu.AddMenuEntry(FCascadeCommands::Get().ToggleBBox);
+			}
+			Menu.EndSection();
+		}
+		static void BuildBasicFSMenu(FMenuBuilder& Menu)
+		{
+			Menu.BeginSection("BasicFS", NSLOCTEXT("Cascade", "BasicFS", "Basic FS"));
+			{
+				Menu.AddMenuEntry(FCascadeCommands::Get().ToggleJetActor);
+				Menu.AddMenuEntry(FCascadeCommands::Get().ToggleNoiseActor);
+				Menu.AddMenuEntry(FCascadeCommands::Get().ToggleVortexActor);
+			}
+			Menu.EndSection();
+		}
+#endif
 	};
 
 	ViewMenuBuilder.AddSubMenu(NSLOCTEXT("Cascade", "ViewOptionsSubMenu", "View Overlays"), 
@@ -132,6 +155,18 @@ TSharedRef<SWidget> SCascadePreviewViewportToolBar::GenerateViewMenu() const
 		ViewMenuBuilder.AddMenuEntry(Actions.ToggleGeometry_Properties);
 	}
 	ViewMenuBuilder.EndSection();
+
+#if WITH_APEX_TURBULENCE
+	ViewMenuBuilder.BeginSection("CascadeMiscPreview3");
+	ViewMenuBuilder.AddSubMenu(NSLOCTEXT("Cascade", "TurbulenceFSMenu", "Turbulence FS"),
+		FText::GetEmpty(),
+		FNewMenuDelegate::CreateStatic(&Local::BuildTurbulenceFSMenu));
+
+	ViewMenuBuilder.AddSubMenu(NSLOCTEXT("Cascade", "BasicFSMenu", "Basic FS"),
+		FText::GetEmpty(),
+		FNewMenuDelegate::CreateStatic(&Local::BuildBasicFSMenu));
+	ViewMenuBuilder.EndSection();
+#endif
 
 	return ViewMenuBuilder.MakeWidget();	
 }

@@ -201,6 +201,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Physics)
 	uint32 bEnableGravity : 1;
 
+	// NVCHANGE_BEGIN: JCAO - Add the flag bBlockTurbulence to make RB interact with Turbulence.
+	/** If true, this body will be mirrored into the asynchronous physics scene when it use the synchronous physics scene. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Physics)
+	uint32 bBlockTurbulence : 1;
+	// NVCHANGE_END: JCAO - Add the flag bBlockTurbulence to make RB interact with Turbulence.
+
 	/** If true and is attached to a parent, the two bodies will be joined into a single rigid body. Physical settings like collision profile and body settings are determined by the root */
 	UPROPERTY(EditAnywhere, AdvancedDisplay, BlueprintReadWrite, Category = Physics)
 	uint32 bAutoWeld : 1;

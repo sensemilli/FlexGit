@@ -9,6 +9,7 @@
 #include "ShaderParameterUtils.h"
 #include "RHIStaticStates.h"
 #include "PhysicsPublic.h"
+#include "ParticleEmitterInstances.h"
 #include "FlexFluidSurfaceSceneProxy.h"
 #include "PhysicsEngine/FlexFluidSurfaceComponent.h"
 #include "PhysicsEngine/FlexContainerInstance.h"

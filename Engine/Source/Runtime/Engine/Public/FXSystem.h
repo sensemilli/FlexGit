@@ -32,6 +32,13 @@ class FPrimitiveDrawInterface;
 class FSceneView;
 /** Canvas that can be drawn on. */
 class FCanvas;
+// NVCHANGE_BEGIN: JCAO - Replace vector fields with APEX turbulence velocity fields
+/** Turbulence FS */
+class UFieldSamplerComponent;
+// NVCHANGE_END: JCAO - Replace vector fields with APEX turbulence velocity fields
+// NVCHANGE_BEGIN: JCAO - Field Sampler Module for GPU particle
+class FFieldSamplerInstance;
+// NVCHANGE_END: JCAO - Field Sampler Module for GPU particle
 
 /*------------------------------------------------------------------------------
 	FX Console variables.
@@ -147,6 +154,27 @@ public:
 	 * @param VectorFieldComponent The vector field component to update.
 	 */
 	virtual void UpdateVectorField(UVectorFieldComponent* VectorFieldComponent) = 0;
+
+	// NVCHANGE_BEGIN: JCAO - Replace vector fields with APEX turbulence velocity fields
+	/**
+	* Add a turbulence fs component to the FX system.
+	*/
+	virtual void AddFieldSampler(UFieldSamplerComponent* FSComponent) = 0;
+
+	/**
+	* Remove turbulence fs from the FX system.
+	*/
+	virtual void RemoveFieldSampler(UFieldSamplerComponent* FSComponent) = 0;
+
+	/**
+	* Update turbulence fs registered with the FX system.
+	*/
+	virtual void UpdateFieldSampler(UFieldSamplerComponent* FSComponent) = 0;
+	// NVCHANGE_BEGIN: JCAO - Field Sampler Module for GPU particle
+	virtual void AddFieldSampler(FFieldSamplerInstance* FieldSamplerInstance, const FMatrix& LocalToWorld) = 0;
+	virtual void RemoveFieldSampler(FFieldSamplerInstance* FieldSamplerInstance) = 0;
+	// NVCHANGE_END: JCAO - Field Sampler Module for GPU particle
+	// NVCHANGE_END: JCAO - Replace vector fields with APEX turbulence velocity fields
 
 	/**
 	 * Creates an emitter instance for simulating sprite particles on the GPU.

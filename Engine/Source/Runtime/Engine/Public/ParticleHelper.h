@@ -296,6 +296,9 @@ DECLARE_CYCLE_STAT_EXTERN(TEXT("Cull Vector Fields"),STAT_GPUParticleVFCullTime,
 DECLARE_CYCLE_STAT_EXTERN(TEXT("Misc1"),STAT_GPUParticleMisc1,STATGROUP_GPUParticles, );
 DECLARE_CYCLE_STAT_EXTERN(TEXT("Misc2"),STAT_GPUParticleMisc2,STATGROUP_GPUParticles, );
 DECLARE_CYCLE_STAT_EXTERN(TEXT("Misc3"),STAT_GPUParticleMisc3,STATGROUP_GPUParticles, );
+// NVCHANGE_BEGIN: JCAO - Add density time in the GPU particle stat
+DECLARE_CYCLE_STAT_EXTERN(TEXT("Particle Density Time"), STAT_GPUParticleDensityTime, STATGROUP_GPUParticles, );
+// NVCHANGE_END: JCAO - Add density time in the GPU particle stat
 
 DECLARE_DWORD_COUNTER_STAT_EXTERN(TEXT("Mesh Particles"),STAT_MeshParticles,STATGROUP_Particles, );
 DECLARE_CYCLE_STAT_EXTERN(TEXT("Mesh Render Time"),STAT_MeshRenderingTime,STATGROUP_Particles, );
@@ -1011,6 +1014,14 @@ struct FParticleRandomSeedInstancePayload
 {
 	FRandomStream	RandomStream;
 };
+
+// NVCHANGE_BEGIN: JCAO - Add Field Sampler Module for particles
+/** instance payload for field sampler */
+struct FParticleFieldSamplerInstancePayload
+{
+	bool	bSpawned;
+};
+// NVCHANGE_END: JCAO - Add Field Sampler Module for particles
 
 /*-----------------------------------------------------------------------------
 	Particle Sorting Helper

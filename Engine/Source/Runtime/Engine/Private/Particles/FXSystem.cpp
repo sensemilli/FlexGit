@@ -303,6 +303,299 @@ void FFXSystem::UpdateVectorField( UVectorFieldComponent* VectorFieldComponent )
 	}
 }
 
+// NVCHANGE_BEGIN: JCAO - Replace vector fields with APEX turbulence velocity fields
+void FFXSystem::AddFieldSampler(UFieldSamplerComponent* FSComponent)
+{
+	if (RHISupportsGPUParticles(FeatureLevel))
+	{
+		check(FSComponent->FieldSamplerInstance == NULL);
+		check(FSComponent->FXSystem == this);
+
+		if (FSComponent->CreateFieldSamplerInstance())
+		{
+			AddFieldSampler(FSComponent->FieldSamplerInstance, FSComponent->ComponentToWorld.ToMatrixWithScale());
+		}
+	}
+}
+
+void FFXSystem::RemoveFieldSampler(UFieldSamplerComponent* FSComponent)
+{
+	if (RHISupportsGPUParticles(FeatureLevel))
+	{
+		check(FSComponent->FXSystem == this);
+
+		RemoveFieldSampler(FSComponent->FieldSamplerInstance);
+		FSComponent->FieldSamplerInstance = NULL;
+	}
+}
+
+// NVCHANGE_BEGIN: JCAO - Field Sampler Module for GPU particle
+void FFXSystem::AddFieldSampler(FFieldSamplerInstance* FieldSamplerInstance, const FMatrix& LocalToWorld)
+{
+#if WITH_APEX_TURBULENCE
+	if (RHISupportsGPUParticles(FeatureLevel))
+	{
+		switch (FieldSamplerInstance->FSType)
+		{
+		case EFieldSamplerAssetType::EFSAT_GRID:
+		{
+			FTurbulenceFSInstance* Instance = static_cast<FTurbulenceFSInstance*>(FieldSamplerInstance);
+			check(Instance);
+			if (Instance)
+			{
+				ENQUEUE_UNIQUE_RENDER_COMMAND_THREEPARAMETER(
+					FAddTurbulenceFSCommand,
+					FFXSystem*, FXSystem, this,
+					FTurbulenceFSInstance*, Instance, Instance,
+					FMatrix, LocalToWorld, LocalToWorld,
+					{
+						if (Instance->Index == INDEX_NONE)
+						{
+							Instance->UpdateTransforms(LocalToWorld);
+							Instance->Index = FXSystem->TurbulenceFSList.AddUninitialized().Index;
+							FXSystem->TurbulenceFSList[Instance->Index] = Instance;
+						}
+					});
+			}
+		}
+		break;
+		case EFieldSamplerAssetType::EFSAT_ATTRACTOR:
+		{
+			FAttractorFSInstance* Instance = static_cast<FAttractorFSInstance*>(FieldSamplerInstance);
+			check(Instance);
+			if (Instance)
+			{
+				ENQUEUE_UNIQUE_RENDER_COMMAND_TWOPARAMETER(
+					FAddAttractorFSCommand,
+					FFXSystem*, FXSystem, this,
+					FAttractorFSInstance*, Instance, Instance,
+					{
+						if (Instance->Index == INDEX_NONE)
+						{
+							Instance->Index = FXSystem->AttractorFSList.AddUninitialized().Index;
+							FXSystem->AttractorFSList[Instance->Index] = Instance;
+						}
+					});
+			}
+		}
+		break;
+		case EFieldSamplerAssetType::EFSAT_NOISE:
+		{
+			FNoiseFSInstance* Instance = static_cast<FNoiseFSInstance*>(FieldSamplerInstance);
+			check(Instance);
+			if (Instance)
+			{
+				ENQUEUE_UNIQUE_RENDER_COMMAND_TWOPARAMETER(
+					FAddNoiseFSCommand,
+					FFXSystem*, FXSystem, this,
+					FNoiseFSInstance*, Instance, Instance,
+					{
+						if (Instance->Index == INDEX_NONE)
+						{
+							Instance->Index = FXSystem->NoiseFSList.AddUninitialized().Index;
+							FXSystem->NoiseFSList[Instance->Index] = Instance;
+						}
+					});
+			}
+		}
+		break;
+		default:
+			check(0);
+		}
+	}
+#endif // WITH_APEX_TURBULENCE
+}
+
+void FFXSystem::RemoveFieldSampler(FFieldSamplerInstance* Instance)
+{
+#if WITH_APEX_TURBULENCE
+	if (RHISupportsGPUParticles(FeatureLevel))
+	{
+		if (Instance)
+		{
+			switch (Instance->FSType)
+			{
+			case EFieldSamplerAssetType::EFSAT_GRID:
+			{
+				FTurbulenceFSInstance* TurbulenceInstance = static_cast<FTurbulenceFSInstance*>(Instance);
+				if (TurbulenceInstance)
+				{
+					ENQUEUE_UNIQUE_RENDER_COMMAND_TWOPARAMETER(
+						FRemoveTurbulenceFSCommand,
+						FFXSystem*, FXSystem, this,
+						FTurbulenceFSInstance*, Instance, TurbulenceInstance,
+						{
+							if (Instance->Index != INDEX_NONE)
+							{
+								FXSystem->TurbulenceFSList.RemoveAt(Instance->Index);
+								delete Instance;
+							}
+						});
+				}
+			}
+			break;
+			case EFieldSamplerAssetType::EFSAT_ATTRACTOR:
+			{
+				FAttractorFSInstance* AttractorInstance = static_cast<FAttractorFSInstance*>(Instance);
+				if (AttractorInstance)
+				{
+					ENQUEUE_UNIQUE_RENDER_COMMAND_TWOPARAMETER(
+						FRemoveAttractorFSCommand,
+						FFXSystem*, FXSystem, this,
+						FAttractorFSInstance*, Instance, AttractorInstance,
+						{
+							if (Instance->Index != INDEX_NONE)
+							{
+								FXSystem->AttractorFSList.RemoveAt(Instance->Index);
+								delete Instance;
+							}
+						});
+				}
+			}
+			break;
+			case EFieldSamplerAssetType::EFSAT_NOISE:
+			{
+				FNoiseFSInstance* NoiseInstance = static_cast<FNoiseFSInstance*>(Instance);
+				if (NoiseInstance)
+				{
+					ENQUEUE_UNIQUE_RENDER_COMMAND_TWOPARAMETER(
+						FRemoveNoiseFSCommand,
+						FFXSystem*, FXSystem, this,
+						FNoiseFSInstance*, Instance, NoiseInstance,
+						{
+							if (Instance->Index != INDEX_NONE)
+							{
+								FXSystem->NoiseFSList.RemoveAt(Instance->Index);
+								delete Instance;
+							}
+						});
+				}
+			}
+			break;
+			}
+		}
+	}
+#endif // WITH_APEX_TURBULENCE
+}
+// NVCHANGE_END: JCAO - Field Sampler Module for GPU particle
+
+void FFXSystem::UpdateFieldSampler(UFieldSamplerComponent* FSComponent)
+{
+#if WITH_APEX_TURBULENCE
+	if (RHISupportsGPUParticles(FeatureLevel))
+	{
+		check(FSComponent->FXSystem == this);
+
+		FFieldSamplerInstance* Instance = FSComponent->FieldSamplerInstance;
+
+		if (Instance)
+		{
+			switch (Instance->FSType)
+			{
+			case EFieldSamplerAssetType::EFSAT_GRID:
+			{
+				struct FUpdateParams
+				{
+					FBox Bounds;
+					FMatrix ComponentToWorld;
+					bool bEnabled;
+				};
+
+				FUpdateParams UpdateParams;
+				UpdateParams.Bounds = FSComponent->Bounds.GetBox();
+				UpdateParams.ComponentToWorld = FSComponent->ComponentToWorld.ToMatrixWithScale();
+				UpdateParams.bEnabled = FSComponent->bEnabled;
+
+				FTurbulenceFSInstance* TurbulenceInstance = static_cast<FTurbulenceFSInstance*>(Instance);
+				check(TurbulenceInstance);
+				ENQUEUE_UNIQUE_RENDER_COMMAND_THREEPARAMETER(
+					FUpdateTurbulenceFSCommand,
+					FFXSystem*, FXSystem, this,
+					FTurbulenceFSInstance*, Instance, TurbulenceInstance,
+					FUpdateParams, UpdateParams, UpdateParams,
+					{
+						Instance->WorldBounds = UpdateParams.Bounds;
+						Instance->UpdateTransforms(UpdateParams.ComponentToWorld);
+						Instance->bEnabled = UpdateParams.bEnabled;
+					});
+			}
+			break;
+			case EFieldSamplerAssetType::EFSAT_ATTRACTOR:
+			{
+				FAttractorFSInstance* AttractorInstance = static_cast<FAttractorFSInstance*>(Instance);
+				check(AttractorInstance);
+
+				struct FUpdateParams
+				{
+					FBox Bounds;
+					FVector Origin;
+					float	ConstFieldStrength;
+					float	VariableFieldStrength;
+					bool bEnabled;
+				};
+
+				FUpdateParams UpdateParams;
+				UpdateParams.Bounds = FSComponent->Bounds.GetBox();
+				UpdateParams.Origin = FSComponent->ComponentToWorld.ToMatrixWithScale().GetOrigin();
+				UAttractorComponent* AttractorComponent = Cast<UAttractorComponent>(FSComponent);
+				check(AttractorComponent);
+				UpdateParams.ConstFieldStrength = AttractorComponent->ConstFieldStrength;
+				UpdateParams.VariableFieldStrength = AttractorComponent->VariableFieldStrength;
+				UpdateParams.bEnabled = AttractorComponent->bEnabled;
+
+				ENQUEUE_UNIQUE_RENDER_COMMAND_THREEPARAMETER(
+					FUpdateAttractorFSCommand,
+					FFXSystem*, FXSystem, this,
+					FAttractorFSInstance*, Instance, AttractorInstance,
+					FUpdateParams, UpdateParams, UpdateParams,
+					{
+						Instance->WorldBounds = UpdateParams.Bounds;
+						Instance->Origin = UpdateParams.Origin;
+						Instance->ConstFieldStrength = UpdateParams.ConstFieldStrength;
+						Instance->VariableFieldStrength = UpdateParams.VariableFieldStrength;
+						Instance->bEnabled = UpdateParams.bEnabled;
+					});
+			}
+			break;
+			case EFieldSamplerAssetType::EFSAT_NOISE:
+			{
+				FNoiseFSInstance* NoiseInstance = static_cast<FNoiseFSInstance*>(Instance);
+				check(NoiseInstance);
+
+				struct FUpdateParams
+				{
+					FBox Bounds;
+					float NoiseStrength;
+					bool bEnabled;
+				};
+
+				FUpdateParams UpdateParams;
+				UpdateParams.Bounds = FSComponent->Bounds.GetBox();
+
+				UNoiseComponent* NoiseComponent = Cast<UNoiseComponent>(FSComponent);
+				check(NoiseComponent);
+				UpdateParams.NoiseStrength = NoiseComponent->NoiseStrength;
+				UpdateParams.bEnabled = NoiseComponent->bEnabled;
+
+				ENQUEUE_UNIQUE_RENDER_COMMAND_THREEPARAMETER(
+					FUpdateNoiseFSCommand,
+					FFXSystem*, FXSystem, this,
+					FNoiseFSInstance*, Instance, NoiseInstance,
+					FUpdateParams, UpdateParams, UpdateParams,
+					{
+						Instance->WorldBounds = UpdateParams.Bounds;
+						Instance->NoiseStrength = UpdateParams.NoiseStrength;
+						Instance->bEnabled = UpdateParams.bEnabled;
+					});
+			}
+			break;
+			}
+		}
+	}
+#endif // WITH_APEX_TURBULENCE
+}
+// NVCHANGE_END: JCAO - Replace vector fields with APEX turbulence velocity fields
+
 /*-----------------------------------------------------------------------------
 	Render related functionality.
 -----------------------------------------------------------------------------*/

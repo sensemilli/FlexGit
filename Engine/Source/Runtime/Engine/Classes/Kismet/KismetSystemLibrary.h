@@ -136,6 +136,20 @@ class ENGINE_API UKismetSystemLibrary : public UBlueprintFunctionLibrary
 	UFUNCTION(BlueprintPure, meta=(DisplayName = "ToObject (interface)", CompactNodeTitle = "->"), Category="Utilities")
 	static UObject* Conv_InterfaceToObject(const FScriptInterface& Interface); 
 
+	// NVCHANGE_BEGIN: JCAO - Add PhysXLevel and blueprint node
+	/** Returns if PhysXLevel equal to 0? */
+	UFUNCTION(BlueprintPure, Category = "Misc")
+	static bool IsPhysXLevel0();
+
+	/** Returns if PhysXLevel equal to 1? */
+	UFUNCTION(BlueprintPure, Category = "Misc")
+	static bool IsPhysXLevel1();
+
+	/** Returns if PhysXLevel equal to 2? */
+	UFUNCTION(BlueprintPure, Category = "Misc")
+	static bool IsPhysXLevel2();
+	// NVCHANGE_END: JCAO - Add PhysXLevel and blueprint node
+
 	UFUNCTION(BlueprintPure, meta = (BlueprintInternalUseOnly = "true"), Category = "Utilities")
 	static UObject* Conv_AssetToObject(const TAssetPtr<UObject>& Asset);
 

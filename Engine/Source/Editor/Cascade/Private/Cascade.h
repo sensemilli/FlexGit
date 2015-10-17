@@ -361,6 +361,12 @@ private:
 	void OnNewEmitterAfter();
 	void OnRemoveDuplicateModules();
 
+#if WITH_APEX_TURBULENCE
+	void OnViewTurbulence(ETurbulenceViewMode ViewMode);
+	bool IsViewTurbulence(ETurbulenceViewMode ViewMode);
+	TArray<FString> TurbulenceDebugRenderNames;
+#endif
+
 	void CloseEntryPopup();
 
 private:

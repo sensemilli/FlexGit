@@ -2,6 +2,7 @@
 
 #include "EnginePrivate.h"
 #include "PhysXSupport.h"
+#include "PhysicsPublic.h"
 #include "StaticMeshResources.h"
 
 #if WITH_FLEX

@@ -53,6 +53,10 @@
 #include "GameFramework/GameState.h"
 #include "PhysicsEngine/FlexFluidSurfaceComponent.h"
 
+// NVCHANGE_BEGIN: JCAO - Add Turbulence Header
+#include "Particles/Density/ParticleModuleColorOverDensity.h"
+#include "Particles/Density/ParticleModuleSizeOverDensity.h"
+// NVCHANGE_END: JCAO - Add Turbulence Header
 
 #define LOCTEXT_NAMESPACE "ParticleComponents"
 
@@ -2049,6 +2053,17 @@ void UParticleSystem::GetAssetRegistryTags(TArray<FAssetRegistryTag>& OutTags) c
 	Super::GetAssetRegistryTags(OutTags);
 }
 
+// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+void UParticleSystem::UpdateDensityModuleClampAlpha(UParticleModuleDensityBase* DensityModule)
+{
+	if (DensityModule)
+	{
+		TArray<const FCurveEdEntry*> CurveEntries;
+		DensityModule->RemoveModuleCurvesFromEditor(CurveEdSetup);
+		DensityModule->AddModuleCurvesToEditor(CurveEdSetup, CurveEntries);
+	}
+}
+// NVCHANGE_END: JCAO - Grid Density with GPU particles
 
 bool UParticleSystem::CalculateMaxActiveParticleCounts()
 {

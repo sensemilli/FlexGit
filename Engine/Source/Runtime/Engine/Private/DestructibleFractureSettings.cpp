@@ -366,7 +366,7 @@ void UDestructibleFractureSettings::BuildDestructibleAssetCookingDesc(NxDestruct
 }
 
 bool UDestructibleFractureSettings::SetRootMesh(const TArray<NxExplicitRenderTriangle>& MeshTriangles, const TArray<UMaterialInterface*>& InMaterials, const TArray<NxExplicitSubmeshData>& SubmeshData, 
-												const TArray<uint32>& MeshPartition, bool bFirstPartitionIsDepthZero)
+												const TArray<uint32>& MeshPartition, const TArray<int32>& ParentIndices)
 {
 	bool Success = false;
 	physx::PxI32 NegativeOne = -1;
@@ -374,7 +374,7 @@ bool UDestructibleFractureSettings::SetRootMesh(const TArray<NxExplicitRenderTri
 	if (ApexDestructibleAssetAuthoring != NULL)
 	{
 		Success = ApexDestructibleAssetAuthoring->setRootMesh(MeshTriangles.GetData(), MeshTriangles.Num(), SubmeshData.GetData(), 
-															  SubmeshData.Num(), (uint32*)MeshPartition.GetData(), MeshPartition.Num(), &NegativeOne, bFirstPartitionIsDepthZero ? 1 : 0);
+															  SubmeshData.Num(), (uint32*)MeshPartition.GetData(), MeshPartition.Num(), (int32*)ParentIndices.GetData(), ParentIndices.Num());
 		if (Success)
 		{
 			NxCollisionDesc CollisionDesc;

@@ -122,3 +122,24 @@ public:
 	 virtual void CustomizeDetails( IDetailLayoutBuilder& DetailBuilder ) override;
  };
  
+ // NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+ class FParticleModuleColorOverDensityDetails : public FParticleModuleDetailsBase
+ {
+ public:
+	 /** Makes a new instance of this detail layout class for a specific detail view requesting it */
+	 static TSharedRef<IDetailCustomization> MakeInstance();
+
+	 /** IDetailCustomization interface */
+	 virtual void CustomizeDetails(IDetailLayoutBuilder& DetailBuilder) override;
+ };
+
+ class FParticleModuleSizeOverDensityDetails : public FParticleModuleDetailsBase
+ {
+ public:
+	 /** Makes a new instance of this detail layout class for a specific detail view requesting it */
+	 static TSharedRef<IDetailCustomization> MakeInstance();
+
+	 /** IDetailCustomization interface */
+	 virtual void CustomizeDetails(IDetailLayoutBuilder& DetailBuilder) override;
+ };
+ // NVCHANGE_END: JCAO - Grid Density with GPU particles

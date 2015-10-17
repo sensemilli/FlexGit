@@ -22,6 +22,18 @@
 	#define WITH_APEX (1 && WITH_PHYSX)
 #endif
 
+// NVCHANGE_BEGIN: JCAO - Replace vector fields with APEX turbulence velocity fields
+#if WITH_PHYSX
+#ifndef WITH_CUDA_CONTEXT
+#define WITH_CUDA_CONTEXT (1 && WITH_PHYSX && PLATFORM_WINDOWS)
+#endif
+
+#ifndef WITH_CUDA_INTEROP
+#define WITH_CUDA_INTEROP (1 && WITH_CUDA_CONTEXT)
+#endif
+#endif
+// NVCHANGE_END: JCAO - Replace vector fields with APEX turbulence velocity fields
+
 /** 
  *   Whether or not compiling with Vehicle extensions to PhysX
  */
@@ -45,6 +57,12 @@
 #ifndef WITH_APEX_LEGACY
 	#define WITH_APEX_LEGACY	1
 #endif // WITH_APEX_LEGACY
+
+// NVCHANGE_BEGIN : JCAO - Add Turbulence Module
+#ifndef WITH_APEX_TURBULENCE
+#define WITH_APEX_TURBULENCE	(1 && WITH_APEX)
+#endif // WITH_APEX_TURBULENCE
+// NVCHANGE_END : JCAO - Add Turbulence Module
 
 #endif // WITH_APEX
 

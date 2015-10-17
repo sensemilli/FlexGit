@@ -10727,6 +10727,28 @@ UGameUserSettings* UEngine::GetGameUserSettings()
 	return GameUserSettings;
 }
 
+// NVCHANGE_BEGIN: JCAO - Add PhysXLevel and blueprint node
+const int32 UEngine::GetPhysXLevel() const
+{
+	return PhysXLevel;
+}
+
+void UEngine::SetPhysXLevel(int32 InLevel)
+{
+	PhysXLevel = FMath::Clamp(InLevel, 0, 2);
+}
+
+const int32 UEngine::GetNextPhysXLevel() const
+{
+	return NextPhysXLevel;
+}
+
+void UEngine::SetNextPhysXLevel(int32 InLevel)
+{
+	NextPhysXLevel = FMath::Clamp(InLevel, 0, 2);
+}
+// NVCHANGE_END: JCAO - Add PhysXLevel and blueprint node
+
 // Stores information (such as modified properties) for an instanced object (component or subobject)
 // in the old CDO, to allow them to be reapplied to the new instance under the new CDO
 struct FInstancedObjectRecord

@@ -261,6 +261,12 @@ void FCascadeEdPreviewViewportClient::Draw(FViewport* Viewport, FCanvas* Canvas)
 
 	EngineShowFlags.VectorFields = GetDrawElement(VectorFields);
 
+#if WITH_APEX_TURBULENCE
+	UWorld* World = CascadePreviewScene.GetWorld();
+	FPhysScene* PhysScene = World->GetPhysicsScene();
+	PhysScene->AddDebugLines(PST_Sync, LineBatcher);
+#endif
+
 	CascadePreviewScene.AddComponent(LineBatcher,FTransform::Identity);
 
 

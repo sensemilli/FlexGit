@@ -1,0 +1,223 @@
+// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+/*==============================================================================
+	ParticleGridDensityFrustumShaders.usf: Shaders for grid density.
+==============================================================================*/
+
+#include "Common.usf"
+
+/** Input buffer containing particle indices. */
+Buffer<float2> InParticleIndices;
+/** Texture containing particle positions. */
+Texture2D PositionTexture;
+
+StructuredBuffer<float>		InGridDensity;
+RWStructuredBuffer<uint>	OutGridDensity;
+RWTexture2D<float>			OutDensityTexture;
+
+static const float ScaleFactor = 0.02f;
+
+uint GridAddress3D(uint c, uint b, uint a, uint dim)
+{
+	return (c*dim + b)*dim + a;
+}
+
+#if 0
+void InterlockedAddFloat(uint UV, float value)
+{
+	uint i_val = asuint(value);
+	uint tmp0 = 0;
+	uint tmp1;
+	[allow_uav_condition]
+	while (true)
+	{
+		InterlockedCompareExchange(OutGridDensity[UV], tmp0, i_val, tmp1);
+		if (tmp1 == tmp0)
+			break;
+		tmp0 = tmp1;
+		i_val = asuint(value + asfloat(tmp1));
+	}
+}
+#endif
+
+[numthreads(THREAD_COUNT,1,1)]
+void GridDensityFillFrustum(
+	uint3 GroupThreadId : SV_GroupThreadID,
+	uint3 GroupIdXYZ : SV_GroupID )
+{
+	const uint ThreadId = GroupThreadId.x;
+	const uint GroupId = GroupIdXYZ.x;
+
+	const int Dim = GridDensity.GridResolution;
+
+	uint FirstChunkIndex;
+	uint ChunkCount;
+
+	if ( GroupId < ParticleBounds.ExtraChunkCount )
+	{
+		FirstChunkIndex = GroupId * (ParticleBounds.ChunksPerGroup + 1);
+		ChunkCount = ParticleBounds.ChunksPerGroup + 1;
+	}
+	else
+	{
+		FirstChunkIndex = GroupId * ParticleBounds.ChunksPerGroup + ParticleBounds.ExtraChunkCount;
+		ChunkCount = ParticleBounds.ChunksPerGroup;
+	}
+
+	uint InputIndex = FirstChunkIndex * THREAD_COUNT + ThreadId;
+
+	for ( uint ChunkIndex = 0; ChunkIndex < ChunkCount; ++ChunkIndex )
+	{
+		BRANCH
+		if ( InputIndex < ParticleBounds.ParticleCount )
+		{
+			// Read in the particle index and its position.
+			const float2 ParticleIndex = InParticleIndices[InputIndex];
+			int3 ParticleTexel = int3(ParticleIndex.xy * int2(TEXTURE_SIZE_X, TEXTURE_SIZE_Y), 0);
+			const float4 ParticlePosition = PositionTexture.Load(ParticleTexel);
+
+			BRANCH
+			if ( ParticlePosition.w <= 1.0f )
+			{
+				float3 Position = ParticlePosition.xyz * ScaleFactor;
+				
+				float4 Pos = mul(float4(Position,1), GridDensityFrustum.DimMatrix);
+				Position.x = Pos.x/Pos.w;
+				Position.y = Pos.y/Pos.w;
+				Position.z = min(sqrt(Pos.z),0.999f); //pow(pos.z,frustum.gamma);
+
+				int a = floor(Dim * Position.x);
+				int b = floor(Dim * Position.y);
+				int c = floor(Dim * Position.z);
+
+				BRANCH
+				if( a >= 0 && a < Dim &&
+					b >= 0 && b < Dim &&
+					c >= 0 && c < Dim )
+				{
+					
+					float x0 = GridDensityFrustum.NearDim.x * (1.f - Pos.z) + GridDensityFrustum.FarDim.x * Pos.z;
+					float y0 = GridDensityFrustum.NearDim.y * (1.f - Pos.z) + GridDensityFrustum.FarDim.y * Pos.z;
+					float z0 = GridDensityFrustum.DimZ;
+
+					float k = Dim*Dim*Dim/(x0*y0*z0);
+					//InterlockedAddFloat(GridAddress3D(c, b, a, Dim), k);
+					
+					// AHR: adding normalization
+					float s = (floor(Dim*Pos.z) + 0.5f)/Dim;
+					float xn = GridDensityFrustum.NearDim.x * (1.f - s) + GridDensityFrustum.FarDim.x * s;
+					float yn = GridDensityFrustum.NearDim.y * (1.f - s) + GridDensityFrustum.FarDim.y * s;
+					k /= (Dim*Dim*Dim)/(xn*yn*z0);
+					k *= 0x00010000;
+					
+					InterlockedAdd(OutGridDensity[GridAddress3D(c, b, a, Dim)], floor(k));
+				}
+			}
+		}
+		InputIndex += THREAD_COUNT;
+	}
+}
+
+float SampleGridDensity(int c, int b, int a)
+{
+	BRANCH
+	if(c >= 0 && c < GridDensity.GridResolution
+	&& b >= 0 && b < GridDensity.GridResolution
+	&& a >= 0 && a < GridDensity.GridResolution)
+	{
+		return InGridDensity[GridAddress3D(c, b, a, GridDensity.GridResolution)];
+	}
+	else
+	{
+		return 0.0f;
+	}
+}
+
+[numthreads(THREAD_COUNT,1,1)]
+void GridDensityApplyFrustum(
+	uint3 GroupThreadId : SV_GroupThreadID,
+	uint3 GroupIdXYZ : SV_GroupID )
+{
+	const uint ThreadId = GroupThreadId.x;
+	const uint GroupId = GroupIdXYZ.x;
+
+	const int Dim = GridDensity.GridResolution;
+
+	uint FirstChunkIndex;
+	uint ChunkCount;
+
+	if ( GroupId < ParticleBounds.ExtraChunkCount )
+	{
+		FirstChunkIndex = GroupId * (ParticleBounds.ChunksPerGroup + 1);
+		ChunkCount = ParticleBounds.ChunksPerGroup + 1;
+	}
+	else
+	{
+		FirstChunkIndex = GroupId * ParticleBounds.ChunksPerGroup + ParticleBounds.ExtraChunkCount;
+		ChunkCount = ParticleBounds.ChunksPerGroup;
+	}
+
+	uint InputIndex = FirstChunkIndex * THREAD_COUNT + ThreadId;
+
+	for ( uint ChunkIndex = 0; ChunkIndex < ChunkCount; ++ChunkIndex )
+	{
+		BRANCH
+		if ( InputIndex < ParticleBounds.ParticleCount )
+		{
+			// Read in the particle index and its position.
+			const float2 ParticleIndex = InParticleIndices[InputIndex];
+			int3 ParticleTexel = int3(ParticleIndex.xy * int2(TEXTURE_SIZE_X, TEXTURE_SIZE_Y), 0);
+			const float4 ParticlePosition = PositionTexture.Load(ParticleTexel);
+
+			BRANCH
+			if ( ParticlePosition.w <= 1.0f )
+			{
+				float3 Position = ParticlePosition.xyz * ScaleFactor;
+				
+				float4 Pos = mul(float4(Position,1), GridDensityFrustum.DimMatrix);
+				Position.x = Pos.x/Pos.w;
+				Position.y = Pos.y/Pos.w;
+				Position.z = min(sqrt(Pos.z),0.999f); //pow(pos.z,frustum.gamma);
+
+				float u = Dim * Position.x - 0.5f;
+				float v = Dim * Position.y - 0.5f;
+				float w = Dim * Position.z - 0.5f;
+				float uf = u - floor(u);
+				float vf = v - floor(v);
+				float wf = w - floor(w);
+				int ui = floor(u);
+				int vi = floor(v);
+				int wi = floor(w);
+
+				float v000 = SampleGridDensity( wi, vi  , ui );
+				float v100 = SampleGridDensity( wi, vi  , ui+1 );
+				float v010 = SampleGridDensity( wi, vi+1, ui );
+				float v110 = SampleGridDensity( wi, vi+1, ui+1 );
+
+				float v001 = SampleGridDensity( wi+1, vi  , ui );
+				float v101 = SampleGridDensity( wi+1, vi  , ui+1 );
+				float v011 = SampleGridDensity( wi+1, vi+1, ui );
+				float v111 = SampleGridDensity( wi+1, vi+1, ui+1 );
+
+				float c00 = v000*(1.f-uf) + v100*uf;
+				float c10 = v010*(1.f-uf) + v110*uf;
+				float c01 = v001*(1.f-uf) + v101*uf;
+				float c11 = v011*(1.f-uf) + v111*uf;
+				float c0 = c00*(1.f-vf) + c10*vf;
+				float c1 = c01*(1.f-vf) + c11*vf;
+				float c = c0*(1.f-wf) + c1*wf;
+				
+				// AHR: adding normalization
+				float s = (floor(Dim*Pos.z) + 0.5f)/Dim;
+				float xn = GridDensityFrustum.NearDim.x * (1.f - s) + GridDensityFrustum.FarDim.x * s;
+				float yn = GridDensityFrustum.NearDim.y * (1.f - s) + GridDensityFrustum.FarDim.y * s;
+				c *= (Dim*Dim*Dim)/(xn*yn* GridDensityFrustum.DimZ);
+				c /= 0x00010000;
+
+				// clamp the density to 0.0f - 1.0f
+				OutDensityTexture[ParticleTexel.xy] = min( max(c / GridDensity.GridMaxCellCount, 0.f), 1.0f );
+			}
+		}
+		InputIndex += THREAD_COUNT;
+	}
+}
+// NVCHANGE_END: JCAO - Grid Density with GPU particles

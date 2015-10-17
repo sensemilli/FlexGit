@@ -24,6 +24,9 @@
 #include "Components/DestructibleComponent.h"
 #include "Components/LineBatchComponent.h"
 #include "PhysicsEngine/PhysicsSettings.h"
+#if WITH_APEX_TURBULENCE
+#include "../FieldSampler/ApexFieldSamplerActor.h"
+#endif
 
 #define USE_ADAPTIVE_FORCES_FOR_ASYNC_SCENE			1
 #define USE_SPECIAL_FRICTION_MODEL_FOR_ASYNC_SCENE	0
@@ -94,6 +97,10 @@ FPhysScene::FPhysScene()
 	: PendingApexDamageManager(new FPendingApexDamageManager)
 #endif
 {
+	// NVCHANGE_BEGIN: JCAO - Fix DE9040
+	bIsStaticLoading = false;
+	// NVCHANGE_END: JCAO - Fix DE9040
+
 	LineBatcher = NULL;
 	OwningWorld = NULL;
 #if WITH_PHYSX
@@ -582,6 +589,20 @@ void FPhysScene::TickPhysScene(uint32 SceneType, FGraphEventRef& InOutCompletion
 	}
 #endif
 
+#if WITH_APEX_TURBULENCE
+	{
+		for (TSparseArray<FApexFieldSamplerActor*>::TIterator FSActorIt(ApexFieldSamplerActorsList[SceneType]); FSActorIt; ++FSActorIt)
+		{
+			FApexFieldSamplerActor *ApexFieldSampler = *FSActorIt;
+
+			if (ApexFieldSampler)
+			{
+				ApexFieldSampler->OnPostFetchResults();
+			}
+		}
+	}
+#endif
+
 	/**
 	* clamp down... if this happens we are simming physics slower than real-time, so be careful with it.
 	* it can improve framerate dramatically (really, it is the same as scaling all velocities down and
@@ -826,6 +847,27 @@ void FPhysScene::ProcessPhysScene(uint32 SceneType)
 	PhysicsSubsceneCompletion[SceneType] = NULL;
 	bPhysXSceneExecuting[SceneType] = false;
 }
+// NVCHANGE_BEGIN: JCAO - Fix DE9040
+void FPhysScene::PrepareRenderResources(uint32 SceneType)
+{
+	// NVCHANGE_BEGIN: JCAO - Replace vector fields with APEX turbulence velocity fields
+#if WITH_APEX
+	if (!bIsStaticLoading)
+	{
+		NxApexScene* ApexScene = GetApexScene(SceneType);
+		check(ApexScene);
+		// prepare the render resource before rendering
+		ENQUEUE_UNIQUE_RENDER_COMMAND_ONEPARAMETER(
+			ApexScenePrepareRenderResources,
+			NxApexScene*, ApexScene, ApexScene,
+			{
+				ApexScene->prepareRenderResourceContexts();
+			});
+	}
+#endif
+	// NVCHANGE_END: JCAO - Replace vector fields with APEX turbulence velocity fields
+}
+// NVCHANGE_END: JCAO - Fix DE9040
 #if WITH_PHYSX
 void FPhysScene::UpdateActiveTransforms(uint32 SceneType)
 {
@@ -904,6 +946,60 @@ void FPhysScene::SyncComponentsToBodies_AssumesLocked(uint32 SceneType)
 	}
 #endif
 }
+
+// NVCHANGE_BEGIN: JCAO - Add the flag bBlockTurbulence to make RB interact with Turbulence.
+#if WITH_APEX_TURBULENCE
+void FPhysScene::SyncMirroredBodies()
+{
+	PxScene* PAsyncScene = GetPhysXScene(PST_Async);
+	PxScene* PSyncScene = GetPhysXScene(PST_Sync);
+	if (PAsyncScene && PSyncScene)
+	{
+		uint32 NumActors = 0;
+		{
+			SCOPED_SCENE_READ_LOCK(PAsyncScene);
+			NumActors = PAsyncScene->getNbActors(PxActorTypeFlag::eRIGID_DYNAMIC);
+		}
+
+		if (NumActors == 0)
+		{
+			return;
+		}
+
+		PxActor** Actors = (PxActor**)FMemory_Alloca(NumActors * sizeof(PxActor*));
+		{
+			SCOPED_SCENE_READ_LOCK(PAsyncScene);
+			PAsyncScene->getActors(PxActorTypeFlag::eRIGID_DYNAMIC, Actors, NumActors);
+		}
+
+		{
+			SCOPED_SCENE_WRITE_LOCK(PAsyncScene);
+			SCOPED_SCENE_READ_LOCK(PSyncScene);
+			for (uint32 i = 0; i < NumActors; i++)
+			{
+				PxRigidDynamic& MirroredActor = *(PxRigidDynamic*)Actors[i];
+
+				FBodyInstance* BodyInst = FPhysxUserData::Get<FBodyInstance>(MirroredActor.userData);
+
+				if (BodyInst)
+				{
+					PxActor* SourceActor = BodyInst->RigidActorSync;
+
+					if (SourceActor && SourceActor->isRigidDynamic())
+					{
+						//Get position from source actor
+						PxRigidDynamic& DynamicActor = *(PxRigidDynamic*)SourceActor;
+						PxTransform CurrentPose = DynamicActor.getGlobalPose();
+
+						MirroredActor.setKinematicTarget(CurrentPose);
+					}
+				}
+			}
+		}
+	}
+}
+#endif
+// NVCHANGE_END: JCAO - Add the flag bBlockTurbulence to make RB interact with Turbulence.
 
 void FPhysScene::DispatchPhysNotifications_AssumesLocked()
 {
@@ -1014,6 +1110,14 @@ void FPhysScene::StartFrame()
 	// Flush list of deferred actors to add to the scene
 	FlushDeferredActors();
 #endif
+
+	// NVCHANGE_BEGIN: JCAO - Fix DE9040
+	PrepareRenderResources(PST_Sync);
+	if (bAsyncSceneEnabled)
+	{
+		PrepareRenderResources(PST_Async);
+	}
+	// NVCHANGE_END: JCAO - Fix DE9040
 
 	// Run the sync scene
 	TickPhysScene(PST_Sync, PhysicsSubsceneCompletion[PST_Sync]);
@@ -1178,6 +1282,12 @@ void FPhysScene::EndFrame(ULineBatchComponent* InLineBatcher)
 
 	SyncComponentsToBodies_AssumesLocked(PST_Sync);
 
+	// NVCHANGE_BEGIN: JCAO - Add the flag bBlockTurbulence to make RB interact with Turbulence.
+#if WITH_APEX_TURBULENCE
+	SyncMirroredBodies();
+#endif
+	// NVCHANGE_END: JCAO - Add the flag bBlockTurbulence to make RB interact with Turbulence.
+
 	// Perform any collision notification events
 	DispatchPhysNotifications_AssumesLocked();
 
@@ -1198,6 +1308,10 @@ void FPhysScene::EndFrame(ULineBatchComponent* InLineBatcher)
 
 void FPhysScene::SetIsStaticLoading(bool bStaticLoading)
 {
+	// NVCHANGE_BEGIN: JCAO - Fix DE9040
+	bIsStaticLoading = bStaticLoading;
+	// NVCHANGE_END: JCAO - Fix DE9040
+
 #if WITH_PHYSX
 	// Loop through scene types to get all scenes
 	for (uint32 SceneType = 0; SceneType < NumPhysScenes; ++SceneType)
@@ -1401,6 +1515,50 @@ void FPhysScene::ApplyWorldOffset(FVector InOffset)
 #endif
 }
 
+#if WITH_CUDA_CONTEXT
+#if USE_MULTIPLE_GPU_DISPATCHER_FOR_EACH_SCENE
+bool FPhysScene::CreateCudaContextManager(uint32 SceneType)
+{
+	physx::PxCudaContextManagerDesc CtxMgrDesc;
+
+	if (GDynamicRHI && !GUsingNullRHI && GDynamicRHI)
+	{
+		CtxMgrDesc.graphicsDevice = GDynamicRHI->RHIGetNativeDevice();
+
+#if WITH_CUDA_INTEROP
+		CtxMgrDesc.interopMode = physx::PxCudaInteropMode::D3D11_INTEROP;
+#endif // WITH_CUDA_INTEROP
+
+		CudaContextManager[SceneType] = PxCreateCudaContextManager(GPhysXSDK->getFoundation(), CtxMgrDesc, GPhysXSDK->getProfileZoneManager());
+
+		if (CudaContextManager[SceneType])
+		{
+			if (!CudaContextManager[SceneType]->contextIsValid())
+			{
+				TerminateCudaContextManager(SceneType);
+				return false;
+			}
+			else if (CudaContextManager[SceneType]->supportsArchSM30())
+			{
+				CudaContextManager[SceneType]->setUsingConcurrentStreams(false);
+			}
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void FPhysScene::TerminateCudaContextManager(uint32 SceneType)
+{
+	if (CudaContextManager[SceneType])
+	{
+		GPhysCommandHandler->DeferredDeleteCudaContextManager(CudaContextManager[SceneType]);
+	}
+}
+#endif // USE_MULTIPLE_GPU_DISPATCHER_FOR_EACH_SCENE
+#endif // WITH_CUDA_CONTEXT
+
 void FPhysScene::InitPhysScene(uint32 SceneType)
 {
 	check(SceneType < NumPhysScenes);
@@ -1432,6 +1590,46 @@ void FPhysScene::InitPhysScene(uint32 SceneType)
 	//LOC_MOD enable kinematic vs kinematic for APEX destructibles. This is for the kinematic cube moving horizontally in QA-Destructible map to collide with the destructible.
 	// Was this flag turned off in UE4? Do we want to turn it on for both sync and async scenes?
 	PSceneDesc.flags |= PxSceneFlag::eENABLE_KINEMATIC_PAIRS;
+	// NVCHANGE_BEGIN: JCAO - Add PhysXLevel and blueprint node
+	GEngine->SetPhysXLevel(GEngine->NextPhysXLevel);
+	// NVCHANGE_END: JCAO - Add PhysXLevel and blueprint node
+
+	// NVCHANGE_BEGIN: JCAO - Create CudaContextManager to support D3D11 interop with APEX
+#if WITH_CUDA_CONTEXT
+#if USE_MULTIPLE_GPU_DISPATCHER_FOR_EACH_SCENE
+	CudaContextManager[SceneType] = NULL;
+#endif // USE_MULTIPLE_GPU_DISPATCHER_FOR_EACH_SCENE
+
+	if (GEngine->GetPhysXLevel() == 2)
+	{
+#if USE_MULTIPLE_GPU_DISPATCHER_FOR_EACH_SCENE
+		if (CreateCudaContextManager(SceneType))
+		{
+			PSceneDesc.gpuDispatcher = CudaContextManager[SceneType]->getGpuDispatcher();
+		}
+#else
+		if (GetCudaContextManager() != NULL)
+		{
+			PSceneDesc.gpuDispatcher = GCudaContextManager->getGpuDispatcher();
+		}
+#endif // USE_MULTIPLE_GPU_DISPATCHER_FOR_EACH_SCENE
+		else
+		{
+			GEngine->SetPhysXLevel(1);
+			GEngine->SaveConfig();
+		}
+	}
+
+	if (GEngine->GetPhysXLevel() != 2)
+	{
+#if USE_MULTIPLE_GPU_DISPATCHER_FOR_EACH_SCENE
+		TerminateCudaContextManager(SceneType);
+#else // USE_MULTIPLE_GPU_DISPATCHER_FOR_EACH_SCENE
+		TerminateCudaContextManager();
+#endif // USE_MULTIPLE_GPU_DISPATCHER_FOR_EACH_SCENE
+	}
+#endif // WITH_CUDA_CONTEXT
+	// NVCHANGE_END: JCAO - Create CudaContextManager to support D3D11 interop with APEX
 
 	// Set bounce threshold
 	PSceneDesc.bounceThresholdVelocity = UPhysicsSettings::Get()->BounceThresholdVelocity;
@@ -1572,6 +1770,19 @@ void FPhysScene::TermPhysScene(uint32 SceneType)
 		NxApexScene* ApexScene = GetApexScene(SceneType);
 		if (ApexScene != NULL)
 		{
+#if WITH_APEX_TURBULENCE
+			{
+				for (TSparseArray<FApexFieldSamplerActor*>::TIterator FSActorIt(ApexFieldSamplerActorsList[SceneType]); FSActorIt; ++FSActorIt)
+				{
+					FApexFieldSamplerActor *ApexFieldSampler = *FSActorIt;
+
+					if (ApexFieldSampler)
+					{
+						ApexFieldSampler->Release();
+					}
+				}
+			}
+#endif
 			GPhysCommandHandler->DeferredRelease(ApexScene);
 		}
 #endif // #if WITH_APEX
@@ -1606,7 +1817,82 @@ void FPhysScene::TermPhysScene(uint32 SceneType)
 		GPhysXSceneMap.Remove(PhysXSceneIndex[SceneType]);
 	}
 #endif
+
+#if WITH_CUDA_CONTEXT && USE_MULTIPLE_GPU_DISPATCHER_FOR_EACH_SCENE
+	TerminateCudaContextManager(SceneType);
+#endif
 }
+
+// NVCHANGE_BEGIN: JCAO - Apex Vis for the cascade
+bool FPhysScene::IsApexVisSet(uint32 SceneType, const TCHAR* Cmd)
+{
+	check(SceneType < PST_MAX);
+
+#if WITH_PHYSX
+#if WITH_APEX
+	// Get the scene to set flags on
+	NxApexScene* ApexScene = GetApexScene(SceneType);
+
+	if (ApexScene == NULL)
+	{
+		return false;
+	}
+
+	NxParameterized::Interface* DebugRenderParams = ApexScene->getDebugRenderParams();
+	check(DebugRenderParams != NULL);
+
+	// See if there's a '/', which means we have a module-specific visualization parameter
+	const TCHAR* Slash = Cmd;
+	while (*Slash != TCHAR(0) && *Slash != TCHAR('/'))
+	{
+		++Slash;
+	}
+
+	if (*Slash != TCHAR(0))
+	{
+		FString ModuleName = FString(Cmd).Left((int32)(Slash - Cmd));
+		DebugRenderParams = ApexScene->getModuleDebugRenderParams(StringCast<ANSICHAR>(*ModuleName).Get());
+	}
+
+	if (DebugRenderParams == NULL)
+	{
+		return false;
+	}
+
+	auto FlagNameAnsi = StringCast<ANSICHAR>((*Slash == TCHAR(0) ? Cmd : Slash + 1));
+	NxParameterized::Handle DebugRenderHandle(*DebugRenderParams, FlagNameAnsi.Get());
+
+	if (!DebugRenderHandle.isValid())
+	{
+		return false;
+	}
+
+	if (DebugRenderHandle.parameterDefinition()->type() == NxParameterized::TYPE_F32)
+	{
+		PxF32 Value;
+		DebugRenderHandle.getParamF32(Value);
+		return (Value > 0.0f);
+	}
+	else
+		if (DebugRenderHandle.parameterDefinition()->type() == NxParameterized::TYPE_U32)
+		{
+			PxU32 Value;
+			DebugRenderHandle.getParamU32(Value);
+			return (Value > 0);
+		}
+		else
+			if (DebugRenderHandle.parameterDefinition()->type() == NxParameterized::TYPE_BOOL)
+			{
+				bool bValue;
+				DebugRenderHandle.getParamBool(bValue);
+				return bValue;
+			}
+#endif	// WITH_APEX
+#endif	// WITH_PHYSX
+
+	return false;
+}
+// NVCHANGE_END: JCAO - Apex Vis for the cascade
 
 #if WITH_PHYSX
 

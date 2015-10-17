@@ -1981,4 +1981,265 @@ void UActorFactoryCylinderVolume::PostSpawnActor( UObject* Asset, AActor* NewAct
 	}
 }
 
+// NVCHANGE_BEGIN: JCAO - Add Field Sampler Asset
+/*-----------------------------------------------------------------------------
+UActorFactoryGridActor
+-----------------------------------------------------------------------------*/
+UActorFactoryGridActor::UActorFactoryGridActor(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	DisplayName = LOCTEXT("GridActorDisplayName", "Grid Actor");
+	NewActorClass = AGridActor::StaticClass();
+}
+
+bool UActorFactoryGridActor::CanCreateActorFrom(const FAssetData& AssetData, FText& OutErrorMsg)
+{
+	if (!AssetData.IsValid() || !AssetData.GetClass()->IsChildOf(UGridAsset::StaticClass()))
+	{
+		OutErrorMsg = NSLOCTEXT("CanCreateActor", "NoGridAsset", "No Grid Asset was specified.");
+		return false;
+	}
+
+	return true;
+}
+
+void UActorFactoryGridActor::PostSpawnActor(UObject* Asset, AActor* NewActor)
+{
+	UGridAsset* GridAsset = CastChecked<UGridAsset>(Asset);
+	AGridActor* GridActor = CastChecked<AGridActor>(NewActor);
+
+	if (GridActor && GridActor->FieldSamplerComponent)
+	{
+		UGridComponent* GridComponent = CastChecked<UGridComponent>(GridActor->FieldSamplerComponent);
+		if (GridComponent)
+		{
+			GridComponent->GridAsset = GridAsset;
+			GridActor->PostEditChange();
+		}
+	}
+}
+
+/*-----------------------------------------------------------------------------
+UActorFactoryVortexActor
+-----------------------------------------------------------------------------*/
+UActorFactoryVortexActor::UActorFactoryVortexActor(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	DisplayName = LOCTEXT("VortexActorDisplayName", "Vortex Actor");
+	NewActorClass = AVortexActor::StaticClass();
+}
+
+bool UActorFactoryVortexActor::CanCreateActorFrom(const FAssetData& AssetData, FText& OutErrorMsg)
+{
+	if (!AssetData.IsValid() || !AssetData.GetClass()->IsChildOf(UVortexAsset::StaticClass()))
+	{
+		OutErrorMsg = NSLOCTEXT("CanCreateActor", "NoVortexAsset", "No Vortex Asset was specified.");
+		return false;
+	}
+
+	return true;
+}
+
+void UActorFactoryVortexActor::PostSpawnActor(UObject* Asset, AActor* NewActor)
+{
+	UVortexAsset* VortexAsset = CastChecked<UVortexAsset>(Asset);
+	AVortexActor* VortexActor = CastChecked<AVortexActor>(NewActor);
+
+	if (VortexActor && VortexActor->FieldSamplerComponent)
+	{
+		UVortexComponent* VortexComponent = CastChecked<UVortexComponent>(VortexActor->FieldSamplerComponent);
+		if (VortexComponent)
+		{
+			VortexComponent->VortexAsset = VortexAsset;
+			VortexActor->PostEditChange();
+		}
+	}
+}
+
+/*-----------------------------------------------------------------------------
+UActorFactoryJetActor
+-----------------------------------------------------------------------------*/
+UActorFactoryJetActor::UActorFactoryJetActor(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	DisplayName = LOCTEXT("JetActorDisplayName", "Jet Actor");
+	NewActorClass = AJetActor::StaticClass();
+}
+
+bool UActorFactoryJetActor::CanCreateActorFrom(const FAssetData& AssetData, FText& OutErrorMsg)
+{
+	if (!AssetData.IsValid() || !AssetData.GetClass()->IsChildOf(UJetAsset::StaticClass()))
+	{
+		OutErrorMsg = NSLOCTEXT("CanCreateActor", "NoJetAsset", "No Jet Asset was specified.");
+		return false;
+	}
+
+	return true;
+}
+
+void UActorFactoryJetActor::PostSpawnActor(UObject* Asset, AActor* NewActor)
+{
+	UJetAsset* JetAsset = CastChecked<UJetAsset>(Asset);
+	AJetActor* JetActor = CastChecked<AJetActor>(NewActor);
+
+	if (JetActor && JetActor->FieldSamplerComponent)
+	{
+		UJetComponent* JetComponent = CastChecked<UJetComponent>(JetActor->FieldSamplerComponent);
+		if (JetComponent)
+		{
+			JetComponent->JetAsset = JetAsset;
+			JetActor->PostEditChange();
+		}
+	}
+}
+
+/*-----------------------------------------------------------------------------
+UActorFactoryAttractorActor
+-----------------------------------------------------------------------------*/
+UActorFactoryAttractorActor::UActorFactoryAttractorActor(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	DisplayName = LOCTEXT("AttractorActorDisplayName", "Attractor Actor");
+	NewActorClass = AAttractorActor::StaticClass();
+}
+
+bool UActorFactoryAttractorActor::CanCreateActorFrom(const FAssetData& AssetData, FText& OutErrorMsg)
+{
+	if (!AssetData.IsValid() || !AssetData.GetClass()->IsChildOf(UAttractorAsset::StaticClass()))
+	{
+		OutErrorMsg = NSLOCTEXT("CanCreateActor", "NoAttractorAsset", "No Attractor Asset was specified.");
+		return false;
+	}
+
+	return true;
+}
+
+void UActorFactoryAttractorActor::PostSpawnActor(UObject* Asset, AActor* NewActor)
+{
+	UAttractorAsset* AttractorAsset = CastChecked<UAttractorAsset>(Asset);
+	AAttractorActor* AttractorActor = CastChecked<AAttractorActor>(NewActor);
+
+	if (AttractorActor && AttractorActor->FieldSamplerComponent)
+	{
+		UAttractorComponent* AttractorComponent = CastChecked<UAttractorComponent>(AttractorActor->FieldSamplerComponent);
+		if (AttractorComponent)
+		{
+			AttractorComponent->AttractorAsset = AttractorAsset;
+			AttractorActor->PostEditChange();
+		}
+	}
+}
+
+/*-----------------------------------------------------------------------------
+UActorFactoryNoiseActor
+-----------------------------------------------------------------------------*/
+UActorFactoryNoiseActor::UActorFactoryNoiseActor(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	DisplayName = LOCTEXT("NoiseActorDisplayName", "Noise Actor");
+	NewActorClass = ANoiseActor::StaticClass();
+}
+
+bool UActorFactoryNoiseActor::CanCreateActorFrom(const FAssetData& AssetData, FText& OutErrorMsg)
+{
+	if (!AssetData.IsValid() || !AssetData.GetClass()->IsChildOf(UNoiseAsset::StaticClass()))
+	{
+		OutErrorMsg = NSLOCTEXT("CanCreateActor", "NoNoiseAsset", "No Noise Asset was specified.");
+		return false;
+	}
+
+	return true;
+}
+
+void UActorFactoryNoiseActor::PostSpawnActor(UObject* Asset, AActor* NewActor)
+{
+	UNoiseAsset* NoiseAsset = CastChecked<UNoiseAsset>(Asset);
+	ANoiseActor* NoiseActor = CastChecked<ANoiseActor>(NewActor);
+
+	if (NoiseActor && NoiseActor->FieldSamplerComponent)
+	{
+		UNoiseComponent* NoiseComponent = CastChecked<UNoiseComponent>(NoiseActor->FieldSamplerComponent);
+		if (NoiseComponent)
+		{
+			NoiseComponent->NoiseAsset = NoiseAsset;
+			NoiseActor->PostEditChange();
+		}
+	}
+}
+
+/*-----------------------------------------------------------------------------
+UActorFactoryHeatSourceActor
+-----------------------------------------------------------------------------*/
+UActorFactoryHeatSourceActor::UActorFactoryHeatSourceActor(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	DisplayName = LOCTEXT("HeatSourceActorDisplayName", "Heat Source Actor");
+	NewActorClass = AHeatSourceActor::StaticClass();
+}
+
+bool UActorFactoryHeatSourceActor::CanCreateActorFrom(const FAssetData& AssetData, FText& OutErrorMsg)
+{
+	if (!AssetData.IsValid() || !AssetData.GetClass()->IsChildOf(UHeatSourceAsset::StaticClass()))
+	{
+		OutErrorMsg = NSLOCTEXT("CanCreateActor", "NoHeatSourceAsset", "No Heat Source Asset was specified.");
+		return false;
+	}
+
+	return true;
+}
+
+void UActorFactoryHeatSourceActor::PostSpawnActor(UObject* Asset, AActor* NewActor)
+{
+	UHeatSourceAsset* HeatSourceAsset = CastChecked<UHeatSourceAsset>(Asset);
+	AHeatSourceActor* HeatSourceActor = CastChecked<AHeatSourceActor>(NewActor);
+
+	if (HeatSourceActor && HeatSourceActor->FieldSamplerComponent)
+	{
+		UHeatSourceComponent* HeatSourceComponent = CastChecked<UHeatSourceComponent>(HeatSourceActor->FieldSamplerComponent);
+		if (HeatSourceComponent)
+		{
+			HeatSourceComponent->HeatSourceAsset = HeatSourceAsset;
+			HeatSourceActor->PostEditChange();
+		}
+	}
+}
+
+/*-----------------------------------------------------------------------------
+UActorFactoryVelocitySourceActor
+-----------------------------------------------------------------------------*/
+UActorFactoryVelocitySourceActor::UActorFactoryVelocitySourceActor(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	DisplayName = LOCTEXT("VelocitySourceActorDisplayName", "Velocity Source Actor");
+	NewActorClass = AVelocitySourceActor::StaticClass();
+}
+
+bool UActorFactoryVelocitySourceActor::CanCreateActorFrom(const FAssetData& AssetData, FText& OutErrorMsg)
+{
+	if (!AssetData.IsValid() || !AssetData.GetClass()->IsChildOf(UVelocitySourceAsset::StaticClass()))
+	{
+		OutErrorMsg = NSLOCTEXT("CanCreateActor", "NoVelocitySourceAsset", "No Velocity Source Asset was specified.");
+		return false;
+	}
+
+	return true;
+}
+
+void UActorFactoryVelocitySourceActor::PostSpawnActor(UObject* Asset, AActor* NewActor)
+{
+	UVelocitySourceAsset* VelocitySourceAsset = CastChecked<UVelocitySourceAsset>(Asset);
+	AVelocitySourceActor* VelocitySourceActor = CastChecked<AVelocitySourceActor>(NewActor);
+
+	if (VelocitySourceActor && VelocitySourceActor->FieldSamplerComponent)
+	{
+		UVelocitySourceComponent* VelocitySourceComponent = CastChecked<UVelocitySourceComponent>(VelocitySourceActor->FieldSamplerComponent);
+		if (VelocitySourceComponent)
+		{
+			VelocitySourceComponent->VelocitySourceAsset = VelocitySourceAsset;
+			VelocitySourceActor->PostEditChange();
+		}
+	}
+}
+// NVCHANGE_END: JCAO - Add Field Sampler Asset
+
 #undef LOCTEXT_NAMESPACE

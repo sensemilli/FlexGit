@@ -78,6 +78,27 @@ struct FGPUSpriteLocalVectorFieldInfo
 
 };
 
+// NVCHANGE_BEGIN: JCAO - Field Sampler Module for GPU particle
+USTRUCT()
+struct FGPUSpriteLocalFieldSamplerInfo
+{
+	GENERATED_USTRUCT_BODY()
+
+	/** Local vector field to apply to this emitter. */
+	UPROPERTY()
+	class UFieldSamplerAsset* FieldSamplerAsset;
+
+	/** Local vector field transform. */
+	UPROPERTY()
+		FTransform Transform;
+
+	FGPUSpriteLocalFieldSamplerInfo()
+		: FieldSamplerAsset(NULL)
+	{
+	}
+};
+// NVCHANGE_END: JCAO - Field Sampler Module for GPU particle
+
 /**
  * The data needed by the runtime to simulate sprites.
  */
@@ -105,6 +126,14 @@ struct FGPUSpriteEmitterInfo
 	/** Local vector field info. */
 	UPROPERTY()
 	struct FGPUSpriteLocalVectorFieldInfo LocalVectorField;
+
+	// NVCHANGE_BEGIN: JCAO - Field Sampler Module for GPU particle
+	/** local field samplers info. */
+#if WITH_APEX_TURBULENCE
+	UPROPERTY()
+	TArray<struct FGPUSpriteLocalFieldSamplerInfo> LocalFieldSamplers;
+#endif
+	// NVCHANGE_END: JCAO - Field Sampler Module for GPU particle
 
 	/** Per-particle vector field scale. */
 	UPROPERTY()
@@ -355,6 +384,46 @@ struct FGPUSpriteResourceData
 	UPROPERTY()
 	FVector2D PivotOffset;
 
+	// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+	/** Quantized color samples for density. */
+	UPROPERTY()
+	TArray<FColor> QuantizedDensityColorSamples;
+
+	/** Quantized size samples for density. */
+	UPROPERTY()
+	TArray<FColor> QuantizedDensitySizeSamples;
+
+	UPROPERTY()
+	FVector4 DensityColorScale;
+
+	UPROPERTY()
+	FVector4 DensityColorBias;
+
+	UPROPERTY()
+	FVector4 DensitySizeScale;
+
+	UPROPERTY()
+	FVector4 DensitySizeBias;
+
+	/** if the module color over density is working */
+	UPROPERTY()
+	uint32 bColorOverDensityEnabled : 1;
+
+	/** if the module size over density is working */
+	UPROPERTY()
+	uint32 bSizeOverDensityEnabled : 1;
+
+	UPROPERTY()
+	int32 GridResolution;
+
+	/** This is the number of particles within a gridcell for a density of 1 */
+	UPROPERTY()
+	int32 GridMaxCellCount;
+
+	UPROPERTY()
+	float GridDepth;
+	// NVCHANGE_END: JCAO - Grid Density with GPU particles
+
 	FGPUSpriteResourceData()
 		: ColorScale(ForceInit)
 		, ColorBias(ForceInit)
@@ -388,10 +457,34 @@ struct FGPUSpriteResourceData
 		, ScreenAlignment(0)
 		, LockAxisFlag(0)
 		, PivotOffset(-0.5f,-0.5f)
+		// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+		, DensityColorScale(ForceInit)
+		, DensityColorBias(ForceInit)
+		, DensitySizeScale(ForceInit)
+		, DensitySizeBias(ForceInit)
+		, bColorOverDensityEnabled(false)
+		, bSizeOverDensityEnabled(false)
+		, GridResolution(0)
+		, GridMaxCellCount(0)
+		, GridDepth(0)
+		// NVCHANGE_END: JCAO - Grid Density with GPU particles
 	{
 	}
 
 };
+
+// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+UENUM()
+enum EGridDensityResolution
+{
+	EGDR_8,
+	EGDR_16,
+	EGDR_32,
+	EGDR_64,
+	EGDR_128,
+	EGDR_256
+};
+// NVCHANGE_END: JCAO - Grid Density with GPU particles
 
 UCLASS(editinlinenew, hidecategories=Object, MinimalAPI, meta=(DisplayName = "GPU Sprites"))
 class UParticleModuleTypeDataGpu : public UParticleModuleTypeDataBase
@@ -409,6 +502,24 @@ class UParticleModuleTypeDataGpu : public UParticleModuleTypeDataBase
 	/** TEMP: How much to stretch sprites based on camera motion blur. */
 	UPROPERTY(EditAnywhere, Category=ParticleModuleTypeDataGpu)
 	float CameraMotionBlurAmount;
+
+	// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+	/** if the grid density is enabled? */
+	UPROPERTY(EditAnywhere, Category = Density)
+	uint32	bEnableGridDensity : 1;
+
+	/** The enum defines the resolution of the 3d grid which voxelizes the sprite positions for the grid density calculation */
+	UPROPERTY(EditAnywhere, Category = Density)
+	TEnumAsByte<EGridDensityResolution>	Resolution;
+
+	/** This is the number of particles within a gridcell for a density of 1 */
+	UPROPERTY(EditAnywhere, Category = Density, meta = (ClampMin = "0"))
+	int32	MaxCellCount;
+
+	/** Depth of the grid. */
+	UPROPERTY(EditAnywhere, Category = Density)
+	float	GridDepth;
+	// NVCHANGE_END: JCAO - Grid Density with GPU particles
 
 	/** When true, all existing partilces are cleared when the emitter is initialized. */
 	UPROPERTY(EditAnywhere, Category = ParticleModuleTypeDataGpu)

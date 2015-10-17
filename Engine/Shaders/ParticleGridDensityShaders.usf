@@ -1,0 +1,101 @@
+// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+/*==============================================================================
+	ParticleGridDensityShaders.usf: Shaders for grid density.
+==============================================================================*/
+
+/*------------------------------------------------------------------------------
+
+	Parameters:
+		THREADS_X - The number of threads to launch for the X axis.
+		THREADS_Y - The number of threads to launch for the Y axis.
+		THREADS_Z - The number of threads to launch for the Z axis.
+------------------------------------------------------------------------------*/
+
+#include "Common.usf"
+
+RWStructuredBuffer<uint> OutGridDensity;
+StructuredBuffer<uint> InGridDensity;
+RWStructuredBuffer<float> OutGridDensityLowPass;
+
+uint GridAddress3D(uint c, uint b, uint a, uint dim)
+{
+	return (c*dim + b)*dim + a;
+}
+
+[numthreads(THREADS_NUM,1,1)]
+void GridDensityClear(
+	uint3 GroupId			: SV_GroupID,
+	uint3 GroupThreadId		: SV_GroupThreadID )
+{
+	uint Index = GroupId.x * THREADS_NUM + GroupThreadId.x;
+	OutGridDensity[Index] = 0;
+}
+
+float SampleGridDensity(int c, int b, int a)
+{
+	BRANCH
+	if(c >= 0 && c < GridDensity.GridResolution
+	&& b >= 0 && b < GridDensity.GridResolution
+	&& a >= 0 && a < GridDensity.GridResolution)
+	{
+		return InGridDensity[GridAddress3D(c, b, a, GridDensity.GridResolution)];
+	}
+	else
+	{
+		return 0.0f;
+	}
+}
+
+[numthreads(THREADS_NUM,1,1)]
+void GridDensityLowPass(
+	uint3 GroupId			: SV_GroupID,
+	uint3 GroupThreadId		: SV_GroupThreadID )
+{
+	uint Dim = GridDensity.GridResolution;
+	uint Index = GroupId.x * THREADS_NUM + GroupThreadId.x;
+
+	int a = Index % Dim;
+	int b = (Index / Dim) % Dim;
+	int c = (Index / (Dim * Dim)) % Dim;
+
+	float value = 0.f;	
+
+	value += SampleGridDensity( c - 1, b - 1, a - 1 );
+	value += SampleGridDensity( c - 1, b - 1, a );
+	value += SampleGridDensity( c - 1, b - 1, a + 1 );
+
+	value += SampleGridDensity( c - 1, b, a - 1 );
+	value += SampleGridDensity( c - 1, b, a );
+	value += SampleGridDensity( c - 1, b, a + 1 );
+
+	value += SampleGridDensity( c - 1, b + 1, a - 1 );
+	value += SampleGridDensity( c - 1, b + 1, a );
+	value += SampleGridDensity( c - 1, b + 1, a + 1 );
+
+	value += SampleGridDensity( c, b - 1, a - 1 );
+	value += SampleGridDensity( c, b - 1, a );
+	value += SampleGridDensity( c, b - 1, a + 1 );
+
+	value += SampleGridDensity( c, b, a - 1 );
+	value += SampleGridDensity( c, b, a );
+	value += SampleGridDensity( c, b, a + 1 );
+
+	value += SampleGridDensity( c, b + 1, a - 1 );
+	value += SampleGridDensity( c, b + 1, a );
+	value += SampleGridDensity( c, b + 1, a + 1 );
+
+	value += SampleGridDensity( c + 1, b - 1, a - 1 );
+	value += SampleGridDensity( c + 1, b - 1, a );
+	value += SampleGridDensity( c + 1, b - 1, a + 1 );
+
+	value += SampleGridDensity( c + 1, b, a - 1 );
+	value += SampleGridDensity( c + 1, b, a );
+	value += SampleGridDensity( c + 1, b, a + 1 );
+
+	value += SampleGridDensity( c + 1, b + 1, a - 1 );
+	value += SampleGridDensity( c + 1, b + 1, a );
+	value += SampleGridDensity( c + 1, b + 1, a + 1 );
+
+	OutGridDensityLowPass[GridAddress3D(c, b, a, GridDensity.GridResolution)] = value / 27.0f;
+}
+// NVCHANGE_END: JCAO - Grid Density with GPU particles

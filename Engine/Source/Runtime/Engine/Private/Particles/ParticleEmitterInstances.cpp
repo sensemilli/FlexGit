@@ -89,6 +89,9 @@ DEFINE_STAT(STAT_GPUSpriteRenderingTime);
 DEFINE_STAT(STAT_GPUSpritePreRenderTime);
 DEFINE_STAT(STAT_GPUSpriteSpawnTime);
 DEFINE_STAT(STAT_GPUSpriteTickTime);
+// NVCHANGE_BEGIN: JCAO - Add density time in the GPU particle stat
+DEFINE_STAT(STAT_GPUParticleDensityTime);
+// NVCHANGE_END: JCAO - Add density time in the GPU particle stat
 
 /** Particle memory stats */
 
@@ -176,6 +179,10 @@ FParticleEmitterBuildInfo::FParticleEmitterBuildInfo()
 	, bLocalVectorFieldTileX(false)
 	, bLocalVectorFieldTileY(false)
 	, bLocalVectorFieldTileZ(false)
+	// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+	, bColorOverDensity(false)
+	, bSizeOverDensity(false)
+	// NVCHANGE_END: JCAO - Grid Density with GPU particles
 {
 	DragScale.InitializeWithConstant(1.0f);
 	VectorFieldScale.InitializeWithConstant(1.0f);

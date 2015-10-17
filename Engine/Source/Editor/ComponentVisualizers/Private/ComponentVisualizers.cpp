@@ -27,6 +27,16 @@
 #include "Components/SplineComponent.h"
 #include "Components/PrimitiveComponent.h"
 
+// NVCHANGE_BEGIN: JCAO - Using Component Visualizer to display the field sampler component
+#include "AttractorComponentVisualizer.h"
+#include "GridComponentVisualizer.h"
+#include "JetComponentVisualizer.h"
+#include "NoiseComponentVisualizer.h"
+#include "VortexComponentVisualizer.h"
+#include "HeatSourceComponentVisualizer.h"
+#include "VelocitySourceComponentVisualizer.h"
+// NVCHANGE_END: JCAO - Using Component Visualizer to display the field sampler component
+
 IMPLEMENT_MODULE( FComponentVisualizersModule, ComponentVisualizers );
 
 void FComponentVisualizersModule::StartupModule()
@@ -42,6 +52,16 @@ void FComponentVisualizersModule::StartupModule()
 	RegisterComponentVisualizer(UPawnSensingComponent::StaticClass()->GetFName(), MakeShareable(new FSensingComponentVisualizer));
 	RegisterComponentVisualizer(UPhysicsSpringComponent::StaticClass()->GetFName(), MakeShareable(new FSpringComponentVisualizer));
 	RegisterComponentVisualizer(UPrimitiveComponent::StaticClass()->GetFName(), MakeShareable(new FPrimitiveComponentVisualizer));
+
+	// NVCHANGE_BEGIN: JCAO - Using Component Visualizer to display the field sampler component	
+	RegisterComponentVisualizer(UAttractorComponent::StaticClass()->GetFName(), MakeShareable(new FAttractorComponentVisualizer));
+	RegisterComponentVisualizer(UGridComponent::StaticClass()->GetFName(), MakeShareable(new FGridComponentVisualizer));
+	RegisterComponentVisualizer(UJetComponent::StaticClass()->GetFName(), MakeShareable(new FJetComponentVisualizer));
+	RegisterComponentVisualizer(UNoiseComponent::StaticClass()->GetFName(), MakeShareable(new FNoiseComponentVisualizer));
+	RegisterComponentVisualizer(UVortexComponent::StaticClass()->GetFName(), MakeShareable(new FVortexComponentVisualizer));
+	RegisterComponentVisualizer(UHeatSourceComponent::StaticClass()->GetFName(), MakeShareable(new FHeatSourceComponentVisualizer));
+	RegisterComponentVisualizer(UVelocitySourceComponent::StaticClass()->GetFName(), MakeShareable(new FVelocitySourceComponentVisualizer));
+	// NVCHANGE_END: JCAO - Using Component Visualizer to display the field sampler component
 }
 
 void FComponentVisualizersModule::ShutdownModule()

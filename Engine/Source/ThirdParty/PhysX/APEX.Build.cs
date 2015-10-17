@@ -87,6 +87,12 @@ public class APEX : ModuleRules
 				APEXDir + "module/destructible/public",
 				APEXDir + "module/clothing/public",
 				APEXDir + "module/legacy/public",
+                // NVCHANGE_BEGIN : JCAO - Add Turbulence Module
+                APEXDir + "module/basicfs/public",
+                APEXDir + "module/fieldsampler/public",
+                APEXDir + "module/turbulencefs/public",
+                APEXDir + "module/particles/public",
+                // NVCHANGE_END: JCAO - Add Turbulence Module
 				APEXDir + "NxParameterized/public",
 			}
 			);
@@ -120,6 +126,9 @@ public class APEX : ModuleRules
 				"APEX_Legacy{0}_x64.dll",
 				"APEX_Loader{0}_x64.dll",
 				"APEX_Particles{0}_x64.dll",
+                // NVCHANGE_BEGIN : JCAO - Add Turbulence Module
+                "APEX_Turbulence{0}_x64.dll",
+                // NVCHANGE_END: JCAO - Add Turbulence Module
 				"ApexFramework{0}_x64.dll",
 			};
 
@@ -144,6 +153,9 @@ public class APEX : ModuleRules
 				"APEX_Legacy{0}_x86.dll",
 				"APEX_Loader{0}_x86.dll",
 				"APEX_Particles{0}_x86.dll",
+                // NVCHANGE_BEGIN : JCAO - Add Turbulence Module
+                "APEX_Turbulence{0}_x86.dll",
+                // NVCHANGE_END: JCAO - Add Turbulence Module
 				"ApexFramework{0}_x86.dll",
 			};
 

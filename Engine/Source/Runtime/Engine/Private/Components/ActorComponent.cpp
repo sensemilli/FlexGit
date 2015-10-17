@@ -114,6 +114,12 @@ UActorComponent::UActorComponent(const FObjectInitializer& ObjectInitializer /*=
 #if WITH_EDITOR
 	bCanUseCachedOwner = true;
 #endif
+
+	// NVCHANGE_BEGIN: JCAO - Check if to enable the component by the defined PhysX Level
+	bEnableForPhysXLevel0 = true;
+	bEnableForPhysXLevel1 = true;
+	bEnableForPhysXLevel2 = true;
+	// NVCHANGE_END: JCAO - Check if to enable the component by the defined PhysX Level
 }
 
 void UActorComponent::PostInitProperties()
