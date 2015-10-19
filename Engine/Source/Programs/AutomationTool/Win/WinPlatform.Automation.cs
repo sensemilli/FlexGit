@@ -37,6 +37,9 @@ public abstract class BaseWinPlatform : Platform
 
         // Hairworks DLL
         StageExecutable("dll", SC, CommandUtils.CombinePaths(SC.LocalRoot, "Engine/Binaries/ThirdParty/Hairworks"), "*.", true);
+		
+		// WaveWorks DLL
+        StageExecutable("dll", SC, CommandUtils.CombinePaths(SC.LocalRoot, "Engine/Binaries/ThirdParty/WaveWorks"), "*.", true);
 
         // NVCHANGE_BEGIN: Add VXGI
         StageExecutable("dll", SC, CommandUtils.CombinePaths(SC.LocalRoot, "Engine/Binaries/ThirdParty/GameWorks/VXGI"), "*.", true);
