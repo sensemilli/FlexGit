@@ -7,17 +7,17 @@ Please follow the below instructions exactly, if you experience any issues, then
 
 1. Download or Clone to your computer somewhere
 
-3. Run Setup.bat in the root path
+3. Double click Setup.bat in the root path (If asked to overwrite files, select 'N')
 
-4. Once the above has complete (needs to download about 3.4gb of prereqs). Run GenerateProjectFiles.bat
+4. Once the above has complete (needs to download about 3.4gb of prereqs). Double click GenerateProjectFiles.bat
 
-5. Open UE4.sln and compile UE4 solution.
+5. Open UE4.sln and set Configuration to "Development Editor". Right click on UE4 in the solution explorer and select "Build"
 
-6. Once compilation has completed, Recompile ShaderCompilerWorker (under programs in Solution Explorer)
+6. Once compilation has completed, Find ShaderCompilerWorker under programs in Solution Explorer and right click on it and select "Build"
 
 7. Launch UE4Editor.exe (or Start Debugging)
 
-8. Wait for launch procedure to complete, it will get stuck on 45% for a while, since its compiling shaders. 
+8. Wait for launch procedure to complete, it will get stuck on 45% for a while, since its compiling shaders. If you get an error relating to ShaderCompilerWorker, it means you did not complete Step 6
 
 Unreal Engine
 =============
