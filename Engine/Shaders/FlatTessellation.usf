@@ -91,7 +91,12 @@ struct FFlatTessellationHSToDS
 		O.PassSpecificData = I[ControlPointID];
 		O.TessellationMultiplier = GetTessellationMultiplier( I[ControlPointID] );
 
-#if DISPLACEMENT_ANTICRACK
+#if WITH_GFSDK_WAVEWORKS
+		
+		// Use WaveWorks tessellation multiplier instead of material (Does edge fixing)
+		O.TessellationMultiplier = GFSDK_WaveWorks_GetEdgeTessellationFactor(I[ControlPointID].Position, I[NextControlPointID].Position);
+
+#elif DISPLACEMENT_ANTICRACK
 		// NextControlPointID is first opposite edge vert
 		// NextNextControlPointID is second opposite edge vert
 		const uint NextNextControlPointID = NextControlPointID < 2 ? NextControlPointID + 1 : 0;
@@ -113,6 +118,15 @@ struct FFlatTessellationHSToDS
 #endif
 
 #if DOMAINSHADER
+
+	// Performs WaveWorks specific interpolation
+	FPassSpecificVSToDS PassWaveWorksInterpolate(FPassSpecificVSToDS Interpolants, float4 nv_waveworks_attr36, float4 nv_waveworks_attr37, float4 nv_waveworks_attr38, float3 nv_waveworks_attr39)
+	{
+		FPassSpecificVSToDS Output = Interpolants;
+		Output.FactoryInterpolants = VertexFactoryWaveWorksInterpolate(Output.FactoryInterpolants, nv_waveworks_attr36, nv_waveworks_attr37, nv_waveworks_attr38, nv_waveworks_attr39);
+		return Output;
+	}
+
 	[domain("tri")]
 	TESSELLATION_ATTRIBUTES
 	FPassSpecificVSToPS MainDomain(
@@ -133,10 +147,25 @@ struct FFlatTessellationHSToDS
 		FPassSpecificVSToDS Interp = PassInterpolate(
 			PassInterpolate( I[0].PassSpecificData, U, I[1].PassSpecificData, V ), 1.f,
 			I[2].PassSpecificData, W );
-																		
+																
+#if WITH_GFSDK_WAVEWORKS
+
+		// Get displaced position and send to Vertex Factory for storing
+		GFSDK_WAVEWORKS_VERTEX_OUTPUT Out = GFSDK_WaveWorks_GetDisplacedVertexAfterTessellation(WorldPosition.xyz + View.ViewOrigin.xyz);
+		Interp = PassWaveWorksInterpolate(Interp, Out.interp.nv_waveworks_attr36, Out.interp.nv_waveworks_attr37, Out.interp.nv_waveworks_attr38, Out.interp.nv_waveworks_attr39);	
+
+#endif
+
 		FMaterialTessellationParameters MaterialParameters = GetMaterialTessellationParameters(Interp.FactoryInterpolants, WorldPosition.xyz);
 
-#if DISPLACEMENT_ANTICRACK
+#if WITH_GFSDK_WAVEWORKS
+
+		// Store the actual displacement value for use in the material editor
+		MaterialParameters.WaveWorksDisplacement = Out.world_displacement;
+
+#endif
+		
+#if DISPLACEMENT_ANTICRACK && !WITH_GFSDK_WAVEWORKS
 
 		float2 DisplacementTexCoords = 0;
 #if NUM_MATERIAL_TEXCOORDS

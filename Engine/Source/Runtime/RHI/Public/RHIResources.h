@@ -644,6 +644,9 @@ public:
 		SetRenderState(ViewMatrix, ShaderInputMappings);
 	}
 	virtual void SetRenderState(const FMatrix ViewMatrix, const TArray<uint32>& ShaderInputMappings) {}
+	virtual void CreateQuadTree(struct GFSDK_WaveWorks_Quadtree** OutWaveWorksQuadTreeHandle, int32 MeshDim, float MinPatchLength, uint32 AutoRootLOD, float UpperGridCoverage, float SeaLevel, bool UseTessellation, float TessellationLOD, float GeoMoprhingDegree) {}
+	virtual void DrawQuadTree(struct GFSDK_WaveWorks_Quadtree* WaveWorksQuadTreeHandle, FMatrix ViewMatrix, FMatrix ProjMatrix, const TArray<uint32>& ShaderInputMappings) {}
+	virtual void DestroyQuadTree(struct GFSDK_WaveWorks_Quadtree* WaveWorksQuadTreeHandle) {}
 	struct GFSDK_WaveWorks_Simulation* Simulation;
 	// FRHIUniformBuffer* VertexShaderUniformBuffer;
 };

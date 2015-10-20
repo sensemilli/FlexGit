@@ -111,9 +111,14 @@ EnginePrivate.h: Unreal engine private header file.
 #include "DeviceProfiles/DeviceProfile.h"
 #include "DeviceProfiles/DeviceProfileManager.h"
 
+// WAVEWORKS
 #include "Engine/WaveWorks.h"
+#include "Components/WaveWorksComponent.h"
+#include "WaveWorksRender.h"
+
 #include "Engine/CanvasRenderTarget2D.h"
 #include "Engine/RenderToTextureFlowMap.h"
+// END WAVEWORKS
 
 // NVCHANGE_BEGIN: JCAO - Add Turbulence Header
 #include "FieldSampler/AttractorActor.h"

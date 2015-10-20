@@ -35,8 +35,9 @@ public:
 
 	void Serialize(FArchive& Ar);
 
-private:
+public:
 	bool bIsBound;
 	// mapping of WaveWorks shader input (see RHIGetWaveWorksShaderInput()) to resource slot
 	TArray<uint32> ShaderInputMappings;
+	TArray<uint32> QuadTreeShaderInputMappings;
 };

@@ -68,11 +68,17 @@ void* FNullDynamicRHI::GetStaticBuffer()
 namespace
 {
 	TArray<WaveWorksShaderInput> ShaderInput;
+	TArray<WaveWorksShaderInput> QuadTreeShaderInput;
 }
 
 const TArray<WaveWorksShaderInput>& FNullDynamicRHI::RHIGetWaveWorksShaderInput()
 {
 	return ShaderInput;
+}
+
+const TArray<WaveWorksShaderInput>& FNullDynamicRHI::RHIGetWaveWorksQuadTreeShaderInput()
+{
+	return QuadTreeShaderInput;
 }
 
 

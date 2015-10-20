@@ -299,11 +299,17 @@ void FMetalDynamicRHI::RHIGraphicsWaitOnAsyncComputeJob(uint32 FenceIndex)
 namespace
 {
 	TArray<WaveWorksShaderInput> ShaderInput;
+	TArray<WaveWorksShaderInput> QuadTreeShaderInput;
 }
 
 const TArray<WaveWorksShaderInput>& FMetalDynamicRHI::RHIGetWaveWorksShaderInput()
 {
 	return ShaderInput;
+}
+
+const TArray<WaveWorksShaderInput>& FMetalDynamicRHI::RHIGetWaveWorksQuadTreeShaderInput()
+{
+	return QuadTreeShaderInput;
 }
 
 FWaveWorksRHIRef FMetalDynamicRHI::RHICreateWaveWorks(const struct GFSDK_WaveWorks_Simulation_Settings& Settings, const struct GFSDK_WaveWorks_Simulation_Params& Params)

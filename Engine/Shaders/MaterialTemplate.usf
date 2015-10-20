@@ -15,10 +15,6 @@
 	#include "SpeedTreeCommon.usf"
 #endif
 
-#if USES_WAVEWORKS
-	#include "WaveWorks.usf"
-#endif
-
 #define NUM_MATERIAL_TEXCOORDS_VERTEX %s
 #define NUM_MATERIAL_TEXCOORDS %s
  
@@ -193,6 +189,12 @@ struct FMaterialPixelParameters
 #if (ES2_PROFILE || ES3_1_PROFILE)
 	float4 LayerWeights;
 #endif
+
+	float3 WaveWorksNormal;
+	float3 WaveWorksEyeDir;
+	float WaveWorksFoamSurfaceFolding;
+	float WaveWorksFoamTurbulentEnergy;
+	float WaveWorksFoamWaveHats;
 };
 
 // @todo compat hack
@@ -267,6 +269,8 @@ struct FMaterialTessellationParameters
 
 	// TangentToWorld[2] is WorldVertexNormal, [0] and [1] are binormal and tangent
 	float3x3 TangentToWorld;
+
+	float3 WaveWorksDisplacement;
 };
 
 /** 
@@ -1001,54 +1005,34 @@ float3 GetSpeedTreeVertexOffset(FMaterialVertexParameters Parameters, int Geomet
 
 #endif
 
-#if USES_WAVEWORKS
-
-/** Helper function to retrieve BlendFactors from last two TexCoords */
-float4 WaveWorksBlendFactors(float2 TexCoords[NUM_MATERIAL_TEXCOORDS])
-{
-#if !COMPUTESHADER
-	return float4(TexCoords[NUM_MATERIAL_TEXCOORDS-2], TexCoords[NUM_MATERIAL_TEXCOORDS-1]);
-#else
-	return float4(0,0,0,0);
-#endif
-}
-
 /** Domain shader for WaveWorks */
-float3 WaveWorksDisplacement(FMaterialTessellationParameters Parameters, float2 UVs)
+float3 WaveWorksDisplacement(FMaterialTessellationParameters Parameters)
 {
-#if !COMPUTESHADER
-	float4 BlendFactors = WaveWorksBlendFactors(Parameters.TexCoords);
-	float3 Displacement = GFSDK_WaveWorks_GetDisplacement(UVs, BlendFactors);
-	return TransformTangentVectorToWorld_PreScaled(Parameters, Displacement);
+#if WITH_GFSDK_WAVEWORKS
+	return Parameters.WaveWorksDisplacement;
 #else
 	return float3(0,0,0);
 #endif
 }
 
 /** Pixel shader for WaveWorks */
-float3 WaveWorksNormal(FMaterialPixelParameters Parameters, float2 UVs)
+float3 WaveWorksNormal(FMaterialPixelParameters Parameters)
 {
-#if !COMPUTESHADER
-	float4 BlendFactors = WaveWorksBlendFactors(Parameters.TexCoords);
-	GFSDK_WAVEWORKS_SURFACE_ATTRIBUTES Attributes = GFSDK_WaveWorks_GetSurfaceAttributes(UVs, BlendFactors);
-	return Attributes.Normal;
+#if WITH_GFSDK_WAVEWORKS
+	return Parameters.WaveWorksNormal;
 #else
 	return float3(0,0,0);
 #endif
 }
 
-float3 WaveWorksFoam(FMaterialPixelParameters Parameters, float2 UVs)
+float3 WaveWorksFoam(FMaterialPixelParameters Parameters)
 {
-#if !COMPUTESHADER
-	float4 BlendFactors = WaveWorksBlendFactors(Parameters.TexCoords);
-	GFSDK_WAVEWORKS_SURFACE_ATTRIBUTES Attributes = GFSDK_WaveWorks_GetSurfaceAttributes(UVs, BlendFactors);
-	return float3(Attributes.FoamSurfaceFolding, Attributes.FoamTurbulentEnergy, Attributes.FoamWaveHats);
+#if WITH_GFSDK_WAVEWORKS
+	return float3(Parameters.WaveWorksFoamSurfaceFolding, Parameters.WaveWorksFoamTurbulentEnergy, Parameters.WaveWorksFoamWaveHats);
 #else
 	return float3(0,0,0);
 #endif
 }
-
-#endif
 
 MaterialFloat2 GetLightmapUVs(FMaterialPixelParameters Parameters)
 {

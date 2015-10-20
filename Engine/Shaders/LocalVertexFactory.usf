@@ -4,6 +4,11 @@
 	LocalVertexFactory.usf: Local vertex factory shader code.
 =============================================================================*/
 
+#if WITH_GFSDK_WAVEWORKS
+	#include "GFSDK_WaveWorks_Quadtree.usf"
+	#include "GFSDK_WaveWorks_Attributes.usf"
+#endif
+
 #include "VertexFactoryCommon.usf"
 #include "LocalVertexFactoryCommon.usf"
 
@@ -142,6 +147,12 @@ half3 SkinNormal(float3 LocalNormal, float4 ClusterWeights, int4 ClusterIndices)
 
 #endif // USE_FLEX_DEFORM
 
+#if WITH_GFSDK_WAVEWORKS
+struct FVertexFactoryInput
+{
+	float2 Position : ATTRIBUTE0;
+};
+#else
 struct FVertexFactoryInput
 {
 	float4	Position	: ATTRIBUTE0;
@@ -195,7 +206,14 @@ struct FVertexFactoryInput
 	float2	LightMapCoordinate : ATTRIBUTE15;
 #endif
 };
+#endif
 
+#if WITH_GFSDK_WAVEWORKS
+struct FPositionOnlyVertexFactoryInput
+{
+	float2 Position : ATTRIBUTE0;
+};
+#else
 struct FPositionOnlyVertexFactoryInput
 {
 	float4	Position	: ATTRIBUTE0;
@@ -212,6 +230,7 @@ struct FPositionOnlyVertexFactoryInput
 	half4 InstanceTransform3 : ATTRIBUTE11; // hitproxy.b in .w
 #endif	// USE_INSTANCING && !USE_INSTANCING_EMULATED
 };
+#endif
 
 struct FVertexFactoryIntermediates
 {
@@ -315,8 +334,16 @@ FMaterialPixelParameters GetMaterialPixelParameters(FVertexFactoryInterpolantsVS
 	Result.Particle.SubUVCoords[1] = GetUV(Interpolants, 0);
 #endif	// USE_PARTICLE_SUBUVS
 
+#if WITH_GFSDK_WAVEWORKS
+
+	// Create normals (Since none exist in the input layout)
+	half3 TangentToWorld0 = half3(1,0,0);
+	half4 TangentToWorld2 = half4(0,0,1,0);
+
+#else
 	half3 TangentToWorld0 = GetTangentToWorld0(Interpolants).xyz;
 	half4 TangentToWorld2 = GetTangentToWorld2(Interpolants);
+#endif
 	Result.UnMirrored = TangentToWorld2.w;
 
 	Result.VertexColor = GetColor(Interpolants);
@@ -341,6 +368,25 @@ FMaterialPixelParameters GetMaterialPixelParameters(FVertexFactoryInterpolantsVS
 #endif	// LIGHTMAP_UV_ACCESS
 
 	Result.TwoSidedSign = 1;
+
+#if WITH_GFSDK_WAVEWORKS
+
+	// Calculate surface attributes using interpolated values from the Domain Shader
+	GFSDK_WAVEWORKS_INTERPOLATED_VERTEX_OUTPUT Interp = (GFSDK_WAVEWORKS_INTERPOLATED_VERTEX_OUTPUT)0;
+	Interp.nv_waveworks_attr36 = Interpolants.nv_waveworks_attr36;
+    Interp.nv_waveworks_attr37 = Interpolants.nv_waveworks_attr37;
+    Interp.nv_waveworks_attr38 = Interpolants.nv_waveworks_attr38;
+    Interp.nv_waveworks_attr39 = Interpolants.nv_waveworks_attr39;
+
+	GFSDK_WAVEWORKS_SURFACE_ATTRIBUTES Attribs = GFSDK_WaveWorks_GetSurfaceAttributes(Interp);
+	Result.WaveWorksNormal = Attribs.normal;
+	Result.WaveWorksEyeDir = Attribs.eye_dir;
+	Result.WaveWorksFoamSurfaceFolding = Attribs.foam_surface_folding;
+	Result.WaveWorksFoamTurbulentEnergy = Attribs.foam_turbulent_energy;
+	Result.WaveWorksFoamWaveHats = Attribs.foam_wave_hats;
+
+#endif
+
 	return Result;
 }
 
@@ -370,22 +416,29 @@ FMaterialVertexParameters GetMaterialVertexParameters(FVertexFactoryInput Input,
 	Result.PerInstanceParams = Intermediates.PerInstanceParams;
 #endif	// USE_INSTANCING
 
-#if NUM_MATERIAL_TEXCOORDS_VERTEX
-	#if NUM_MATERIAL_TEXCOORDS_VERTEX > 1
-		UNROLL
-		for(int CoordinateIndex = 0; CoordinateIndex < NUM_MATERIAL_TEXCOORDS_VERTEX-1; CoordinateIndex+=2)
-		{
-			Result.TexCoords[CoordinateIndex] = Input.PackedTexCoords4[CoordinateIndex/2].xy;
-			if( CoordinateIndex+1 < NUM_MATERIAL_TEXCOORDS_VERTEX )
+#if !WITH_GFSDK_WAVEWORKS
+
+	// No texture coordinates provided in Input Layout
+	// @todo: Calculate a set of texture coordinates
+	#if NUM_MATERIAL_TEXCOORDS_VERTEX
+		#if NUM_MATERIAL_TEXCOORDS_VERTEX > 1
+			UNROLL
+			for(int CoordinateIndex = 0; CoordinateIndex < NUM_MATERIAL_TEXCOORDS_VERTEX-1; CoordinateIndex+=2)
 			{
-				Result.TexCoords[CoordinateIndex+1] = Input.PackedTexCoords4[CoordinateIndex/2].zw;
+				Result.TexCoords[CoordinateIndex] = Input.PackedTexCoords4[CoordinateIndex/2].xy;
+				if( CoordinateIndex+1 < NUM_MATERIAL_TEXCOORDS_VERTEX )
+				{
+					Result.TexCoords[CoordinateIndex+1] = Input.PackedTexCoords4[CoordinateIndex/2].zw;
+				}
 			}
-		}
-	#endif	// NUM_MATERIAL_TEXCOORDS_VERTEX > 1
-	#if NUM_MATERIAL_TEXCOORDS_VERTEX % 2 == 1
-		Result.TexCoords[NUM_MATERIAL_TEXCOORDS_VERTEX-1] = Input.PackedTexCoords2;
-	#endif	// NUM_MATERIAL_TEXCOORDS_VERTEX % 2 == 1
-#endif	// NUM_MATERIAL_TEXCOORDS_VERTEX
+		#endif	// NUM_MATERIAL_TEXCOORDS_VERTEX > 1
+		#if NUM_MATERIAL_TEXCOORDS_VERTEX % 2 == 1
+			Result.TexCoords[NUM_MATERIAL_TEXCOORDS_VERTEX-1] = Input.PackedTexCoords2;
+		#endif	// NUM_MATERIAL_TEXCOORDS_VERTEX % 2 == 1
+	#endif	// NUM_MATERIAL_TEXCOORDS_VERTEX
+
+#endif // !WITH_GFSDK_WAVEWORKS
+
 	return Result;
 }
 
@@ -522,6 +575,13 @@ float4 CalcWorldPosition(float4 Position)
 	return TransformLocalToTranslatedWorld(LocalPos.xyz);
 	*/
 	return INVARIANT(TransformLocalToTranslatedWorld(float3(mul(Position, CalcSliceTransform(dot(Position.xyz, SplineMeshDir))).xyz)));
+#elif WITH_GFSDK_WAVEWORKS
+
+	// Calculate world position of quad prior to tessellation
+	GFSDK_WAVEWORKS_VERTEX_INPUT VertexInput;
+	VertexInput.nv_waveworks_quad7 = Position;
+	return INVARIANT(float4(GFSDK_WaveWorks_GetUndisplacedVertexWorldPosition(VertexInput), 1.0f));
+
 #else
 	return TransformLocalToTranslatedWorld(Position.xyz);
 #endif
@@ -530,7 +590,15 @@ float4 CalcWorldPosition(float4 Position)
 half3x3 CalcTangentToLocal(FVertexFactoryInput Input)
 {
 	half3x3 Result;
+
+#if WITH_GFSDK_WAVEWORKS
+
+	// Create normal
+	half4 TangentZ = TangentBias(float4(0,0,1,0));
+
+#else
 	half4 TangentZ = TangentBias(Input.TangentZ);
+#endif
 
 #if USE_SPLINEDEFORM
 	// Make slice rotation matrix, and use that to transform tangents
@@ -542,6 +610,11 @@ half3x3 CalcTangentToLocal(FVertexFactoryInput Input)
 
 	TangentZ.xyz = SkinNormal(TangentZ.xyz, Input.ClusterWeights, Input.ClusterIndices);
 	half3 TangentX = SkinNormal(TangentBias(Input.TangentX).xyz, Input.ClusterWeights, Input.ClusterIndices);
+
+#elif WITH_GFSDK_WAVEWORKS
+
+	// Create tangent
+	half3 TangentX = TangentBias(float3(1,0,0));
 
 #else
 	// pass-thru the tangent
@@ -579,10 +652,20 @@ FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput In
 
 	Intermediates.TangentToLocal = CalcTangentToLocal(Input);
 	Intermediates.TangentToWorld = CalcTangentToWorld(Input,Intermediates.TangentToLocal);
+
+#if WITH_GFSDK_WAVEWORKS
+	
+	// Zero out uneeded values
+	Intermediates.TangentToWorldSign = 0;
+	Intermediates.Color = half4(1,1,1,1);
+
+#else
 	Intermediates.TangentToWorldSign = TangentBias(Input.TangentZ.w) * Primitive.LocalToWorldDeterminantSign;
 
 	// Swizzle vertex color.
 	Intermediates.Color = Input.Color FCOLOR_COMPONENT_SWIZZLE;
+#endif
+
 #if USE_INSTANCING
 	// x = per-instance random, y = per-instance fade out factor, z = zero or one depending of if it is shown at all, w is dither cutoff 
 
@@ -627,6 +710,8 @@ float4 VertexFactoryGetWorldPosition(FVertexFactoryInput Input, FVertexFactoryIn
 	return CalcWorldPosition(Input.Position, GetInstanceTransform(Input)) * Intermediates.PerInstanceParams.z;
 #elif USE_FLEX_DEFORM
 	return CalcWorldPosition(Input.Position, Input.ClusterWeights, Input.ClusterIndices);
+#elif WITH_GFSDK_WAVEWORKS
+	return CalcWorldPosition(float4(Input.Position,0,1));
 #else
 	return CalcWorldPosition(Input.Position);
 #endif	// USE_INSTANCING
@@ -695,6 +780,8 @@ float4 VertexFactoryGetWorldPosition(FPositionOnlyVertexFactoryInput Input)
 	return CalcWorldPosition(Input.Position, GetInstanceTransform(Input));
 #elif USE_FLEX_DEFORM
 	return CalcWorldPosition(Input.Position, Input.ClusterWeights, Input.ClusterIndices);
+#elif WITH_GFSDK_WAVEWORKS
+	return CalcWorldPosition(float4(Input.Position,0,1));
 #else
 	return CalcWorldPosition(Input.Position);
 #endif	// USE_INSTANCING
@@ -819,6 +906,23 @@ float4 VertexFactoryGetPreviousWorldPosition(FVertexFactoryInput Input, FVertexF
 
 		return TangentToWorld;
 	}
+
+	// Stores the WaveWorks interpolants to be sent to the Pixel Shader
+	FVertexFactoryInterpolantsVSToDS VertexFactoryWaveWorksInterpolate(FVertexFactoryInterpolantsVSToDS Input, float4 nv_waveworks_attr36, float4 nv_waveworks_attr37, float4 nv_waveworks_attr38, float3 nv_waveworks_attr39)
+	{
+		FVertexFactoryInterpolantsVSToDS Output = (FVertexFactoryInterpolantsVSToDS)0;
+		Output.InterpolantsVSToPS = Input.InterpolantsVSToPS;
+
+		#if WITH_GFSDK_WAVEWORKS	
+			Output.InterpolantsVSToPS.nv_waveworks_attr36 = nv_waveworks_attr36;
+			Output.InterpolantsVSToPS.nv_waveworks_attr37 = nv_waveworks_attr37;
+			Output.InterpolantsVSToPS.nv_waveworks_attr38 = nv_waveworks_attr38;
+			Output.InterpolantsVSToPS.nv_waveworks_attr39 = nv_waveworks_attr39;
+		#endif
+
+		return Output;
+	}
+
 #endif // #if USING_TESSELLATION
 
 #if USE_INSTANCING

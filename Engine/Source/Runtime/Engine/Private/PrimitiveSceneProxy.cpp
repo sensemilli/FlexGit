@@ -89,6 +89,7 @@ FPrimitiveSceneProxy::FPrimitiveSceneProxy(const UPrimitiveComponent* InComponen
 ,	NumUncachedStaticLightingInteractions(0)
 ,	HierarchicalLODOverride(0)
 #endif
+,	bWaveWorks(false)
 {
 	check(Scene);
 

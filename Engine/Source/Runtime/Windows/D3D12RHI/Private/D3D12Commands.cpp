@@ -2286,11 +2286,18 @@ void FD3D12CommandContext::RHISetWaveWorksState(FWaveWorksRHIParamRef State, con
 namespace
 {
 	TArray<WaveWorksShaderInput> ShaderInput;
+	TArray<WaveWorksShaderInput> QuadTreeShaderInput;
 }
+
 
 const TArray<WaveWorksShaderInput>& FD3D12CommandContext::RHIGetWaveWorksShaderInput()
 {
 	return ShaderInput;
+}
+
+const TArray<WaveWorksShaderInput>& FD3D12CommandContext::RHIGetWaveWorksQuadTreeShaderInput()
+{
+	return QuadTreeShaderInput;
 }
 
 FWaveWorksRHIRef FD3D12CommandContext::RHICreateWaveWorks(const struct GFSDK_WaveWorks_Simulation_Settings& Settings, const struct GFSDK_WaveWorks_Simulation_Params& Params)

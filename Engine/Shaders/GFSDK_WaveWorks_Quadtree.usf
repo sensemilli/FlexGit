@@ -1,0 +1,77 @@
+/*
+ * This code contains NVIDIA Confidential Information and is disclosed 
+ * under the Mutual Non-Disclosure Agreement. 
+ * 
+ * Notice 
+ * ALL NVIDIA DESIGN SPECIFICATIONS AND CODE ("MATERIALS") ARE PROVIDED "AS IS" NVIDIA MAKES 
+ * NO REPRESENTATIONS, WARRANTIES, EXPRESSED, IMPLIED, STATUTORY, OR OTHERWISE WITH RESPECT TO 
+ * THE MATERIALS, AND EXPRESSLY DISCLAIMS ANY IMPLIED WARRANTIES OF NONINFRINGEMENT, 
+ * MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE. 
+ * 
+ * NVIDIA Corporation assumes no responsibility for the consequences of use of such 
+ * information or for any infringement of patents or other rights of third parties that may 
+ * result from its use. No license is granted by implication or otherwise under any patent 
+ * or patent rights of NVIDIA Corporation. No third party distribution is allowed unless 
+ * expressly authorized by NVIDIA.  Details are subject to change without notice. 
+ * This code supersedes and replaces all information previously supplied. 
+ * NVIDIA Corporation products are not authorized for use as critical 
+ * components in life support devices or systems without express written approval of 
+ * NVIDIA Corporation. 
+ * 
+ * Copyright © 2008- 2013 NVIDIA Corporation. All rights reserved.
+ * 
+ * NVIDIA Corporation and its licensors retain all intellectual property and proprietary
+ * rights in and to this software and related documentation and any modifications thereto.
+ * Any use, reproduction, disclosure or distribution of this software and related
+ * documentation without an express license agreement from NVIDIA Corporation is
+ * strictly prohibited.
+ */
+ 
+ /**
+ * WaveWorks_Quadtree.usf: Code for WaveWorks
+ */
+
+#if SM5_PROFILE
+#else
+#error WaveWorks only supported for SM5_PROFILE
+#endif
+
+// HS
+cbuffer nv_waveworks_quad0 {
+	float4 nv_waveworks_quad1;
+	float4 nv_waveworks_quad2;
+};
+
+// VS
+cbuffer nv_waveworks_quad3 {
+	float4x4 nv_waveworks_quad4;
+	float4 nv_waveworks_quad5;
+	float4 nv_waveworks_quad6;
+};
+struct GFSDK_WAVEWORKS_VERTEX_INPUT
+{
+	float4 nv_waveworks_quad7;
+};
+
+float3 GFSDK_WaveWorks_GetUndisplacedVertexWorldPosition(GFSDK_WAVEWORKS_VERTEX_INPUT In)
+{
+	float2 nv_waveworks_quad8 = In.nv_waveworks_quad7.xy;
+
+	//return mul(float4(nv_waveworks_quad8,In.nv_waveworks_quad7.zw), nv_waveworks_quad4).xyz;
+	float4 temp = float4(nv_waveworks_quad8,In.nv_waveworks_quad7.zw);
+	float3 RotatatedPosition = nv_waveworks_quad4[0].xyz * temp.xxx + nv_waveworks_quad4[1].xyz * temp.yyy + nv_waveworks_quad4[2].xyz + temp.zzz;
+	return (RotatatedPosition + (float3(nv_waveworks_quad4[0].w, nv_waveworks_quad4[1].w, nv_waveworks_quad4[2].w) + View.PreViewTranslation.xyz));
+}
+
+float GFSDK_WaveWorks_GetEdgeTessellationFactor(float4 vertex1, float4 vertex2)
+{
+	float4 nv_waveworks_quad20 = 0.5*(vertex1 + vertex2);
+	float nv_waveworks_quad21 = length (vertex1 - vertex2);
+	float nv_waveworks_quad22 = length(nv_waveworks_quad1.xyz - nv_waveworks_quad20.xyz);
+	return max(1.0,nv_waveworks_quad2.x * nv_waveworks_quad21 / nv_waveworks_quad22);
+}
+float GFSDK_WaveWorks_GetVertexTargetTessellatedEdgeLength(float3 vertex)
+{
+	float nv_waveworks_quad23 = length(nv_waveworks_quad1.xyz - vertex.xyz);
+	return nv_waveworks_quad23 / nv_waveworks_quad2.x;
+}

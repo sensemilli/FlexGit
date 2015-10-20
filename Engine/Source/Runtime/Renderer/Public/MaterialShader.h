@@ -136,6 +136,9 @@ public:
 	virtual bool Serialize(FArchive& Ar) override;
 	virtual uint32 GetAllocatedSize() const override;
 
+	/** */
+	FWaveWorksShaderParameters* GetWaveWorksShaderParameters() { return &WaveWorksParameters; }
+
 private:
 
 	FShaderUniformBufferParameter MaterialUniformBuffer;

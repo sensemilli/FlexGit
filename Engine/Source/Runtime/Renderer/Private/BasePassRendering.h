@@ -764,6 +764,341 @@ protected:
 };
 
 /**
+* Draws a WaveWorks mesh
+*/
+template<typename LightMapPolicyType>
+class TBasePassWaveWorksDrawingPolicy : public FMeshDrawingPolicy
+{
+public:
+
+	/** The data the drawing policy uses for each mesh element. */
+	class ElementDataType
+	{
+	public:
+
+		/** The element's light-map data. */
+		typename LightMapPolicyType::ElementDataType LightMapElementData;
+
+		/** Default constructor. */
+		ElementDataType()
+		{}
+
+		/** Initialization constructor. */
+		ElementDataType(const typename LightMapPolicyType::ElementDataType& InLightMapElementData)
+			: LightMapElementData(InLightMapElementData)
+		{}
+	};
+
+	/** Initialization constructor. */
+	TBasePassWaveWorksDrawingPolicy(
+		const FVertexFactory* InVertexFactory,
+		const FMaterialRenderProxy* InMaterialRenderProxy,
+		const FMaterial& InMaterialResource,
+		ERHIFeatureLevel::Type InFeatureLevel,
+		LightMapPolicyType InLightMapPolicy,
+		EBlendMode InBlendMode,
+		ESceneRenderTargetsMode::Type InSceneTextureMode,
+		FMatrix InViewMatrix,
+		FMatrix InProjMatrix,
+		bool bInEnableSkyLight,
+		bool bInEnableAtmosphericFog,
+		bool bOverrideWithShaderComplexity = false,
+		bool bInAllowGlobalFog = false,
+		bool bInEnableEditorPrimitiveDepthTest = false
+		) :
+		FMeshDrawingPolicy(InVertexFactory, InMaterialRenderProxy, InMaterialResource, bOverrideWithShaderComplexity),
+		LightMapPolicy(InLightMapPolicy),
+		BlendMode(InBlendMode),
+		SceneTextureMode(InSceneTextureMode),
+		bAllowGlobalFog(bInAllowGlobalFog),
+		bEnableSkyLight(bInEnableSkyLight),
+		bEnableEditorPrimitiveDepthTest(bInEnableEditorPrimitiveDepthTest),
+		bEnableAtmosphericFog(bInEnableAtmosphericFog),
+		CurrentViewMatrix(InViewMatrix),
+		CurrentProjMatrix(InProjMatrix)
+	{
+		HullShader = NULL;
+		DomainShader = NULL;
+
+		QuadTreeShaderInputMapping.Add(0xffffffff);
+		QuadTreeShaderInputMapping.Add(0xffffffff);
+
+		FWaveWorksShaderParameters* WaveWorksShaderParams = nullptr;
+
+		const EMaterialTessellationMode MaterialTessellationMode = InMaterialResource.GetTessellationMode();
+
+		if (RHISupportsTessellation(GShaderPlatformForFeatureLevel[InFeatureLevel])
+			&& InVertexFactory->GetType()->SupportsTessellationShaders()
+			&& MaterialTessellationMode != MTM_NoTessellation)
+		{
+			// Find the base pass tessellation shaders since the material is tessellated
+			HullShader = InMaterialResource.GetShader<TBasePassHS<LightMapPolicyType> >(VertexFactory->GetType());
+			DomainShader = InMaterialResource.GetShader<TBasePassDS<LightMapPolicyType> >(VertexFactory->GetType());
+
+			WaveWorksShaderParams = DomainShader->GetWaveWorksShaderParameters();
+			QuadTreeShaderInputMapping[1] = WaveWorksShaderParams->QuadTreeShaderInputMappings[1];
+		}
+
+		if (bEnableAtmosphericFog)
+		{
+			VertexShader = InMaterialResource.GetShader<TBasePassVS<LightMapPolicyType, true> >(InVertexFactory->GetType());
+		}
+		else
+		{
+			VertexShader = InMaterialResource.GetShader<TBasePassVS<LightMapPolicyType, false> >(InVertexFactory->GetType());
+		}
+
+		WaveWorksShaderParams = VertexShader->GetWaveWorksShaderParameters();
+		QuadTreeShaderInputMapping[0] = WaveWorksShaderParams->QuadTreeShaderInputMappings[0];
+
+		if (bEnableSkyLight)
+		{
+			PixelShader = InMaterialResource.GetShader<TBasePassPS<LightMapPolicyType, true> >(InVertexFactory->GetType());
+		}
+		else
+		{
+			PixelShader = InMaterialResource.GetShader<TBasePassPS<LightMapPolicyType, false> >(InVertexFactory->GetType());
+		}
+
+#if DO_GUARD_SLOW
+		// Somewhat hacky
+		if (SceneTextureMode == ESceneRenderTargetsMode::DontSet && !bEnableEditorPrimitiveDepthTest && InMaterialResource.IsUsedWithEditorCompositing())
+		{
+			SceneTextureMode = ESceneRenderTargetsMode::DontSetIgnoreBoundByEditorCompositing;
+		}
+#endif
+	}
+
+	// FMeshDrawingPolicy interface.
+
+	bool Matches(const TBasePassWaveWorksDrawingPolicy& Other) const
+	{
+		return FMeshDrawingPolicy::Matches(Other) &&
+			VertexShader == Other.VertexShader &&
+			PixelShader == Other.PixelShader &&
+			HullShader == Other.HullShader &&
+			DomainShader == Other.DomainShader &&
+			SceneTextureMode == Other.SceneTextureMode &&
+			bAllowGlobalFog == Other.bAllowGlobalFog &&
+			bEnableSkyLight == Other.bEnableSkyLight &&
+
+			LightMapPolicy == Other.LightMapPolicy;
+	}
+
+	void SetSharedState(FRHICommandList& RHICmdList, const FViewInfo* View, const ContextDataType PolicyContext) const
+	{
+		// Set the light-map policy.
+		LightMapPolicy.Set(RHICmdList, VertexShader, bOverrideWithShaderComplexity ? NULL : PixelShader, VertexShader, PixelShader, VertexFactory, MaterialRenderProxy, View);
+
+		VertexShader->SetParameters(RHICmdList, MaterialRenderProxy, VertexFactory, *MaterialResource, *View, bAllowGlobalFog, SceneTextureMode);
+
+		if (HullShader)
+		{
+			HullShader->SetParameters(RHICmdList, MaterialRenderProxy, *View);
+		}
+
+		if (DomainShader)
+		{
+			DomainShader->SetParameters(RHICmdList, MaterialRenderProxy, VertexFactory, *View);
+		}
+
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+		if (bOverrideWithShaderComplexity)
+		{
+			// If we are in the translucent pass then override the blend mode, otherwise maintain additive blending.
+			if (IsTranslucentBlendMode(BlendMode))
+			{
+				RHICmdList.SetBlendState(TStaticBlendState<CW_RGBA, BO_Add, BF_One, BF_One, BO_Add, BF_Zero, BF_One>::GetRHI());
+			}
+
+			TShaderMapRef<FShaderComplexityAccumulatePS> ShaderComplexityPixelShader(View->ShaderMap);
+			const uint32 NumPixelShaderInstructions = PixelShader->GetNumInstructions();
+			const uint32 NumVertexShaderInstructions = VertexShader->GetNumInstructions();
+			ShaderComplexityPixelShader->SetParameters(RHICmdList, NumVertexShaderInstructions, NumPixelShaderInstructions, View->GetFeatureLevel());
+		}
+		else
+#endif
+		{
+			PixelShader->SetParameters(RHICmdList, MaterialRenderProxy, *MaterialResource, View, BlendMode, bEnableEditorPrimitiveDepthTest, SceneTextureMode);
+
+			switch (BlendMode)
+			{
+			default:
+			case BLEND_Opaque:
+				// Opaque materials are rendered together in the base pass, where the blend state is set at a higher level
+				break;
+			case BLEND_Masked:
+				// Masked materials are rendered together in the base pass, where the blend state is set at a higher level
+				break;
+			case BLEND_Translucent:
+				// Alpha channel is only needed for SeparateTranslucency, before this was preserving the alpha channel but we no longer store depth in the alpha channel so it's no problem
+
+				RHICmdList.SetBlendState(TStaticBlendState<CW_RGBA, BO_Add, BF_SourceAlpha, BF_InverseSourceAlpha, BO_Add, BF_Zero, BF_InverseSourceAlpha>::GetRHI());
+				break;
+			case BLEND_Additive:
+				// Add to the existing scene color
+				// Alpha channel is only needed for SeparateTranslucency, before this was preserving the alpha channel but we no longer store depth in the alpha channel so it's no problem
+				RHICmdList.SetBlendState(TStaticBlendState<CW_RGBA, BO_Add, BF_One, BF_One, BO_Add, BF_Zero, BF_InverseSourceAlpha>::GetRHI());
+				break;
+			case BLEND_Modulate:
+				// Modulate with the existing scene color, preserve destination alpha.
+				RHICmdList.SetBlendState(TStaticBlendState<CW_RGB, BO_Add, BF_DestColor, BF_Zero>::GetRHI());
+				break;
+			};
+		}
+	}
+
+	/**
+	* Create bound shader state using the vertex decl from the mesh draw policy
+	* as well as the shaders needed to draw the mesh
+	* @param DynamicStride - optional stride for dynamic vertex data
+	* @return new bound shader state object
+	*/
+	FBoundShaderStateInput GetBoundShaderStateInput(ERHIFeatureLevel::Type InFeatureLevel)
+	{
+		FPixelShaderRHIParamRef PixelShaderRHIRef = PixelShader->GetPixelShader();
+
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+		if (bOverrideWithShaderComplexity)
+		{
+			TShaderMapRef<FShaderComplexityAccumulatePS> ShaderComplexityAccumulatePixelShader(GetGlobalShaderMap(InFeatureLevel));
+			PixelShaderRHIRef = ShaderComplexityAccumulatePixelShader->GetPixelShader();
+		}
+#endif
+
+		return FBoundShaderStateInput(
+			FMeshDrawingPolicy::GetVertexDeclaration(),
+			VertexShader->GetVertexShader(),
+			GETSAFERHISHADER_HULL(HullShader),
+			GETSAFERHISHADER_DOMAIN(DomainShader),
+			PixelShaderRHIRef,
+			FGeometryShaderRHIRef());
+	}
+
+	void SetMeshRenderState(
+		FRHICommandList& RHICmdList,
+		const FViewInfo& View,
+		const FPrimitiveSceneProxy* PrimitiveSceneProxy,
+		const FMeshBatch& Mesh,
+		int32 BatchElementIndex,
+		bool bBackFace,
+		float DitheredLODTransitionValue,
+		const ElementDataType& ElementData,
+		const ContextDataType PolicyContext
+		) const
+	{
+		// Set the light-map policy's mesh-specific settings.
+		LightMapPolicy.SetMesh(
+			RHICmdList,
+			View,
+			PrimitiveSceneProxy,
+			VertexShader,
+			bOverrideWithShaderComplexity ? NULL : PixelShader,
+			VertexShader,
+			PixelShader,
+			VertexFactory,
+			MaterialRenderProxy,
+			ElementData.LightMapElementData);
+
+		const FMeshBatchElement& BatchElement = Mesh.Elements[BatchElementIndex];
+		VertexShader->SetMesh(RHICmdList, VertexFactory, View, PrimitiveSceneProxy, Mesh, BatchElement, DitheredLODTransitionValue);
+
+		if (HullShader && DomainShader)
+		{
+			HullShader->SetMesh(RHICmdList, VertexFactory, View, PrimitiveSceneProxy, BatchElement, DitheredLODTransitionValue);
+			DomainShader->SetMesh(RHICmdList, VertexFactory, View, PrimitiveSceneProxy, BatchElement, DitheredLODTransitionValue);
+		}
+
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+		if (bOverrideWithShaderComplexity)
+		{
+			// If we are in the translucent pass or rendering a masked material then override the blend mode, otherwise maintain opaque blending
+			if (BlendMode != BLEND_Opaque)
+			{
+				// Add complexity to existing, keep alpha
+				RHICmdList.SetBlendState(TStaticBlendState<CW_RGB, BO_Add, BF_One, BF_One>::GetRHI());
+			}
+
+			const auto FeatureLevel = View.GetFeatureLevel();
+			TShaderMapRef<FShaderComplexityAccumulatePS> ShaderComplexityPixelShader(View.ShaderMap);
+			const uint32 NumPixelShaderInstructions = PixelShader->GetNumInstructions();
+			const uint32 NumVertexShaderInstructions = VertexShader->GetNumInstructions();
+			ShaderComplexityPixelShader->SetParameters(RHICmdList, NumVertexShaderInstructions, NumPixelShaderInstructions, FeatureLevel);
+		}
+		else
+#endif
+		{
+			PixelShader->SetMesh(RHICmdList, VertexFactory, View, PrimitiveSceneProxy, BatchElement, BlendMode, DitheredLODTransitionValue);
+		}
+
+		FMeshDrawingPolicy::SetMeshRenderState(RHICmdList, View, PrimitiveSceneProxy, Mesh, BatchElementIndex, bBackFace, DitheredLODTransitionValue, FMeshDrawingPolicy::ElementDataType(), PolicyContext);
+	}
+
+	void DrawMesh(FRHICommandList& RHICmdList, const FMeshBatch& Mesh, int32 BatchElementIndex)
+	{
+		if (SceneProxy->QuadTreeHandle)
+		{
+			auto WaveWorksRHI = SceneProxy->WaveWorksResource->GetWaveWorksRHI();
+			WaveWorksRHI->DrawQuadTree(
+				SceneProxy->QuadTreeHandle,
+				CurrentViewMatrix,
+				CurrentProjMatrix,
+				QuadTreeShaderInputMapping
+				);
+		}
+	}
+
+	friend int32 CompareDrawingPolicy(const TBasePassWaveWorksDrawingPolicy& A, const TBasePassWaveWorksDrawingPolicy& B)
+	{
+		COMPAREDRAWINGPOLICYMEMBERS(VertexShader);
+		COMPAREDRAWINGPOLICYMEMBERS(PixelShader);
+		COMPAREDRAWINGPOLICYMEMBERS(HullShader);
+		COMPAREDRAWINGPOLICYMEMBERS(DomainShader);
+		COMPAREDRAWINGPOLICYMEMBERS(VertexFactory);
+		COMPAREDRAWINGPOLICYMEMBERS(MaterialRenderProxy);
+		COMPAREDRAWINGPOLICYMEMBERS(SceneTextureMode);
+		COMPAREDRAWINGPOLICYMEMBERS(bAllowGlobalFog);
+		COMPAREDRAWINGPOLICYMEMBERS(bEnableSkyLight);
+
+		return CompareDrawingPolicy(A.LightMapPolicy, B.LightMapPolicy);
+	}
+
+protected:
+	TBasePassVertexShaderBaseType<LightMapPolicyType>* VertexShader;
+	TBasePassHS<LightMapPolicyType>* HullShader;
+	TBasePassDS<LightMapPolicyType>* DomainShader;
+	TBasePassPixelShaderBaseType<LightMapPolicyType>* PixelShader;
+
+	LightMapPolicyType LightMapPolicy;
+	EBlendMode BlendMode;
+
+	ESceneRenderTargetsMode::Type SceneTextureMode;
+
+	uint32 bAllowGlobalFog : 1;
+
+	uint32 bEnableSkyLight : 1;
+
+	/** Whether or not this policy is compositing editor primitives and needs to depth test against the scene geometry in the base pass pixel shader */
+	uint32 bEnableEditorPrimitiveDepthTest : 1;
+	/** Whether or not this policy enables atmospheric fog */
+	uint32 bEnableAtmosphericFog : 1;
+
+public:
+
+	/** Vertex/Hull Shader Input Mappings */
+	TArray<uint32> QuadTreeShaderInputMapping;
+
+	/** The WaveWorks scene proxy */
+	class FWaveWorksSceneProxy* SceneProxy;
+
+	/** The current View matrix */
+	FMatrix CurrentViewMatrix;
+
+	/** The current Projection matrix */
+	FMatrix CurrentProjMatrix;
+};
+
+/**
  * A drawing policy factory for the base pass drawing policy.
  */
 class FBasePassOpaqueDrawingPolicyFactory

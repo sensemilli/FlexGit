@@ -4059,22 +4059,10 @@ protected:
 		}
 
 		if (ShaderFrequency != SF_Domain && ShaderFrequency != SF_Pixel)
-			return Errorf(TEXT("Invalid node used in vertex/hull shader input!"));
-
-		if (UVs < 0)
-			return Errorf(TEXT("UVs input required!"));
+			return Errorf(TEXT("Invalid node used in pixel/hull shader input!"));
 
 		if (!WaveWorksId.IsValid())
 		{
-			EMaterialProperty SavedMaterialProperty = MaterialProperty;
-			TArray<FMaterialFunctionCompileState> SavedFunctionStack = FunctionStack;
-
-			SetMaterialProperty(MP_CustomizedUVs0, SF_Vertex);
-			BlendFactorsCode = GetParameterCode(AddCodeChunk(MCT_Float4,
-				TEXT("GFSDK_WaveWorks_GetBlendFactors(length(Parameters.WorldPosition.xyz - View.ViewOrigin.xyz) * %g);"), DistanceScale));
-			SetMaterialProperty(SavedMaterialProperty, GetMaterialPropertyShaderFrequency(SavedMaterialProperty));
-			FunctionStack = SavedFunctionStack;
-
 			WaveWorksId = WaveWorks->Id;
 		}
 
@@ -4082,9 +4070,7 @@ protected:
 		{
 			return Errorf(TEXT("At most one WaveWorks reference allowed per material!"));
 		}
-
-		FString UVCode = CoerceParameter(UVs, MCT_Float2);
-		return AddCodeChunk(MCT_Float3, TEXT("WaveWorks%s(Parameters, %s)"), *OutputName, *UVCode);
+		return AddCodeChunk(MCT_Float3, TEXT("WaveWorks%s(Parameters);"), *OutputName);
 	}
 };
 

@@ -197,7 +197,7 @@ bool UWaveWorks::PropertiesChanged() const
 const GFSDK_WaveWorks_Simulation_Settings& UWaveWorks::GetSettings() const
 {
 	Settings->detail_level = (GFSDK_WaveWorks_Simulation_DetailLevel)(int)DetailLevel;
-	Settings->fft_period = 400.0f;
+	Settings->fft_period = 4000.0f;
 	Settings->use_Beaufort_scale = bUseBeaufortScale;
 	Settings->readback_displacements = false;
 	Settings->aniso_level = 4;

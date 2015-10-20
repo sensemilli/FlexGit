@@ -1004,6 +1004,7 @@ public:
 	// NVCHANGE_END: Add VXGI
 
 	virtual const TArray<WaveWorksShaderInput>& RHIGetWaveWorksShaderInput() = 0;
+	virtual const TArray<WaveWorksShaderInput>& RHIGetWaveWorksQuadTreeShaderInput() = 0;
 	virtual FWaveWorksRHIRef RHICreateWaveWorks(const struct GFSDK_WaveWorks_Simulation_Settings& Settings, const struct GFSDK_WaveWorks_Simulation_Params& Params) = 0;
 	virtual void RHISetWaveWorksState(FWaveWorksRHIParamRef State, const FMatrix& ViewMatrix, const TArray<uint32>& ShaderInputMappings) = 0;
 };

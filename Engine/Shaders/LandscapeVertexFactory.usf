@@ -792,6 +792,13 @@ float3x3 VertexFactoryGetTangentToLocalDS(FVertexFactoryInterpolantsVSToDS Inter
 {
 	return AssembleTangentToWorld( Interpolants.TangentToWorld0, Interpolants.TangentToWorld2 );
 }
+
+// Dummy function required to ensure shaders don't fail to compile
+FVertexFactoryInterpolantsVSToDS VertexFactoryWaveWorksInterpolate(FVertexFactoryInterpolantsVSToDS Input, float4 nv_waveworks_attr36, float4 nv_waveworks_attr37, float4 nv_waveworks_attr38, float3 nv_waveworks_attr39)
+{
+	return Input;
+}
+
 #endif // #if USING_TESSELLATION
 
 #if NUM_VF_PACKED_INTERPOLANTS > 0

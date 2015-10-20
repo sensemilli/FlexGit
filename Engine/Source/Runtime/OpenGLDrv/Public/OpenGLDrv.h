@@ -485,6 +485,7 @@ public:
 	virtual void RHIGraphicsWaitOnAsyncComputeJob(uint32 FenceIndex) override;
 
 	virtual const TArray<WaveWorksShaderInput>& RHIGetWaveWorksShaderInput() final override;
+	virtual const TArray<WaveWorksShaderInput>& RHIGetWaveWorksQuadTreeShaderInput() final override;
 	virtual FWaveWorksRHIRef RHICreateWaveWorks(const struct GFSDK_WaveWorks_Simulation_Settings& Settings, const struct GFSDK_WaveWorks_Simulation_Params& Params) final override;
 	virtual void RHISetWaveWorksState(FWaveWorksRHIParamRef State, const FMatrix& ViewMatrix, const TArray<uint32>& ShaderInputMappings) final override;
 

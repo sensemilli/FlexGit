@@ -855,6 +855,7 @@ public:
 	}
 
 	virtual const TArray<WaveWorksShaderInput>& RHIGetWaveWorksShaderInput() final override;
+	virtual const TArray<WaveWorksShaderInput>& RHIGetWaveWorksQuadTreeShaderInput() final override;
 	virtual FWaveWorksRHIRef RHICreateWaveWorks(const struct GFSDK_WaveWorks_Simulation_Settings& Settings, const struct GFSDK_WaveWorks_Simulation_Params& Params) final override
 	{
 		return nullptr;
