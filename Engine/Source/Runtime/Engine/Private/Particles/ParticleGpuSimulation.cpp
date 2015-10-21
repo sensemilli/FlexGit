@@ -230,18 +230,21 @@ public:
 		bTexturesCleared = false;
 
 		// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
-		check(!IsValidRef(DensityTextureRHI));
-		check(!IsValidRef(DensityTextureUAV));
+		if (GetFeatureLevel() >= ERHIFeatureLevel::SM5)
+		{
+			check(!IsValidRef(DensityTextureRHI));
+			check(!IsValidRef(DensityTextureUAV));
 
-		DensityTextureRHI = RHICreateTexture2D(
-			SizeX, SizeY, PF_R32_FLOAT,
-			/*NumMips=*/ 1,
-			/*NumSamples=*/ 1,
-			/*Flags=*/ TexCreate_ShaderResource | TexCreate_UAV,
-			CreateInfo);
+			DensityTextureRHI = RHICreateTexture2D(
+				SizeX, SizeY, PF_R32_FLOAT,
+				/*NumMips=*/ 1,
+				/*NumSamples=*/ 1,
+				/*Flags=*/ TexCreate_ShaderResource | TexCreate_UAV,
+				CreateInfo);
 
-		// create UAV for compute shader
-		DensityTextureUAV = RHICreateUnorderedAccessView(DensityTextureRHI);
+			// create UAV for compute shader
+			DensityTextureUAV = RHICreateUnorderedAccessView(DensityTextureRHI);
+		}
 		// NVCHANGE_END: JCAO - Grid Density with GPU particles
 	}
 
