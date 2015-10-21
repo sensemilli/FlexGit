@@ -8,6 +8,7 @@ WaveWorksComponent.cpp: UWaveWorksComponent implementation.
 #include "GFSDK_WaveWorks.h"
 #include "WaveWorksRender.h"
 #include "Materials/MaterialExpressionWaveWorks.h"
+#include "WaveWorksResource.h"
 
 /*-----------------------------------------------------------------------------
 UWaveWorksComponent
@@ -36,7 +37,12 @@ FPrimitiveSceneProxy* UWaveWorksComponent::CreateSceneProxy()
 		if (WaveWorksExpressions.Num() > 0)
 		{
 			const UMaterialExpressionWaveWorks* WaveWorksExpression = WaveWorksExpressions[0];
-			return new FWaveWorksSceneProxy(this, WaveWorksExpression->WaveWorks);
+			UWaveWorks* WaveWorksAsset = WaveWorksExpression->WaveWorks;
+
+			if (WaveWorksAsset->GetWaveWorksResource() && WaveWorksAsset->GetWaveWorksResource()->GetWaveWorksRHI())
+			{
+				return new FWaveWorksSceneProxy(this, WaveWorksExpression->WaveWorks);
+			}
 		}
 	}
 

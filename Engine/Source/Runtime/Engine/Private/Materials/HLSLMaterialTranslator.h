@@ -4053,13 +4053,16 @@ protected:
 
 	virtual int32 WaveWorks(UWaveWorks* WaveWorks, int32 UVs, float DistanceScale, FString OutputName) override
 	{
-		if (ErrorUnlessFeatureLevelSupported(ERHIFeatureLevel::SM5) == INDEX_NONE)
+		if (Material->GetTessellationMode() != MTM_NoTessellation && GetFeatureLevel() >= ERHIFeatureLevel::SM5)
 		{
-			return INDEX_NONE;
+			if (ShaderFrequency != SF_Domain && ShaderFrequency != SF_Pixel)
+				return Errorf(TEXT("Invalid node used in pixel/hull shader input!"));
 		}
-
-		if (ShaderFrequency != SF_Domain && ShaderFrequency != SF_Pixel)
-			return Errorf(TEXT("Invalid node used in pixel/hull shader input!"));
+		else
+		{
+			if (ShaderFrequency != SF_Vertex && ShaderFrequency != SF_Pixel)
+				return Errorf(TEXT("Invalid node used in vertex/pixel shader input!"));
+		}
 
 		if (!WaveWorksId.IsValid())
 		{

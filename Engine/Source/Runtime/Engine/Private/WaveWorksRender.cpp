@@ -57,7 +57,7 @@ FWaveWorksSceneProxy::FWaveWorksSceneProxy(const UWaveWorksComponent* InComponen
 		(uint32) InComponent->AutoRootLOD,
 		InComponent->UpperGridCoverage,
 		InComponent->SeaLevel,
-		InComponent->UseTessellation,
+		InComponent->UseTessellation && (GMaxRHIFeatureLevel >= ERHIFeatureLevel::SM5),
 		InComponent->TessellationLOD,
 		InComponent->GeoMorphingDegree
 		);

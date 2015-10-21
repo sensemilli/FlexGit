@@ -190,11 +190,13 @@ struct FMaterialPixelParameters
 	float4 LayerWeights;
 #endif
 
+#if WITH_GFSDK_WAVEWORKS
 	float3 WaveWorksNormal;
 	float3 WaveWorksEyeDir;
 	float WaveWorksFoamSurfaceFolding;
 	float WaveWorksFoamTurbulentEnergy;
 	float WaveWorksFoamWaveHats;
+#endif
 };
 
 // @todo compat hack
@@ -270,7 +272,9 @@ struct FMaterialTessellationParameters
 	// TangentToWorld[2] is WorldVertexNormal, [0] and [1] are binormal and tangent
 	float3x3 TangentToWorld;
 
+#if WITH_GFSDK_WAVEWORKS
 	float3 WaveWorksDisplacement;
+#endif
 };
 
 /** 
@@ -305,6 +309,10 @@ struct FMaterialVertexParameters
 
 	/** Per-particle properties. Only valid for particle vertex factories. */
 	FMaterialParticleParameters Particle;
+
+#if !USING_TESSELLATION && WITH_GFSDK_WAVEWORKS
+	float3 WaveWorksDisplacement;
+#endif
 };
 
 float3 GetTranslatedWorldPosition(FMaterialVertexParameters Parameters)
@@ -1006,7 +1014,11 @@ float3 GetSpeedTreeVertexOffset(FMaterialVertexParameters Parameters, int Geomet
 #endif
 
 /** Domain shader for WaveWorks */
+#if USING_TESSELLATION
 float3 WaveWorksDisplacement(FMaterialTessellationParameters Parameters)
+#else
+float3 WaveWorksDisplacement(FMaterialVertexParameters Parameters)
+#endif
 {
 #if WITH_GFSDK_WAVEWORKS
 	return Parameters.WaveWorksDisplacement;

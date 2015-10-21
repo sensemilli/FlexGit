@@ -243,6 +243,10 @@ struct FVertexFactoryIntermediates
 	// x = per-instance random, y = per-instance fade out amount, z = hide/show flag, w dither fade cutoff
 	float4 PerInstanceParams;
 #endif	// USE_INSTANCING
+
+#if !USING_TESSELLATION && WITH_GFSDK_WAVEWORKS
+	GFSDK_WAVEWORKS_VERTEX_OUTPUT WaveWorksData;
+#endif
 };
 
 #if USE_INSTANCING
@@ -438,6 +442,10 @@ FMaterialVertexParameters GetMaterialVertexParameters(FVertexFactoryInput Input,
 	#endif	// NUM_MATERIAL_TEXCOORDS_VERTEX
 
 #endif // !WITH_GFSDK_WAVEWORKS
+
+#if !USING_TESSELLATION && WITH_GFSDK_WAVEWORKS
+	Result.WaveWorksDisplacement = Intermediates.WaveWorksData.world_displacement;
+#endif
 
 	return Result;
 }
@@ -688,6 +696,14 @@ FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput In
 		Intermediates.PerInstanceParams.w = 0;
 	#endif
 #endif	// USE_INSTANCING
+
+#if !USING_TESSELLATION && WITH_GFSDK_WAVEWORKS
+	GFSDK_WAVEWORKS_VERTEX_INPUT In;
+	In.nv_waveworks_quad7 = float4(Input.Position.xy, 0, 0);
+
+	Intermediates.WaveWorksData = GFSDK_WaveWorks_GetDisplacedVertex(In);
+#endif
+
 	return Intermediates;
 }
 
@@ -770,6 +786,14 @@ FVertexFactoryInterpolantsVSToPS VertexFactoryGetInterpolantsVSToPS(FVertexFacto
 #if USE_INSTANCING
 	Interpolants.PerInstanceParams = Intermediates.PerInstanceParams;
 #endif
+
+#if !USING_TESSELLATION && WITH_GFSDK_WAVEWORKS
+	Interpolants.nv_waveworks_attr36 = Intermediates.WaveWorksData.interp.nv_waveworks_attr36;
+	Interpolants.nv_waveworks_attr37 = Intermediates.WaveWorksData.interp.nv_waveworks_attr37;
+	Interpolants.nv_waveworks_attr38 = Intermediates.WaveWorksData.interp.nv_waveworks_attr38;
+	Interpolants.nv_waveworks_attr39 = Intermediates.WaveWorksData.interp.nv_waveworks_attr39;
+#endif
+
 	return Interpolants;
 }
 
