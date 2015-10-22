@@ -88,11 +88,16 @@ uint32 FWaveWorksSceneProxy::GetMemoryFootprint(void) const
 
 FPrimitiveViewRelevance FWaveWorksSceneProxy::GetViewRelevance(const FSceneView* View)
 {
+	const bool bIsTranslucent = WaveWorksMaterial->GetBlendMode() == EBlendMode::BLEND_Translucent;
+
 	FPrimitiveViewRelevance ViewRelevance;
 	ViewRelevance.bDrawRelevance = true;
 	ViewRelevance.bDynamicRelevance = true;
 	ViewRelevance.bRenderInMainPass = true;
-	ViewRelevance.bOpaqueRelevance = true;
+	ViewRelevance.bOpaqueRelevance = !bIsTranslucent;
+	ViewRelevance.bNormalTranslucencyRelevance = bIsTranslucent;
+	ViewRelevance.bSeparateTranslucencyRelevance = bIsTranslucent;
+	ViewRelevance.bDistortionRelevance = bIsTranslucent;
 	return ViewRelevance;
 }
 
