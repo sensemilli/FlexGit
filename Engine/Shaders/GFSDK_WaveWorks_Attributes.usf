@@ -83,7 +83,7 @@ struct GFSDK_WAVEWORKS_VERTEX_OUTPUT
 };
 GFSDK_WAVEWORKS_VERTEX_OUTPUT GFSDK_WaveWorks_GetDisplacedVertex(GFSDK_WAVEWORKS_VERTEX_INPUT In)
 {
-	float3 nv_waveworks_attr40 = GFSDK_WaveWorks_GetUndisplacedVertexWorldPosition(In);
+	float3 nv_waveworks_attr40 = GFSDK_WaveWorks_GetUndisplacedVertexWorldPosition(In) + View.ViewOrigin.xyz;
 	float  nv_waveworks_attr41 = length(nv_waveworks_attr1 - nv_waveworks_attr40);
 	float2 nv_waveworks_attr42 = nv_waveworks_attr40.xy * nv_waveworks_attr4.x;
 	float2 nv_waveworks_attr43 = nv_waveworks_attr40.xy * nv_waveworks_attr4.y;

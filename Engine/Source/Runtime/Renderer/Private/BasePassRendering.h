@@ -836,7 +836,10 @@ public:
 			DomainShader = InMaterialResource.GetShader<TBasePassDS<LightMapPolicyType> >(VertexFactory->GetType());
 
 			WaveWorksShaderParams = DomainShader->GetWaveWorksShaderParameters();
-			QuadTreeShaderInputMapping[1] = WaveWorksShaderParams->QuadTreeShaderInputMappings[1];
+			if (WaveWorksShaderParams->QuadTreeShaderInputMappings.Num() > 1)
+			{
+				QuadTreeShaderInputMapping[1] = WaveWorksShaderParams->QuadTreeShaderInputMappings[1];
+			}
 		}
 
 		if (bEnableAtmosphericFog)
@@ -849,7 +852,10 @@ public:
 		}
 
 		WaveWorksShaderParams = VertexShader->GetWaveWorksShaderParameters();
-		QuadTreeShaderInputMapping[0] = WaveWorksShaderParams->QuadTreeShaderInputMappings[0];
+		if (WaveWorksShaderParams->QuadTreeShaderInputMappings.Num() > 0)
+		{
+			QuadTreeShaderInputMapping[0] = WaveWorksShaderParams->QuadTreeShaderInputMappings[0];
+		}
 
 		if (bEnableSkyLight)
 		{
