@@ -57,3 +57,12 @@ FBoxSphereBounds UWaveWorksComponent::CalcBounds(const FTransform& LocalToWorld)
 	NewBounds.SphereRadius = FMath::Sqrt(3.0f * FMath::Square(HALF_WORLD_MAX));
 	return NewBounds;
 }
+
+void UWaveWorksComponent::SampleDisplacements(TArray<FVector2D> InSamplePoints, TArray<FVector4>& OutDisplacements)
+{
+	if (!SceneProxy)
+		return;
+
+	FWaveWorksSceneProxy* WaveWorksSceneProxy = static_cast<FWaveWorksSceneProxy*>(SceneProxy);
+	WaveWorksSceneProxy->SampleDisplacements_GameThread(InSamplePoints, OutDisplacements);
+}

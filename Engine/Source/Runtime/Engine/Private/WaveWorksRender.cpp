@@ -134,3 +134,13 @@ void FWaveWorksSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*
 		}
 	}
 }
+
+/** */
+void FWaveWorksSceneProxy::SampleDisplacements_GameThread(TArray<FVector2D> InSamplePoints, TArray<FVector4>& OutDisplacements)
+{
+	if (!WaveWorksResource)
+		return;
+
+	FWaveWorksRHIRef WaveWorksRHI = WaveWorksResource->GetWaveWorksRHI();
+	WaveWorksRHI->GetDisplacements(InSamplePoints, OutDisplacements);
+}

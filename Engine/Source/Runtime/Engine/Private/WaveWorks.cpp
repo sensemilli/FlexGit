@@ -23,8 +23,13 @@ UWaveWorks::UWaveWorks(const class FObjectInitializer& PCIP)
 	memset(Params, 0, sizeof(*Params));
 
 	DetailLevel = WaveWorksSimulationDetailLevel::High;
+	FFTPeriod = 40000;
+	AnisoLevel = 4;
+	bReadbackDisplacements = true;
 	TimeScale = 0.25f;
-	Wind = { 2.0f, 1.0f };
+	WindDirection = { 1.0f, 1.0f };
+	WindSpeed = 1.0f;
+	BeaufortScale = 4.0f;
 	WindDependency = 0.95f;
 	SmallWaveFraction = 0.0f;
 	bUseBeaufortScale = true;
@@ -105,8 +110,21 @@ void UWaveWorks::UpdateProperties()
 		FString Name = Property->GetName();
 		if (Name.Equals(TEXT("WaveAmplitude")) || 
 			Name.Equals(TEXT("ChoppyScale")) ||
-			Name.StartsWith(TEXT("Foam")))
+			Name.StartsWith(TEXT("Foam")) || 
+			Name.StartsWith(TEXT("WindSpeed")))
 			(Property->*UpdatePropertyFlag)(CPF_EditConst);
+
+		if (Name.StartsWith(TEXT("Beaufort")))
+		{
+			if (bUseBeaufortScale)
+			{
+				Property->ClearPropertyFlags(CPF_EditConst);
+			}
+			else
+			{
+				Property->SetPropertyFlags(CPF_EditConst);
+			}
+		}
 	}
 }
 #endif // WITH_EDITOR
@@ -177,13 +195,12 @@ class FWaveWorksResource* UWaveWorks::GetWaveWorksResource()
 
 bool UWaveWorks::PropertiesChanged() const
 {
-	FVector2D WindDir = Wind.GetSafeNormal();
 	return Settings->detail_level != (GFSDK_WaveWorks_Simulation_DetailLevel)(int)DetailLevel
 		|| Settings->use_Beaufort_scale != bUseBeaufortScale
 		|| Params->wave_amplitude != WaveAmplitude
-		|| Params->wind_dir.x != WindDir.X
-		|| Params->wind_dir.y != WindDir.Y
-		|| Params->wind_speed != Wind.Size()
+		|| Params->wind_dir.x != WindDirection.X
+		|| Params->wind_dir.y != WindDirection.Y
+		|| Params->wind_speed != (bUseBeaufortScale ? BeaufortScale : WindSpeed)
 		|| Params->wind_dependency != WindDependency
 		|| Params->choppy_scale != ChoppyScale
 		|| Params->small_wave_fraction != SmallWaveFraction
@@ -197,10 +214,11 @@ bool UWaveWorks::PropertiesChanged() const
 const GFSDK_WaveWorks_Simulation_Settings& UWaveWorks::GetSettings() const
 {
 	Settings->detail_level = (GFSDK_WaveWorks_Simulation_DetailLevel)(int)DetailLevel;
-	Settings->fft_period = 4000.0f;
+	Settings->fft_period = FFTPeriod;
 	Settings->use_Beaufort_scale = bUseBeaufortScale;
-	Settings->readback_displacements = false;
-	Settings->aniso_level = 4;
+	Settings->readback_displacements = bReadbackDisplacements;
+	Settings->num_readback_FIFO_entries = (bReadbackDisplacements) ? 4 : 0;
+	Settings->aniso_level = (gfsdk_U8)AnisoLevel;
 	Settings->CPU_simulation_threading_model = GFSDK_WaveWorks_Simulation_CPU_Threading_Model_Automatic;
 	Settings->num_GPUs = 0;
 
@@ -210,9 +228,8 @@ const GFSDK_WaveWorks_Simulation_Settings& UWaveWorks::GetSettings() const
 const GFSDK_WaveWorks_Simulation_Params& UWaveWorks::GetParams() const
 {
 	Params->wave_amplitude = WaveAmplitude;
-	FVector2D WindDir = Wind.GetSafeNormal();
-	Params->wind_dir = { WindDir.X, WindDir.Y };
-	Params->wind_speed = Wind.Size();
+	Params->wind_dir = { WindDirection.X, WindDirection.Y };
+	Params->wind_speed = (bUseBeaufortScale) ? BeaufortScale : WindSpeed;
 	Params->wind_dependency = WindDependency;
 	Params->choppy_scale = ChoppyScale;
 	Params->small_wave_fraction = SmallWaveFraction;

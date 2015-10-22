@@ -23,6 +23,9 @@ public:
 	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
 	/* End UPrimitiveComponent interface */
 
+	UFUNCTION(BlueprintCallable, Category="WaveWorks")
+	virtual void SampleDisplacements(TArray<FVector2D> InSamplePoints, TArray<FVector4>& OutDisplacements);
+
 public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="WaveWorks")

@@ -30,29 +30,41 @@ public:
 
 	float Time;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = WaveWorks)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Simulation)
 	TEnumAsByte<WaveWorksSimulationDetailLevel::Type> DetailLevel;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = WaveWorks, meta = (ClampMin = "0.0"))
-	float TimeScale;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = WaveWorks)
-	FVector2D Wind;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = WaveWorks, meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float WindDependency;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = WaveWorks, meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float SmallWaveFraction;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = WaveWorks)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Simulation)
+	float FFTPeriod;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Simulation)
 	bool bUseBeaufortScale;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = WaveWorks, meta = (ClampMin = "0.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Simulation)
+	bool bReadbackDisplacements;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Simulation)
+	int32 AnisoLevel;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Parameters, meta = (ClampMin = "0.0"))
+	float TimeScale;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Parameters)
+	FVector2D WindDirection;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Parameters)
+	float WindSpeed;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Parameters)
+	float BeaufortScale;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Parameters, meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float WindDependency;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Parameters, meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float SmallWaveFraction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Parameters, meta = (ClampMin = "0.0"))
 	float WaveAmplitude;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = WaveWorks, meta = (ClampMin = "0.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Parameters, meta = (ClampMin = "0.0"))
 	float ChoppyScale;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = WaveWorks, meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Parameters, meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float FoamGenerationThreshold;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = WaveWorks, meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Parameters, meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float FoamGenerationAmount;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = WaveWorks, meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Parameters, meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float FoamDissipationSpeed;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = WaveWorks, meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Parameters, meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float FoamFalloffSpeed;
 
 	// Begin UObject interface.

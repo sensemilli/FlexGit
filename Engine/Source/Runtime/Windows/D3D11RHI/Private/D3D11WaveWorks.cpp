@@ -110,7 +110,6 @@ public:
 	{
 		if(Simulation)
 		{
-			// GFSDK_WaveWorks_Simulation_AdvanceStagingCursorD3D11(Simulation, true, DeviceContext, NULL);
 			GFSDK_WaveWorks_Simulation_SetRenderStateD3D11(Simulation, DeviceContext,
 				reinterpret_cast<const gfsdk_float4x4&>(ViewMatrix), ShaderInputMappings.GetData(), NULL);
 		}
@@ -177,6 +176,20 @@ public:
 	virtual void DestroyQuadTree(GFSDK_WaveWorks_Quadtree* WaveWorksQuadTreeHandle)
 	{
 		GFSDK_WaveWorks_Quadtree_Destroy(WaveWorksQuadTreeHandle);
+	}
+
+	virtual void GetDisplacements(TArray<FVector2D> InSamplePoints, TArray<FVector4>& OutDisplacements)
+	{
+		if (Simulation)
+		{
+			OutDisplacements.AddUninitialized(InSamplePoints.Num());
+			gfsdk_waveworks_result Result = GFSDK_WaveWorks_Simulation_GetDisplacements(
+				Simulation,
+				reinterpret_cast<gfsdk_float2*>(InSamplePoints.GetData()),
+				reinterpret_cast<gfsdk_float4*>(OutDisplacements.GetData()),
+				InSamplePoints.Num()
+				);
+		}
 	}
 
 private:

@@ -70,6 +70,9 @@ public:
 	virtual void GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, class FMeshElementCollector& Collector) const override;
 	/* End FPrimitiveSceneProxy Interface */
 
+	/** */
+	void SampleDisplacements_GameThread(TArray<FVector2D> InSamplePoints, TArray<FVector4>& OutDisplacements);
+
 public:
 
 	/** The WaveWorks object */
