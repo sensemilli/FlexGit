@@ -835,7 +835,7 @@ public:
 			HullShader = InMaterialResource.GetShader<TBasePassHS<LightMapPolicyType> >(VertexFactory->GetType());
 			DomainShader = InMaterialResource.GetShader<TBasePassDS<LightMapPolicyType> >(VertexFactory->GetType());
 
-			WaveWorksShaderParams = DomainShader->GetWaveWorksShaderParameters();
+			WaveWorksShaderParams = HullShader->GetWaveWorksShaderParameters();
 			if (WaveWorksShaderParams->QuadTreeShaderInputMappings.Num() > 1)
 			{
 				QuadTreeShaderInputMapping[1] = WaveWorksShaderParams->QuadTreeShaderInputMappings[1];
