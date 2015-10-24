@@ -81,6 +81,93 @@ private:
 };
 
 /**
+* Used to write out depth for opaque and masked materials during the depth-only pass for WaveWorks
+*/
+class FDepthWaveWorksDrawingPolicy : public FMeshDrawingPolicy
+{
+public:
+
+	FDepthWaveWorksDrawingPolicy(
+		const FVertexFactory* InVertexFactory,
+		const FMaterialRenderProxy* InMaterialRenderProxy,
+		const FMaterial& InMaterialResource,
+		FMatrix InViewMatrix,
+		FMatrix InProjMatrix,
+		bool bIsTwoSided,
+		ERHIFeatureLevel::Type InFeatureLevel
+		);
+
+	// FMeshDrawingPolicy interface.
+	bool Matches(const FDepthWaveWorksDrawingPolicy& Other) const
+	{
+		return FDepthWaveWorksDrawingPolicy::Matches(Other)
+			&& bNeedsPixelShader == Other.bNeedsPixelShader
+			&& VertexShader == Other.VertexShader
+			&& PixelShader == Other.PixelShader;
+	}
+
+	void SetSharedState(FRHICommandList& RHICmdList, const FSceneView* View, const ContextDataType PolicyContext) const;
+
+	/**
+	* Create bound shader state using the vertex decl from the mesh draw policy
+	* as well as the shaders needed to draw the mesh
+	* @param DynamicStride - optional stride for dynamic vertex data
+	* @return new bound shader state object
+	*/
+	FBoundShaderStateInput GetBoundShaderStateInput(ERHIFeatureLevel::Type InFeatureLevel);
+
+	void SetMeshRenderState(
+		FRHICommandList& RHICmdList,
+		const FSceneView& View,
+		const FPrimitiveSceneProxy* PrimitiveSceneProxy,
+		const FMeshBatch& Mesh,
+		int32 BatchElementIndex,
+		bool bBackFace,
+		float DitheredLODTransitionValue,
+		const ElementDataType& ElementData,
+		const ContextDataType PolicyContext
+		) const;
+
+	int32 CompareDrawingPolicy(const FDepthWaveWorksDrawingPolicy& A, const FDepthWaveWorksDrawingPolicy& B)
+	{
+		COMPAREDRAWINGPOLICYMEMBERS(VertexShader);
+		COMPAREDRAWINGPOLICYMEMBERS(HullShader);
+		COMPAREDRAWINGPOLICYMEMBERS(DomainShader);
+		COMPAREDRAWINGPOLICYMEMBERS(bNeedsPixelShader);
+		COMPAREDRAWINGPOLICYMEMBERS(PixelShader);
+		COMPAREDRAWINGPOLICYMEMBERS(VertexFactory);
+		COMPAREDRAWINGPOLICYMEMBERS(MaterialRenderProxy);
+		COMPAREDRAWINGPOLICYMEMBERS(bIsTwoSidedMaterial);
+		return 0;
+	}
+
+	/** */
+	void DrawMesh(FRHICommandList& RHICmdList, const FMeshBatch& Mesh, int32 BatchElementIndex);
+
+private:
+	bool bNeedsPixelShader;
+	class FDepthOnlyHS *HullShader;
+	class FDepthOnlyDS *DomainShader;
+
+	TDepthOnlyVS<false>* VertexShader;
+	FDepthOnlyPS* PixelShader;
+
+public:
+
+	/** Vertex/Hull Shader Input Mappings */
+	TArray<uint32> QuadTreeShaderInputMapping;
+
+	/** The WaveWorks scene proxy */
+	class FWaveWorksSceneProxy* SceneProxy;
+
+	/** The current View matrix */
+	FMatrix CurrentViewMatrix;
+
+	/** The current Projection matrix */
+	FMatrix CurrentProjMatrix;
+};
+
+/**
  * Writes out depth for opaque materials on meshes which support a position-only vertex buffer.
  * Using the position-only vertex buffer saves vertex fetch bandwidth during the z prepass.
  */

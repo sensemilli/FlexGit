@@ -98,6 +98,7 @@ FPrimitiveViewRelevance FWaveWorksSceneProxy::GetViewRelevance(const FSceneView*
 	ViewRelevance.bNormalTranslucencyRelevance = bIsTranslucent;
 	ViewRelevance.bSeparateTranslucencyRelevance = bIsTranslucent;
 	ViewRelevance.bDistortionRelevance = bIsTranslucent;
+	ViewRelevance.bRenderCustomDepth = ShouldRenderCustomDepth();
 	return ViewRelevance;
 }
 
@@ -118,7 +119,7 @@ void FWaveWorksSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*
 			Mesh.DynamicVertexStride = 0;
 			Mesh.DynamicVertexData = NULL;
 			Mesh.VertexFactory = &VertexFactory;
-			Mesh.ReverseCulling = false;
+			Mesh.ReverseCulling = true;
 			Mesh.bDisableBackfaceCulling = true;
 			Mesh.bWireframe = ViewFamily.EngineShowFlags.Wireframe;
 			Mesh.Type = PT_3_ControlPointPatchList;

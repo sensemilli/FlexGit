@@ -141,6 +141,9 @@ public:
 		GFSDK_WaveWorks_SavestateHandle QuadTreeSaveState;
 		GFSDK_WaveWorks_Savestate_CreateD3D11(GFSDK_WaveWorks_StatePreserve_All, Device, &QuadTreeSaveState);
 
+		FD3D11DynamicRHI* D3D11RHI = static_cast<FD3D11DynamicRHI*>(GDynamicRHI);
+		D3D11RHI->SetWaveWorksState();
+
 		GFSDK_WaveWorks_Quadtree_SetFrustumCullMargin(
 			WaveWorksQuadTreeHandle,
 			GFSDK_WaveWorks_Simulation_GetConservativeMaxDisplacementEstimate(Simulation)

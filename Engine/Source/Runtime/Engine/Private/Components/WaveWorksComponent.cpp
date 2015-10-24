@@ -53,7 +53,7 @@ FBoxSphereBounds UWaveWorksComponent::CalcBounds(const FTransform& LocalToWorld)
 {
 	FBoxSphereBounds NewBounds;
 	NewBounds.Origin = FVector::ZeroVector;
-	NewBounds.BoxExtent = FVector(HALF_WORLD_MAX, HALF_WORLD_MAX, HALF_WORLD_MAX);
+	NewBounds.BoxExtent = FVector(HALF_WORLD_MAX, HALF_WORLD_MAX, 400.0f);
 	NewBounds.SphereRadius = FMath::Sqrt(3.0f * FMath::Square(HALF_WORLD_MAX));
 	return NewBounds;
 }

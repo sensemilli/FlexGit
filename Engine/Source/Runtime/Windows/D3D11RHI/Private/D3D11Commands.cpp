@@ -1269,6 +1269,12 @@ void FD3D11DynamicRHI::CommitComputeResourceTables(FD3D11ComputeShader* InComput
 	SetResourcesFromTables(ComputeShader);
 }
 
+void FD3D11DynamicRHI::SetWaveWorksState()
+{
+	CommitGraphicsResourceTables();
+	CommitNonComputeShaderConstants();
+}
+
 void FD3D11DynamicRHI::RHIDrawPrimitive(uint32 PrimitiveType,uint32 BaseVertexIndex,uint32 NumPrimitives,uint32 NumInstances)
 {
 	RHI_DRAW_CALL_STATS(PrimitiveType,NumInstances*NumPrimitives);

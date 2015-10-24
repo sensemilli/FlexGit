@@ -785,6 +785,13 @@ protected:
 	/** needs to be called before each dispatch call */
 	virtual void CommitComputeShaderConstants();
 
+public:
+
+	/** @temp */
+	void SetWaveWorksState();
+
+protected:
+
 	template <class ShaderType> void SetResourcesFromTables(const ShaderType* RESTRICT);
 	void CommitGraphicsResourceTables();
 	void CommitComputeResourceTables(FD3D11ComputeShader* ComputeShader);
