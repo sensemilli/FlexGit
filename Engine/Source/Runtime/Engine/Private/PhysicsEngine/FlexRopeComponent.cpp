@@ -636,7 +636,7 @@ void UFlexRopeComponent::Synchronize()
 				{
 					FOverlapResult const& O = Overlaps[OverlapIdx];
 
-					if (!O.Component.IsValid() || O.Component.Get()->IsA(UFlexComponent::StaticClass()))
+					if (!O.Component.IsValid() || O.Component.Get() == this)
 						continue;
 
 					UPrimitiveComponent* TmpPrimComp = O.Component.Get();

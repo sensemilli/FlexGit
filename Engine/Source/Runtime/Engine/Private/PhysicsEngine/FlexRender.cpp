@@ -191,6 +191,8 @@ FFlexGPUVertexFactory::FFlexGPUVertexFactory(const FLocalVertexFactory& Base, co
 	FlexData.ClusterWeights = FVertexStreamComponent(ClusterWeightsVertexBuffer, 0, sizeof(float)*4, VET_Float4);
 	FlexData.ClusterIndices = FVertexStreamComponent(ClusterIndicesVertexBuffer, 0,	sizeof(int16)*4, VET_Short4);
 
+	MaxClusters = 0;
+
 	// have to first initialize our RHI and then recreate it from the static mesh
 	BeginInitResource(this);
 
