@@ -1,7 +1,7 @@
-NVIDIA Merged Branch for 4.9.1
+NVIDIA Merged Branch for 4.9.2
 ==============================
 
-This branch contains VXGI, HBAO+, WaveWorks, HairWorks, FLEX, and Turbulence merged together for UE4 4.9.1.
+This branch contains VXGI, HBAO+, WaveWorks, HairWorks, FLEX, and Turbulence merged together for UE4 4.9.2.
 
 Please follow the below instructions exactly, if you experience any issues, then please contact me, and tell me exactly what issue you are having.
 
