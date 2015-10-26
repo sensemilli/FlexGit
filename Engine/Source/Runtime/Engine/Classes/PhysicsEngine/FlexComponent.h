@@ -12,7 +12,7 @@ class FFlexMeshSceneProxy;
 
 struct FlexExtInstance;
 
-UCLASS(hidecategories = (Object))
+UCLASS(hidecategories = (Object), meta = (BlueprintSpawnableComponent))
 class ENGINE_API UFlexComponent : public UStaticMeshComponent, public IFlexContainerClient
 {
 	GENERATED_UCLASS_BODY()		
