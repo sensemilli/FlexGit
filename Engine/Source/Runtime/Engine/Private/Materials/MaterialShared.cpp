@@ -856,7 +856,7 @@ bool FMaterialResource::IsCrackFreeDisplacementEnabled() const
 
 bool FMaterialResource::IsSeparateTranslucencyEnabled() const 
 { 
-	return Material->bEnableSeparateTranslucency;
+	return Material->bEnableSeparateTranslucency && !IsUIMaterial();
 }
 
 bool FMaterialResource::IsAdaptiveTessellationEnabled() const
@@ -871,7 +871,7 @@ bool FMaterialResource::IsFullyRough() const
 
 bool FMaterialResource::OutputsVelocityOnBasePass() const
 {
-	return Material->bOutputVelocityOnBasePass;
+	return Material->bOutputVelocityOnBasePass && !IsUIMaterial();
 }
 
 bool FMaterialResource::IsNonmetal() const
