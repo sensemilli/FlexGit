@@ -8,6 +8,7 @@
 #include "SimpleElementShaders.h"
 #include "Hair.h"
 #include "HairSceneProxy.h"
+#include "FogRendering.h"
 
 #include "../../Renderer/Private/LightGrid.h"
 
@@ -186,6 +187,12 @@ class FHairWorksMultiLightPs : public FGlobalShader
 		GFSDK_HAIR_RESOURCE_NORMALS.Bind(Initializer.ParameterMap, TEXT("GFSDK_HAIR_RESOURCE_NORMALS"));
 
 		LightGrid.Bind(Initializer.ParameterMap, TEXT("LightGrid"));
+		
+		ExponentialFogParameters.Bind(Initializer.ParameterMap, TEXT("SharedFogParameter0"));
+		ExponentialFogColorParameter.Bind(Initializer.ParameterMap, TEXT("SharedFogParameter1"));
+		InscatteringLightDirection.Bind(Initializer.ParameterMap, TEXT("InscatteringLightDirection"));
+		DirectionalInscatteringColor.Bind(Initializer.ParameterMap, TEXT("DirectionalInscatteringColor"));
+		DirectionalInscatteringStartDistance.Bind(Initializer.ParameterMap, TEXT("DirectionalInscatteringStartDistance"));
 	}
 
 	virtual bool Serialize(FArchive& Ar)
@@ -194,6 +201,11 @@ class FHairWorksMultiLightPs : public FGlobalShader
 
 		Ar << HairConstantBuffer << TextureSampler << RootColorTexture << TipColorTexture << SpecularColorTexture << LightAttenuation << GFSDK_HAIR_RESOURCE_FACE_HAIR_INDICES << GFSDK_HAIR_RESOURCE_TANGENTS << GFSDK_HAIR_RESOURCE_NORMALS;
 		Ar << LightGrid;
+		Ar << ExponentialFogParameters;
+		Ar << ExponentialFogColorParameter;
+		Ar << InscatteringLightDirection;
+		Ar << DirectionalInscatteringColor;
+		Ar << DirectionalInscatteringStartDistance;
 
 		return bShaderHasOutdatedParameters;
 	}
@@ -215,11 +227,11 @@ class FHairWorksMultiLightPs : public FGlobalShader
 		static const auto CVar = IConsoleManager::Get().FindTConsoleVariableDataInt(TEXT("r.ForwardLighting"));
 		bool bForwardLighting = CVar->GetValueOnRenderThread() != 0;
 
+		IRendererModule& RendererModule = FModuleManager::LoadModuleChecked<IRendererModule>("Renderer");
+
 		if (bForwardLighting)
 		{
 			SetUniformBufferParameter(RHICmdList, GetPixelShader(), GetUniformBufferParameter<FForwardLightData>(), View.ForwardLightData);
-
-			IRendererModule& RendererModule = FModuleManager::LoadModuleChecked<IRendererModule>("Renderer");
 			RendererModule.SetLightGridResource(RHICmdList, GetPixelShader(), LightGrid);
 		}
 		else
@@ -227,6 +239,7 @@ class FHairWorksMultiLightPs : public FGlobalShader
 			SetUniformBufferParameter(RHICmdList, GetPixelShader(), GetUniformBufferParameter<FForwardLightData>(), 0);
 			SetSRVParameter(RHICmdList, GetPixelShader(), LightGrid, 0);
 		}
+		RendererModule.SetHeightFogParams(RHICmdList, GetPixelShader(), &View, ExponentialFogParameters, ExponentialFogColorParameter, InscatteringLightDirection, DirectionalInscatteringColor, DirectionalInscatteringStartDistance);
 	}
 
 	static bool ShouldCache(EShaderPlatform Platform)
@@ -255,6 +268,12 @@ protected:
 	FShaderResourceParameter	GFSDK_HAIR_RESOURCE_NORMALS;
 
 	FShaderResourceParameter LightGrid;
+	
+	FShaderParameter ExponentialFogParameters;
+	FShaderParameter ExponentialFogColorParameter;
+	FShaderParameter InscatteringLightDirection;
+	FShaderParameter DirectionalInscatteringColor;
+	FShaderParameter DirectionalInscatteringStartDistance;
 };
 
 IMPLEMENT_SHADER_TYPE(, FHairWorksMultiLightPs, TEXT("HairWorks"), TEXT("MultiLightMain"), SF_Pixel);

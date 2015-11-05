@@ -605,6 +605,7 @@ public:
 
 	/** */
 	virtual void SetLightGridResource(FRHICommandListImmediate& RHICmdList, FPixelShaderRHIParamRef PixelShader, class FShaderResourceParameter& LightGridParam) const = 0;
+	virtual void SetHeightFogParams(FRHICommandListImmediate& RHICmdList, FPixelShaderRHIParamRef PixelShader, const class FSceneView* View, class FShaderParameter& ExponentialFogParameters, class FShaderParameter& ExponentialFogColorParameter, class FShaderParameter& InscatteringLightDirection, class FShaderParameter& DirectionalInscatteringColor, class FShaderParameter& DirectionalInscatteringStartDistance) const = 0;
 };
 
 

@@ -79,6 +79,15 @@ public:
 	{
 		SetSRVParameter(RHICmdList, PixelShader, LightGridParam, GLightGridVertexBuffer.VertexBufferSRV);
 	}
+	virtual void SetHeightFogParams(FRHICommandListImmediate& RHICmdList, FPixelShaderRHIParamRef PixelShader, const class FSceneView* View, FShaderParameter& ExponentialFogParameters, FShaderParameter& ExponentialFogColorParameter, FShaderParameter& InscatteringLightDirection, FShaderParameter& DirectionalInscatteringColor, FShaderParameter& DirectionalInscatteringStartDistance) const
+	{
+		const FViewInfo* ViewInfo = static_cast<const FViewInfo*>(View);
+		SetShaderValue(RHICmdList, PixelShader, ExponentialFogParameters, ViewInfo->ExponentialFogParameters);
+		SetShaderValue(RHICmdList, PixelShader, ExponentialFogColorParameter, FVector4(ViewInfo->ExponentialFogColor, 1.0f - ViewInfo->FogMaxOpacity));
+		SetShaderValue(RHICmdList, PixelShader, InscatteringLightDirection, FVector4(ViewInfo->InscatteringLightDirection, ViewInfo->bUseDirectionalInscattering ? 1 : 0));
+		SetShaderValue(RHICmdList, PixelShader, DirectionalInscatteringColor, FVector4(FVector(ViewInfo->DirectionalInscatteringColor), ViewInfo->DirectionalInscatteringExponent));
+		SetShaderValue(RHICmdList, PixelShader, DirectionalInscatteringStartDistance, ViewInfo->DirectionalInscatteringStartDistance);
+	}
 
 private:
 	TSet<FSceneInterface*> AllocatedScenes;
