@@ -74,6 +74,12 @@ public:
 		return PostOpaqueRenderDelegate.IsBound();
 	}
 
+	/** */
+	virtual void SetLightGridResource(FRHICommandListImmediate& RHICmdList, FPixelShaderRHIParamRef PixelShader, FShaderResourceParameter& LightGridParam) const
+	{
+		SetSRVParameter(RHICmdList, PixelShader, LightGridParam, GLightGridVertexBuffer.VertexBufferSRV);
+	}
+
 private:
 	TSet<FSceneInterface*> AllocatedScenes;
 	ICustomCulling* CustomCullingImpl;

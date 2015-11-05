@@ -9,6 +9,8 @@
 #include "Hair.h"
 #include "HairSceneProxy.h"
 
+#include "../../Renderer/Private/LightGrid.h"
+
 DEFINE_LOG_CATEGORY(LogHairWorks);
 
 // Debug render console variables.
@@ -124,6 +126,8 @@ class FHairWorksPs : public FGlobalShader
 		SetTextureParameter(RHICmdList, GetPixelShader(), SpecularColorTexture, HairTextures[GFSDK_HAIR_TEXTURE_SPECULAR]);
 
 		SetShaderValueArray(RHICmdList, GetPixelShader(), IndirectLightingSHCoefficients, IndirectLight, 3);
+
+		check(GetUniformBufferParameter<FForwardLightData>().IsInitialized());
 	}
 
 	static bool ShouldCache(EShaderPlatform Platform)
@@ -158,6 +162,102 @@ protected:
 };
 
 IMPLEMENT_SHADER_TYPE(, FHairWorksPs, TEXT("HairWorks"), TEXT("Main"), SF_Pixel);
+
+class FHairWorksMultiLightPs : public FGlobalShader
+{
+	DECLARE_SHADER_TYPE(FHairWorksMultiLightPs, Global);
+
+	FHairWorksMultiLightPs()
+	{}
+
+	FHairWorksMultiLightPs(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+		: FGlobalShader(Initializer)
+	{
+		LightAttenuation.Bind(Initializer.ParameterMap, TEXT("LightAttenuationTexture"));
+		HairConstantBuffer.Bind(Initializer.ParameterMap, TEXT("HairConstantBuffer"));
+		TextureSampler.Bind(Initializer.ParameterMap, TEXT("TextureSampler"));
+
+		RootColorTexture.Bind(Initializer.ParameterMap, TEXT("RootColorTexture"));
+		TipColorTexture.Bind(Initializer.ParameterMap, TEXT("TipColorTexture"));
+		SpecularColorTexture.Bind(Initializer.ParameterMap, TEXT("SpecularColorTexture"));
+
+		GFSDK_HAIR_RESOURCE_FACE_HAIR_INDICES.Bind(Initializer.ParameterMap, TEXT("GFSDK_HAIR_RESOURCE_FACE_HAIR_INDICES"));
+		GFSDK_HAIR_RESOURCE_TANGENTS.Bind(Initializer.ParameterMap, TEXT("GFSDK_HAIR_RESOURCE_TANGENTS"));
+		GFSDK_HAIR_RESOURCE_NORMALS.Bind(Initializer.ParameterMap, TEXT("GFSDK_HAIR_RESOURCE_NORMALS"));
+
+		LightGrid.Bind(Initializer.ParameterMap, TEXT("LightGrid"));
+	}
+
+	virtual bool Serialize(FArchive& Ar)
+	{
+		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
+
+		Ar << HairConstantBuffer << TextureSampler << RootColorTexture << TipColorTexture << SpecularColorTexture << LightAttenuation << GFSDK_HAIR_RESOURCE_FACE_HAIR_INDICES << GFSDK_HAIR_RESOURCE_TANGENTS << GFSDK_HAIR_RESOURCE_NORMALS;
+		Ar << LightGrid;
+
+		return bShaderHasOutdatedParameters;
+	}
+
+	void SetParameters(FRHICommandListImmediate& RHICmdList, const FSceneView& View, const GFSDK_Hair_ConstantBuffer& HairConstBuffer, const TArray<FTexture2DRHIRef>& HairTextures, const FVector& LightDir, const FLinearColor& LightColor, FTextureRHIRef LightAttenuation, const FVector4 IndirectLight[3])//const FTextureRHIParamRef LightCache[3], const FVector LightCatcheAlloc[4]
+	{
+		FGlobalShader::SetParameters(RHICmdList, GetPixelShader(), View);
+
+		SetTextureParameter(RHICmdList, GetPixelShader(), this->LightAttenuation, LightAttenuation);
+		SetShaderValue(RHICmdList, GetPixelShader(), this->HairConstantBuffer, HairConstBuffer);
+		SetSamplerParameter(RHICmdList, GetPixelShader(), TextureSampler, TStaticSamplerState<>::GetRHI());
+
+		SetTextureParameter(RHICmdList, GetPixelShader(), RootColorTexture, HairTextures[GFSDK_HAIR_TEXTURE_ROOT_COLOR]);
+		SetTextureParameter(RHICmdList, GetPixelShader(), TipColorTexture, HairTextures[GFSDK_HAIR_TEXTURE_TIP_COLOR]);
+		SetTextureParameter(RHICmdList, GetPixelShader(), SpecularColorTexture, HairTextures[GFSDK_HAIR_TEXTURE_SPECULAR]);
+
+		check(GetUniformBufferParameter<FForwardLightData>().IsInitialized());
+
+		static const auto CVar = IConsoleManager::Get().FindTConsoleVariableDataInt(TEXT("r.ForwardLighting"));
+		bool bForwardLighting = CVar->GetValueOnRenderThread() != 0;
+
+		if (bForwardLighting)
+		{
+			SetUniformBufferParameter(RHICmdList, GetPixelShader(), GetUniformBufferParameter<FForwardLightData>(), View.ForwardLightData);
+
+			IRendererModule& RendererModule = FModuleManager::LoadModuleChecked<IRendererModule>("Renderer");
+			RendererModule.SetLightGridResource(RHICmdList, GetPixelShader(), LightGrid);
+		}
+		else
+		{
+			SetUniformBufferParameter(RHICmdList, GetPixelShader(), GetUniformBufferParameter<FForwardLightData>(), 0);
+			SetSRVParameter(RHICmdList, GetPixelShader(), LightGrid, 0);
+		}
+	}
+
+	static bool ShouldCache(EShaderPlatform Platform)
+	{
+		return IsFeatureLevelSupported(Platform, ERHIFeatureLevel::SM5);
+	}
+
+	static void ModifyCompilationEnvironment(EShaderPlatform Platform, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		FGlobalShader::ModifyCompilationEnvironment(Platform, OutEnvironment);
+	}
+
+protected:
+
+	FShaderResourceParameter LightAttenuation;
+	FShaderParameter HairConstantBuffer;
+	FShaderResourceParameter TextureSampler;
+
+	FShaderResourceParameter RootColorTexture;;
+	FShaderResourceParameter TipColorTexture;
+	FShaderResourceParameter SpecularColorTexture;
+
+	// To suppress warnings.
+	FShaderResourceParameter	GFSDK_HAIR_RESOURCE_FACE_HAIR_INDICES;
+	FShaderResourceParameter	GFSDK_HAIR_RESOURCE_TANGENTS;
+	FShaderResourceParameter	GFSDK_HAIR_RESOURCE_NORMALS;
+
+	FShaderResourceParameter LightGrid;
+};
+
+IMPLEMENT_SHADER_TYPE(, FHairWorksMultiLightPs, TEXT("HairWorks"), TEXT("MultiLightMain"), SF_Pixel);
 
 class FHairWorksSimplePs : public FGlobalShader
 {
@@ -372,26 +472,44 @@ void FHairSceneProxy::DrawTranslucency(const FSceneView& View, const FVector& Li
 
 	HairWorksSdk->SetViewProjection((gfsdk_float4x4*)ViewMatrices.ViewMatrix.M, (gfsdk_float4x4*)ViewMatrices.ProjMatrix.M, GFSDK_HAIR_LEFT_HANDED);
 
-	// Setup shaders
-	TShaderMapRef<FSimpleElementVS> VertexShader(GetGlobalShaderMap(ERHIFeatureLevel::SM5));
-	TShaderMapRef<FHairWorksPs> PixelShader(GetGlobalShaderMap(ERHIFeatureLevel::SM5));
-
-	static FGlobalBoundShaderState BoundShaderState;
-
-	SetGlobalBoundShaderState(
-		RHICmdList,
-		ERHIFeatureLevel::SM5,
-		BoundShaderState,
-		GSimpleElementVertexDeclaration.VertexDeclarationRHI,
-		*VertexShader,
-		*PixelShader
-		);
+	static const auto CVar = IConsoleManager::Get().FindTConsoleVariableDataInt(TEXT("r.ForwardLighting"));
+	bool bForwardLighting = CVar->GetValueOnRenderThread() != 0;
 
 	GFSDK_HairShaderConstantBuffer ConstBuffer;
 	HairWorksSdk->PrepareShaderConstantBuffer(HairInstanceId, &ConstBuffer);
 
+	// Setup shaders
+	TShaderMapRef<FSimpleElementVS> VertexShader(GetGlobalShaderMap(ERHIFeatureLevel::SM5));
 	HairTextures.SetNum(GFSDK_HAIR_NUM_TEXTURES, false);
-	PixelShader->SetParameters(RHICmdList, View, reinterpret_cast<GFSDK_Hair_ConstantBuffer&>(ConstBuffer), HairTextures, LightDir, LightColor, LightAttenuation, IndirectLight);
+
+	if (bForwardLighting)
+	{
+		static FGlobalBoundShaderState MultiLightBoundShaderState;
+		TShaderMapRef<FHairWorksMultiLightPs> PixelShader(GetGlobalShaderMap(ERHIFeatureLevel::SM5));
+		SetGlobalBoundShaderState(
+			RHICmdList,
+			ERHIFeatureLevel::SM5,
+			MultiLightBoundShaderState,
+			GSimpleElementVertexDeclaration.VertexDeclarationRHI,
+			*VertexShader,
+			*PixelShader
+			);
+		PixelShader->SetParameters(RHICmdList, View, reinterpret_cast<GFSDK_Hair_ConstantBuffer&>(ConstBuffer), HairTextures, LightDir, LightColor, LightAttenuation, IndirectLight);
+	}
+	else
+	{
+		static FGlobalBoundShaderState BoundShaderState;
+		TShaderMapRef<FHairWorksPs> PixelShader(GetGlobalShaderMap(ERHIFeatureLevel::SM5));
+		SetGlobalBoundShaderState(
+			RHICmdList,
+			ERHIFeatureLevel::SM5,
+			BoundShaderState,
+			GSimpleElementVertexDeclaration.VertexDeclarationRHI,
+			*VertexShader,
+			*PixelShader
+			);
+		PixelShader->SetParameters(RHICmdList, View, reinterpret_cast<GFSDK_Hair_ConstantBuffer&>(ConstBuffer), HairTextures, LightDir, LightColor, LightAttenuation, IndirectLight);
+	}
 
 	// To update shader states
 	RHICmdList.DrawPrimitive(0, 0, 0, 0);
