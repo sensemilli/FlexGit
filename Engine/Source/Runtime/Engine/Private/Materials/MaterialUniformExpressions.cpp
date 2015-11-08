@@ -95,6 +95,7 @@ void FUniformExpressionSet::Serialize(FArchive& Ar)
 	Ar << PerFrameUniformScalarExpressions;
 	Ar << PerFrameUniformVectorExpressions;
 	Ar << PerFramePrevUniformScalarExpressions;
+
 	Ar << PerFramePrevUniformVectorExpressions;
 
 	// Recreate the uniform buffer struct after loading.

@@ -204,16 +204,36 @@ class UFlexContainer : public UObject
 	UPROPERTY(EditAnywhere, Category = Fluid, meta = (editcondition = "Fluid"))
 	float PositionSmoothing;
 
+	/** */
+	UPROPERTY(EditAnywhere, Category = Fluid, meta = (editcondition = "Fluid"))
+	float MaxDiffuseParticles;
+
+	/** */
+	UPROPERTY(EditAnywhere, Category = Fluid, meta = (editcondition = "Fluid"))
+	float DiffuseThreshold;
+
+	/** */
+	UPROPERTY(EditAnywhere, Category = Fluid, meta = (editcondition = "Fluid"))
+	float DiffuseBallistic;
+
+	/** */
+	UPROPERTY(EditAnywhere, Category = Fluid, meta = (editcondition = "Fluid"))
+	float DiffuseBuoyancy;
+
+	/** */
+	UPROPERTY(EditAnywhere, Category = Fluid, meta = (editcondition = "Fluid"))
+	float DiffuseDrag;
+
 	/** Drag force applied to boundary fluid particles */
 	UPROPERTY()
 	float FreeSurfaceDrag;
 
 	/** Particles belonging to rigid shapes that move with a position delta magnitude > threshold will be permanently deformed in the rest pose */
-    UPROPERTY()
+	UPROPERTY(EditAnywhere, Category = Plastic)
     float PlasticThreshold;            
 	
 	/** Controls the rate at which particles in the rest pose are deformed for particles passing the deformation threshold */
-	UPROPERTY()
+	UPROPERTY(EditAnywhere, Category = Plastic)
     float PlasticCreep;
 };
 

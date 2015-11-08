@@ -43,7 +43,7 @@ FFlexFluidSurfaceSceneProxy
 
 struct FSurfaceParticleMesh
 {
-	const FParticleSystemSceneProxy* PSysSceneProxy;
+	const FPrimitiveSceneProxy* PSysSceneProxy;
 	const FDynamicEmitterDataBase* DynamicEmitterData;
 	const FMeshBatch* Mesh;
 };

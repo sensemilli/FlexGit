@@ -541,7 +541,7 @@ FFlexContainerInstance::FFlexContainerInstance(UFlexContainer* InTemplate, FPhys
 
 	Template = InTemplate;
 
-	Solver = flexCreateSolver(Template->MaxParticles, 0);
+	Solver = flexCreateSolver(Template->MaxParticles, Template->MaxDiffuseParticles);
 	Container = flexExtCreateContainer(Solver, Template->MaxParticles);
 
 	// get pointers to container memory (these do not change)
@@ -559,12 +559,22 @@ FFlexContainerInstance::FFlexContainerInstance(UFlexContainer* InTemplate, FPhys
 		SmoothPositions.SetNum(Template->MaxParticles);
 	}
 
+	if (Template->MaxDiffuseParticles > 0.0f)
+	{
+		DiffuseParticles.SetNum(Template->MaxParticles);
+		DiffuseVelocities.SetNum(Template->MaxParticles);
+		DiffuseIndices.SetNum(Template->MaxParticles);
+	}
+
 	NumStaticTriangles = 0;
+	NumDiffuseParticles = 0;
 
 	GroupCounter = 0;
 	LeftOverTime = 0.0f;
 
 	Owner = OwnerScene;
+
+	bWarmup = true;
 }
 
 FFlexContainerInstance::~FFlexContainerInstance()
@@ -614,6 +624,30 @@ void FFlexContainerInstance::DestroyParticle(int32 Index)
 	flexExtFreeParticles(Container, 1, &Index);
 
 	DEC_DWORD_STAT(STAT_Flex_ParticleCount);
+}
+
+/** */
+void FFlexContainerInstance::CreateParticles(const TArray<FVector>& InPositions, const TArray<float>& InMasses, const TArray<FVector>& InVelocities, int32 InPhase, TArray<int32>& OutIndices)
+{
+	verify(Container);
+
+	OutIndices.AddZeroed(InPositions.Num());
+	int32 n = flexExtAllocParticles(Container, InPositions.Num(), OutIndices.GetData());
+	if (n == 0)
+	{
+		OutIndices.Empty();
+	}
+	else
+	{
+		for (int32 i = 0; i < OutIndices.Num(); i++)
+		{
+			INC_DWORD_STAT(STAT_Flex_ParticleCount);
+
+			Particles[OutIndices[i]] = FVector4(InPositions[i], InMasses[i]);
+			Velocities[OutIndices[i]] = InVelocities[i];
+			Phases[OutIndices[i]] = InPhase;
+		}
+	}
 }
  
 FlexExtInstance* FFlexContainerInstance::CreateInstance(FlexExtAsset* Asset, const FMatrix& Mat, const FVector& Velocity, int32 Phase)
@@ -726,11 +760,11 @@ void FFlexContainerInstance::UpdateSimData()
 	params.mLift = Template->Lift;
 	params.mDamping = Template->Damping;
 	params.mNumIterations = Template->NumIterations;
-	params.mSolidRestDistance = Template->Radius;
+	params.mSolidRestDistance = Template->Radius;// (Template->Fluid) ? (Template->Radius * Template->RestDistance) : Template->Radius;
 	params.mFluidRestDistance = Template->Radius*Template->RestDistance;
 	params.mDissipation = Template->Dissipation;
 	params.mParticleCollisionMargin = Template->CollisionMarginParticles;
-	params.mShapeCollisionMargin = FMath::Max(Template->CollisionMarginShapes, FMath::Max(Template->CollisionDistance*0.25f, 1.0f)); // ensure a minimum collision distance for generating contacts against shapes, we need some margin to avoid jittering as contacts activate/deactivate
+	params.mShapeCollisionMargin = (Template->CollisionMarginShapes > 0.0f) ? Template->CollisionMarginShapes : Template->CollisionDistance * 0.25f;// FMath::Max(Template->CollisionMarginShapes, FMath::Max(Template->CollisionDistance*0.25f, 1.0f)); // ensure a minimum collision distance for generating contacts against shapes, we need some margin to avoid jittering as contacts activate/deactivate
 	params.mCollisionDistance = Template->CollisionDistance;
 	params.mPlasticThreshold = Template->PlasticThreshold;
 	params.mPlasticCreep = Template->PlasticCreep;
@@ -754,11 +788,19 @@ void FFlexContainerInstance::UpdateSimData()
 	params.mBuoyancy = 1.0f;
 	params.mEnableCCD = Template->EnableCCD;
 
+	params.mDiffuseThreshold = Template->DiffuseThreshold;
+	params.mDiffuseBallistic = Template->DiffuseBallistic;
+	params.mDiffuseBuoyancy = Template->DiffuseBuoyancy;
+	params.mDiffuseDrag = Template->DiffuseDrag;
+
 	params.mPlanes[0][0] = 0.0f;
 	params.mPlanes[0][1] = 0.0f;
 	params.mPlanes[0][2] = 1.0f;
 	params.mPlanes[0][3] = 0.0f;
 	params.mNumPlanes = 0;
+
+	int32 ParticleCount = flexGetActiveCount(Solver);
+	flexSetVelocities(Solver, (float*)&Velocities[0].X, ParticleCount, eFlexMemoryHost);
 
 	// update params
 	flexSetParams(Solver, &params);
@@ -814,6 +856,10 @@ void FFlexContainerInstance::Simulate(float DeltaTime)
 		flexGetSmoothParticles(Solver, (float*)&SmoothPositions[0], Template->MaxParticles, FlexMemory::eFlexMemoryHostAsync);
 	}
 
+	if (Template->MaxDiffuseParticles > 0.0f)
+	{
+		NumDiffuseParticles = flexGetDiffuseParticles(Solver, (float*)&DiffuseParticles[0], (float*)&DiffuseVelocities[0], (int32*)DiffuseIndices[0], eFlexMemoryDeviceAsync);
+	}
 
 #if STATS
 	if (TimersPtr)

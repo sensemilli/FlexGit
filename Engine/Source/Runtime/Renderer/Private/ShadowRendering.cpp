@@ -1369,11 +1369,13 @@ void FProjectedShadowInfo::RenderDepthDynamic(FRHICommandList& RHICmdList, FScen
 	{
 		const FMeshBatchAndRelevance& MeshBatchAndRelevance = DynamicSubjectMeshElements[MeshBatchIndex];
 
-		if (!MeshBatchAndRelevance.PrimitiveSceneProxy->IsFlexFluidSurface())
-		{
-			const FMeshBatch& MeshBatch = *MeshBatchAndRelevance.Mesh;
-			FShadowDepthDrawingPolicyFactory::DrawDynamicMesh(RHICmdList, *FoundView, Context, MeshBatch, false, true, MeshBatchAndRelevance.PrimitiveSceneProxy, MeshBatch.BatchHitProxyId);
-		}
+#if WITH_FLEX
+		if (MeshBatchAndRelevance.PrimitiveSceneProxy->IsFlexFluidSurface() || MeshBatchAndRelevance.Mesh->bFlexFluidParticles)
+			continue;
+#endif
+
+		const FMeshBatch& MeshBatch = *MeshBatchAndRelevance.Mesh;
+		FShadowDepthDrawingPolicyFactory::DrawDynamicMesh(RHICmdList, *FoundView, Context, MeshBatch, false, true, MeshBatchAndRelevance.PrimitiveSceneProxy, MeshBatch.BatchHitProxyId);
 	}
 
 	// Draw hairs.

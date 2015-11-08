@@ -50,6 +50,7 @@ public:
 private:
 
 	TArray<class FFlexFluidSurfaceSceneProxy*> SurfaceSceneProxies;
+	TArray<class FFlexParticleSceneProxy*> ParticleSceneProxies;
 };
 
 extern FFlexFluidSurfaceRenderer GFlexFluidSurfaceRenderer;

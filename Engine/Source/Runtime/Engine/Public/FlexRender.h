@@ -1,7 +1,7 @@
 #pragma once
 
-#include "PhysXSupport.h"
 #include "StaticMeshResources.h"
+#include "ParticleVertexFactory.h"
 
 #if WITH_FLEX
 
@@ -137,5 +137,89 @@ public:
 	// shape transforms sent from game thread
 	const FFlexShapeTransform* ShapeTransforms;
 };
+
+class FFlexParticleSpriteVertexFactory : public FParticleSpriteVertexFactory
+{
+	DECLARE_VERTEX_FACTORY_TYPE(FFlexParticleSpriteVertexFactory);
+
+	/* Default constructor */
+	FFlexParticleSpriteVertexFactory(EParticleVertexFactoryType InType, ERHIFeatureLevel::Type InFeatureLevel)
+		: FParticleSpriteVertexFactory(InType, InFeatureLevel)
+	{
+	}
+
+	FFlexParticleSpriteVertexFactory()
+		: FParticleSpriteVertexFactory(PVFT_MAX, ERHIFeatureLevel::Num)
+	{
+	}
+
+	/* Adds custom defines */
+	static void ModifyCompilationEnvironment(EShaderPlatform Platform, const FMaterial* Material, FShaderCompilerEnvironment& OutEnvironment);
+
+	/* Construct params for shaders */
+	static FVertexFactoryShaderParameters* ConstructShaderParameters(EShaderFrequency ShaderFrequency);
+};
+
+struct FFlexParticleUserData
+{
+public:
+
+	int32 ParticleOffset;
+	int32 ParticleCount;
+};
+
+/** Scene proxy for special Flex particle rendering */
+class FFlexParticleSceneProxy : public FPrimitiveSceneProxy
+{
+public:
+
+	/* Default constructor */
+	FFlexParticleSceneProxy(class UFlexComponent* Component);
+
+	/* Editor constructor for preview mode */
+	FFlexParticleSceneProxy(class UFlexComponent* Component, TArray<FVector> InPositions);
+
+	/* Destructor */
+	virtual ~FFlexParticleSceneProxy();
+
+	virtual FPrimitiveViewRelevance GetViewRelevance(const FSceneView* View) override;
+	virtual void GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, class FMeshElementCollector& Collector) const override;
+	virtual uint32 GetMemoryFootprint(void) const;
+
+	/* Render standard/diffuse particles */
+	void RenderParticles(TArray<FVector4> InParticles, UMaterialInterface* InMaterial, float Scale, const FSceneView* View, int32 ViewIndex, class FMeshElementCollector& Collector, bool bIsDiffuse) const;
+
+	/* Update particle positions */
+	void UpdateParticlePositions(TArray<FVector4>& InPositions);
+	void UpdateDiffuseParticlePositions(TArray<FVector4>& InDiffusePositions);
+	void UpdateAnisotropy(TArray<FVector4>& InAnisotropy1, TArray<FVector4>& InAnisotropy2, TArray<FVector4>& InAnisotropy3);
+
+public:
+
+	FMaterialRelevance MaterialRelevance;
+	UMaterialInterface* Material;
+	UMaterialInterface* DiffuseMaterial;
+
+	TArray<FVector4> Particles;
+	TArray<FVector4> DiffuseParticles;
+	TArray<FVector4> Anisotropy1;
+	TArray<FVector4> Anisotropy2;
+	TArray<FVector4> Anisotropy3;
+
+	float ParticleRadius;
+	float DiffuseParticleScale;
+
+	uint32 bFlexParticleFluid : 1;
+
+	TArray<FFlexParticleUserData> ParticleUserData;
+};
+
+class FFlexParticleIndexBuffer : public FIndexBuffer
+{
+public:
+	virtual void InitRHI() override;
+};
+
+extern TGlobalResource<FFlexParticleIndexBuffer> GFlexParticleIndexBuffer;
 
 #endif // WITH FLEX

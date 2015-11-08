@@ -74,7 +74,6 @@ int32 UParticleModuleFlexShapeSpawn::GetMaximumBurstCount()
 		return 0;
 }
 
-
 /*-----------------------------------------------------------------------------
 	UParticleModuleFlexFluidSpawn implementation.
 -----------------------------------------------------------------------------*/

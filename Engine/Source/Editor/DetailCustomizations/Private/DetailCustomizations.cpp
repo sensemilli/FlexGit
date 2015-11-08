@@ -105,6 +105,10 @@
 #include "AssetImportDataCustomization.h"
 #include "TextCustomization.h"
 
+#if WITH_FLEX
+#include "FlexComponentDetails.h"
+#endif
+
 IMPLEMENT_MODULE( FDetailCustomizationsModule, DetailCustomizations );
 
 
@@ -300,6 +304,10 @@ void FDetailCustomizationsModule::RegisterObjectCustomizations()
 	RegisterCustomClassLayout("FbxImportUI", FOnGetDetailCustomizationInstance::CreateStatic(&FFbxImportUIDetails::MakeInstance));
 
 	RegisterCustomClassLayout("ConfigHierarchyPropertyView", FOnGetDetailCustomizationInstance::CreateStatic(&FConfigPropertyHelperDetails::MakeInstance));
+
+#if WITH_FLEX
+	RegisterCustomClassLayout("FlexComponent", FOnGetDetailCustomizationInstance::CreateStatic(&FFlexComponentDetails::MakeInstance));
+#endif
 }
 
 

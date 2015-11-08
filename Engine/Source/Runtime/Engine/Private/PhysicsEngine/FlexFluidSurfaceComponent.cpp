@@ -438,20 +438,16 @@ void UFlexFluidSurfaceComponent::SendRenderEmitterDynamicData_Concurrent(
 
 FBoxSphereBounds UFlexFluidSurfaceComponent::CalcBounds(const FTransform & LocalToWorld) const
 {
-	if (EmitterInstances.Num() > 0)
+	FBox Bounds = FBox(ForceInitToZero);
+	for (int32 i = 0; i < EmitterInstances.Num(); i++)
 	{
-		FBox Bounds = EmitterInstances[0]->GetBoundingBox();
-		for (int32 i = 1; i < EmitterInstances.Num(); i++)
-		{
-			Bounds += EmitterInstances[i]->GetBoundingBox();
-		}
-
-		return FBoxSphereBounds(Bounds);
+		Bounds += EmitterInstances[i]->GetBoundingBox();
 	}
-	else
+	for (int32 i = 0; i < ComponentInstances.Num(); i++)
 	{
-		return FBoxSphereBounds(LocalToWorld.GetLocation(), FVector(0.0f, 0.0f, 0.0f), 0.0f);
+		Bounds += ComponentInstances[i]->GetBounds().GetBox();
 	}
+	return FBoxSphereBounds(Bounds);
 }
 
 FPrimitiveSceneProxy* UFlexFluidSurfaceComponent::CreateSceneProxy()
@@ -480,12 +476,37 @@ void UFlexFluidSurfaceComponent::UnregisterEmitterInstance(struct FParticleEmitt
 		EmitterInstances.RemoveSingleSwap(EmitterInstance);
 		MarkRenderDynamicDataDirty();
 
-		if (EmitterInstances.Num() == 0 && GetWorld() != NULL)
+		if (EmitterInstances.Num() == 0 && ComponentInstances.Num() == 0 && GetWorld() != NULL)
 		{
 			//this will destroy the actor. 
 			GetWorld()->RemoveFlexFluidSurface(this);
 
 			//no other operations should go here.
+		}
+	}
+}
+
+void UFlexFluidSurfaceComponent::RegisterFlexComponent(class UFlexComponent* InComponent)
+{
+	int32 ComponentIndex = ComponentInstances.Find(InComponent);
+	if (ComponentIndex == INDEX_NONE)
+	{
+		ComponentInstances.Add(InComponent);
+		MarkRenderDynamicDataDirty();
+	}
+}
+
+void UFlexFluidSurfaceComponent::UnregisterFlexComponent(class UFlexComponent* InComponent)
+{
+	int32 ComponentIndex = ComponentInstances.Find(InComponent);
+	if (ComponentIndex != INDEX_NONE)
+	{
+		ComponentInstances.RemoveSingleSwap(InComponent);
+		MarkRenderDynamicDataDirty();
+
+		if (ComponentInstances.Num() == 0 && EmitterInstances.Num() == 0 && GetWorld() != nullptr)
+		{
+			GetWorld()->RemoveFlexFluidSurface(this);
 		}
 	}
 }

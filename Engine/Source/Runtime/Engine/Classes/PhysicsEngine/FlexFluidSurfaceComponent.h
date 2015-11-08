@@ -16,11 +16,15 @@ public:
 	void RegisterEmitterInstance(struct FParticleEmitterInstance* EmitterInstance);
 	void UnregisterEmitterInstance(struct FParticleEmitterInstance* EmitterInstance);
 
+	void RegisterFlexComponent(class UFlexComponent* InComponent);
+	void UnregisterFlexComponent(class UFlexComponent* InComponent);
+
 	void SendRenderEmitterDynamicData_Concurrent(struct FDynamicEmitterDataBase* DynamicEmitterData, 
 		struct FParticleEmitterInstance* EmitterInstance, class FParticleSystemSceneProxy* ParticleSystemSceneProxy);
 	
 	UFlexFluidSurface* FlexFluidSurface;
 	TArray<struct FParticleEmitterInstance*> EmitterInstances;
+	TArray<class UFlexComponent*> ComponentInstances;
 
 protected:
 

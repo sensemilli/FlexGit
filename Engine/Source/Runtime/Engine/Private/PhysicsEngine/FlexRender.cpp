@@ -444,4 +444,301 @@ bool FFlexMeshSceneProxy::GetShadowMeshElement(int32 LODIndex, int32 BatchIndex,
 	return false;
 }
 
+void FFlexParticleSpriteVertexFactory::ModifyCompilationEnvironment(EShaderPlatform Platform, const FMaterial* Material, FShaderCompilerEnvironment& OutEnvironment)
+{
+	FParticleSpriteVertexFactory::ModifyCompilationEnvironment(Platform, Material, OutEnvironment);
+}
+
+FVertexFactoryShaderParameters* FFlexParticleSpriteVertexFactory::ConstructShaderParameters(EShaderFrequency ShaderFrequency)
+{
+	return FParticleSpriteVertexFactory::ConstructShaderParameters(ShaderFrequency);
+}
+
+IMPLEMENT_VERTEX_FACTORY_TYPE(FFlexParticleSpriteVertexFactory, "ParticleSpriteVertexFactory", true, false, true, false, false);
+
+class FFlexDynamicSpriteCollectorResources : public FOneFrameResource
+{
+public:
+
+	FFlexParticleSpriteVertexFactory VertexFactory;
+	FParticleSpriteUniformBufferRef UniformBuffer;
+
+	virtual ~FFlexDynamicSpriteCollectorResources()
+	{
+		VertexFactory.ReleaseResource();
+	}
+};
+
+FFlexParticleSceneProxy::FFlexParticleSceneProxy(UFlexComponent* Component)
+	: FPrimitiveSceneProxy(Component)
+	, MaterialRelevance(Component->GetMaterialRelevance(GetScene().GetFeatureLevel()))
+	, Material(Component->ParticleMaterial)
+	, DiffuseMaterial(Component->DiffuseParticleMaterial)
+	, bFlexParticleFluid(Component->FluidSurfaceTemplate != nullptr)
+{
+	if (Material == nullptr)
+	{
+		Material = UMaterial::GetDefaultMaterial(MD_Surface);
+	}
+
+	Particles.AddZeroed(Component->ParticleIndices.Num());
+	for (int32 i = 0; i < Particles.Num(); i++)
+	{
+		Particles[i] = Component->ContainerInstance->Particles[Component->ParticleIndices[i]];
+	}
+	
+	int32 NumBatches = FMath::RoundToInt(Particles.Num());
+	ParticleUserData.SetNum(NumBatches);
+
+	ParticleRadius = Component->ContainerTemplate->Radius;
+	DiffuseParticleScale = Component->DiffuseParticleScale;
+
+}
+
+/* Editor constructor for preview mode */
+FFlexParticleSceneProxy::FFlexParticleSceneProxy(UFlexComponent* Component, TArray<FVector> InPositions)
+	: FFlexParticleSceneProxy(Component)
+{
+	Particles.AddZeroed(InPositions.Num());
+	for (int32 i = 0; i < Particles.Num(); i++)
+	{
+		Particles[i] = FVector4(InPositions[i], 1.f);
+	}
+
+	int32 NumBatches = FMath::RoundToInt(Particles.Num());
+	ParticleUserData.SetNum(NumBatches);
+}
+
+FFlexParticleSceneProxy::~FFlexParticleSceneProxy()
+{
+}
+
+FPrimitiveViewRelevance FFlexParticleSceneProxy::GetViewRelevance(const FSceneView* View)
+{
+	FPrimitiveViewRelevance Relevance;
+	Relevance.bDrawRelevance = IsShown(View);
+	Relevance.bShadowRelevance = IsShadowCast(View);
+	Relevance.bDynamicRelevance = true;
+	Relevance.bStaticRelevance = false;
+	Relevance.bRenderInMainPass = ShouldRenderInMainPass();
+	Relevance.bRenderCustomDepth = ShouldRenderCustomDepth();
+	Relevance.bNormalTranslucencyRelevance = (DiffuseMaterial && DiffuseMaterial->GetBlendMode() == EBlendMode::BLEND_Translucent);
+	//MaterialRelevance.SetPrimitiveViewRelevance(Relevance);
+
+	return Relevance;
+}
+
+void FFlexParticleSceneProxy::RenderParticles(TArray<FVector4> InParticles, UMaterialInterface* InMaterial, float Scale, const FSceneView* View, int32 ViewIndex, FMeshElementCollector& Collector, bool bIsDiffuse) const
+{
+	int32 TotalParticleCount = InParticles.Num();
+	int32 NumLoops = (TotalParticleCount / 16384) + 1;
+
+	//struct FCompareParticleOrderZ
+	//{
+	//	FORCEINLINE bool operator()(const FParticleOrder& A, const FParticleOrder& B) const { return B.Z < A.Z; }
+	//};
+
+	///* Sort particles by depth */
+	//FParticleOrder* ParticleOrder = GParticleOrderPool.GetParticleOrderData(TotalParticleCount);
+
+	//for (int32 ParticleIdx = 0; ParticleIdx < InParticles.Num(); ParticleIdx++)
+	//{
+	//	FVector4& Particle = InParticles[ParticleIdx];
+	//	float InZ = View->ViewProjectionMatrix.TransformPosition(Particle).W;
+
+	//	ParticleOrder[ParticleIdx].ParticleIndex = ParticleIdx;
+	//	ParticleOrder[ParticleIdx].Z = InZ;
+	//}
+	//Sort(ParticleOrder, TotalParticleCount, FCompareParticleOrderZ());
+
+	for (int32 LoopIndex = 0; LoopIndex < NumLoops; LoopIndex++)
+	{
+		int32 NumParticles = FMath::Min(TotalParticleCount - (LoopIndex * 16384), 16384);
+		if (NumParticles == 0)
+			continue;
+
+		int32 Offset = LoopIndex * 16384;
+		
+		FFlexParticleUserData* UserData = nullptr;
+		if (!bIsDiffuse)
+		{
+			UserData = (FFlexParticleUserData*)&ParticleUserData[LoopIndex];
+			UserData->ParticleOffset = Offset;
+			UserData->ParticleCount = NumParticles;
+		}
+
+		FFlexDynamicSpriteCollectorResources& CollectorResources = Collector.AllocateOneFrameResource<FFlexDynamicSpriteCollectorResources>();
+		CollectorResources.VertexFactory.SetParticleFactoryType(PVFT_Sprite);
+		CollectorResources.VertexFactory.SetFeatureLevel(ERHIFeatureLevel::SM5);
+		CollectorResources.VertexFactory.InitResource();
+
+		FGlobalDynamicVertexBuffer::FAllocation Allocation;
+		FGlobalDynamicVertexBuffer::FAllocation DynamicParameterAllocation;
+
+		Allocation = FGlobalDynamicVertexBuffer::Get().Allocate(NumParticles * (sizeof(FParticleSpriteVertex)));
+		if (Allocation.IsValid())
+		{
+			int32 VertexStride = sizeof(FParticleSpriteVertex);
+			uint8* TempVert = (uint8*)Allocation.Buffer;
+
+			/* Setup particle buffer */
+			for (int32 j = 0; j < NumParticles; j++)
+			{
+				FParticleSpriteVertex* FillVertex = (FParticleSpriteVertex*)TempVert;
+
+				//FillVertex->Position = InParticles[ParticleOrder[Offset + j].ParticleIndex];
+				FillVertex->Position = InParticles[Offset + j];
+				FillVertex->RelativeTime = 0.0f;
+				FillVertex->OldPosition = FVector::ZeroVector;
+				FillVertex->ParticleId = (float)((Offset + j) / TotalParticleCount);
+				FillVertex->Size = FVector2D(ParticleRadius, ParticleRadius) * Scale;
+				FillVertex->Rotation = 0.0f;
+				FillVertex->SubImageIndex = 0.0f;
+				FillVertex->Color = FLinearColor::White;
+
+				TempVert += VertexStride;
+			}
+
+			/* Setup per view params */
+			FParticleSpriteUniformParameters PerViewUniformParameters;
+			PerViewUniformParameters.AxisLockRight = FVector::ZeroVector;
+			PerViewUniformParameters.AxisLockUp = FVector::ZeroVector;
+			PerViewUniformParameters.RotationScale = 1.0f;
+			PerViewUniformParameters.RotationBias = 0.0f;
+			PerViewUniformParameters.TangentSelector = FVector4(0.0f, 0.0f, 0.0f, 1.0f);
+			PerViewUniformParameters.InvDeltaSeconds = 30.0f;
+			PerViewUniformParameters.SubImageSize = FVector4(1.0f, 1.0f, 1.0f, 1.0f);
+			PerViewUniformParameters.NormalsType = 0.0f;
+			PerViewUniformParameters.NormalsSphereCenter = FVector4(0.0f, 0.0f, 0.0f, 1.0f);
+			PerViewUniformParameters.NormalsCylinderUnitDirection = FVector4(0.0f, 0.0f, 1.0f, 0.0f);
+			PerViewUniformParameters.PivotOffset = FVector2D(-0.5f, -0.5f);
+			PerViewUniformParameters.MacroUVParameters = FVector4(0.0f, 0.0f, 1.0f, 1.0f);
+
+			CollectorResources.UniformBuffer = FParticleSpriteUniformBufferRef::CreateUniformBufferImmediate(PerViewUniformParameters, UniformBuffer_SingleFrame);
+			CollectorResources.VertexFactory.SetSpriteUniformBuffer(CollectorResources.UniformBuffer);
+			CollectorResources.VertexFactory.SetInstanceBuffer(Allocation.VertexBuffer, Allocation.VertexOffset, sizeof(FParticleSpriteVertex), true);
+			CollectorResources.VertexFactory.SetDynamicParameterBuffer(DynamicParameterAllocation.VertexBuffer, DynamicParameterAllocation.VertexOffset, sizeof(FParticleVertexDynamicParameter), true);
+
+			FMeshBatch& ParticleMesh = Collector.AllocateMesh();
+			FMeshBatchElement& ParticleBatchElement = ParticleMesh.Elements[0];
+
+			ParticleMesh.VertexFactory = &CollectorResources.VertexFactory;
+			ParticleMesh.Type = PT_TriangleList;
+			ParticleMesh.bDisableBackfaceCulling = InMaterial->IsTwoSided(false);
+			ParticleMesh.MaterialRenderProxy = InMaterial->GetRenderProxy(false, false);
+			ParticleMesh.bFlexFluidParticles = bFlexParticleFluid && !bIsDiffuse;
+
+			ParticleBatchElement.UserData = (void*) UserData;
+			ParticleBatchElement.IndexBuffer = &GFlexParticleIndexBuffer;
+			ParticleBatchElement.NumPrimitives = 2;
+			ParticleBatchElement.NumInstances = NumParticles;
+			ParticleBatchElement.FirstIndex = 0;
+			ParticleBatchElement.PrimitiveUniformBuffer = CreatePrimitiveUniformBufferImmediate(FMatrix::Identity, GetBounds(), GetLocalBounds(), false, false);
+			ParticleBatchElement.MinVertexIndex = 0;
+			ParticleBatchElement.MaxVertexIndex = (NumParticles * 4) - 1;
+
+			Collector.AddMesh(ViewIndex, ParticleMesh);
+		}
+	}
+}
+
+void FFlexParticleSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, FMeshElementCollector& Collector) const
+{
+	for (int32 ViewIndex = 0; ViewIndex < Views.Num(); ViewIndex++)
+	{
+		if (VisibilityMap & (1 << ViewIndex))
+		{
+			const FSceneView* View = Views[ViewIndex];
+
+			/* Render standard particles */
+			RenderParticles(Particles, Material, 1.f, View, ViewIndex, Collector, false);
+
+			/* Diffuse only render if they exist */
+			if (DiffuseParticles.Num() > 0 && DiffuseMaterial != nullptr)
+			{
+				/* Render diffuse particles if there are any */
+				RenderParticles(DiffuseParticles, DiffuseMaterial, DiffuseParticleScale, View, ViewIndex, Collector, true);
+			}
+		}
+	}
+}
+
+uint32 FFlexParticleSceneProxy::GetMemoryFootprint(void) const
+{
+	return sizeof(*this);
+}
+
+/* Update particle positions */
+void FFlexParticleSceneProxy::UpdateParticlePositions(TArray<FVector4>& InPositions)
+{
+	if (InPositions.Num() != Particles.Num())
+	{
+		Particles.SetNum(InPositions.Num());
+
+		int32 NumBatches = FMath::RoundToInt(Particles.Num());
+		ParticleUserData.SetNum(NumBatches);
+	}
+
+	for (int32 i = 0; i < InPositions.Num(); i++)
+	{
+		Particles[i] = InPositions[i];
+	}
+}
+
+void FFlexParticleSceneProxy::UpdateDiffuseParticlePositions(TArray<FVector4>& InDiffusePositions)
+{
+	if (InDiffusePositions.Num() != DiffuseParticles.Num())
+	{
+		DiffuseParticles.SetNum(InDiffusePositions.Num());
+	}
+
+	for (int32 i = 0; i < InDiffusePositions.Num(); i++)
+	{
+		DiffuseParticles[i] = InDiffusePositions[i];
+	}
+}
+
+void FFlexParticleSceneProxy::UpdateAnisotropy(TArray<FVector4>& InAnisotropy1, TArray<FVector4>& InAnisotropy2, TArray<FVector4>& InAnisotropy3)
+{
+	if (InAnisotropy1.Num() != Anisotropy1.Num())
+	{
+		Anisotropy1.SetNum(InAnisotropy1.Num());
+		Anisotropy2.SetNum(InAnisotropy2.Num());
+		Anisotropy3.SetNum(InAnisotropy3.Num());
+	}
+
+	for (int32 i = 0; i < InAnisotropy1.Num(); i++)
+	{
+		Anisotropy1[i] = InAnisotropy1[i];
+		Anisotropy2[i] = InAnisotropy2[i];
+		Anisotropy3[i] = InAnisotropy3[i];
+	}
+}
+
+void FFlexParticleIndexBuffer::InitRHI()
+{
+	// Instanced path needs only MAX_PARTICLES_PER_INSTANCE,
+	// but using the maximum needed for the non-instanced path
+	// in prep for future flipping of both instanced and non-instanced at runtime.
+	const uint32 MaxParticles = 65536 / 4;
+	const uint32 Size = sizeof(uint16) * 6 * MaxParticles;
+	const uint32 Stride = sizeof(uint16);
+	FRHIResourceCreateInfo CreateInfo;
+	IndexBufferRHI = RHICreateIndexBuffer(Stride, Size, BUF_Static, CreateInfo);
+	uint16* Indices = (uint16*)RHILockIndexBuffer(IndexBufferRHI, 0, Size, RLM_WriteOnly);
+	for (uint32 SpriteIndex = 0; SpriteIndex < MaxParticles; ++SpriteIndex)
+	{
+		Indices[SpriteIndex * 6 + 0] = SpriteIndex * 4 + 0;
+		Indices[SpriteIndex * 6 + 1] = SpriteIndex * 4 + 2;
+		Indices[SpriteIndex * 6 + 2] = SpriteIndex * 4 + 3;
+		Indices[SpriteIndex * 6 + 3] = SpriteIndex * 4 + 0;
+		Indices[SpriteIndex * 6 + 4] = SpriteIndex * 4 + 1;
+		Indices[SpriteIndex * 6 + 5] = SpriteIndex * 4 + 2;
+	}
+	RHIUnlockIndexBuffer(IndexBufferRHI);
+}
+
+/** Global particle index buffer. */
+TGlobalResource<FFlexParticleIndexBuffer> GFlexParticleIndexBuffer;
+
 #endif // WITH_FLEX

@@ -107,6 +107,10 @@ struct FMeshBatch
 	/** If bDitheredLODTransition and this is a dynamic mesh element, then this is the alpha for dither fade (static draw lists need to derive this later as it is changes every frame) */
 	float DitheredLODTransitionAlpha;
 
+#if WITH_FLEX
+	uint32 bFlexFluidParticles : 1;
+#endif
+
 	// can be NULL
 	const FLightCacheInterface* LCI;
 
@@ -212,6 +216,9 @@ struct FMeshBatch
 	,	DynamicVertexData(NULL)
 	,	VertexFactory(NULL)
 	,	MaterialRenderProxy(NULL)
+#if WITH_FLEX
+	,	bFlexFluidParticles(false)
+#endif
 	{
 		// By default always add the first element.
 		new(Elements) FMeshBatchElement;

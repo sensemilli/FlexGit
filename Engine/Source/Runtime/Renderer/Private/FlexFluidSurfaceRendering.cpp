@@ -14,6 +14,7 @@ FlexFluidSurfaceRendering.cpp: Flex fluid surface rendering implementation.
 #include "FlexFluidSurfaceSceneProxy.h"
 #include "FlexFluidSurfaceRendering.h"
 #include "PhysicsEngine/FlexFluidSurfaceComponent.h"
+#include "FlexRender.h"
 
 FFlexFluidSurfaceRenderer GFlexFluidSurfaceRenderer;
 
@@ -722,13 +723,41 @@ void RenderParticleDepthAndThickness(FRHICommandList& RHICmdList, FFlexFluidSurf
 		{
 			const FSurfaceParticleMesh& ParticleMesh = SurfaceSceneProxy->VisibleParticleMeshes[i];
 			
-			//TODO: remove cast
-			FDynamicSpriteEmitterData* SpriteEmitterData = ((FDynamicSpriteEmitterData*)ParticleMesh.DynamicEmitterData);
-			bool bHasAnisotropy = SpriteEmitterData->Source.bFlexAnisotropyData;
-
-			if (bHasAnisotropy)
+			bool bHasAnisotropy = false;
+			if (ParticleMesh.DynamicEmitterData)
 			{
-				UpdateAnisotropyBuffers(SpriteEmitterData);
+				FDynamicSpriteEmitterData* SpriteEmitterData = ((FDynamicSpriteEmitterData*)ParticleMesh.DynamicEmitterData);
+				bHasAnisotropy = SpriteEmitterData->Source.bFlexAnisotropyData;
+
+				if (bHasAnisotropy)
+				{
+					UpdateAnisotropyBuffers(SpriteEmitterData);
+				}
+			}
+			else
+			{
+				FFlexParticleSceneProxy* SceneProxy = (FFlexParticleSceneProxy*)ParticleMesh.PSysSceneProxy;
+				FFlexParticleUserData* UserData = (FFlexParticleUserData*)ParticleMesh.Mesh->Elements[0].UserData;
+
+				if (SceneProxy->Anisotropy1.Num() > 0)
+				{
+					GAnisotropyResources.AllocateFor(UserData->ParticleCount);
+
+					FVector4* AnisoBuffer1 = (FVector4*)RHILockVertexBuffer(GAnisotropyResources.AnisoBuffer1.Buffer, 0, GAnisotropyResources.AnisoBuffer1.NumBytes, RLM_WriteOnly);
+					FVector4* AnisoBuffer2 = (FVector4*)RHILockVertexBuffer(GAnisotropyResources.AnisoBuffer2.Buffer, 0, GAnisotropyResources.AnisoBuffer2.NumBytes, RLM_WriteOnly);
+					FVector4* AnisoBuffer3 = (FVector4*)RHILockVertexBuffer(GAnisotropyResources.AnisoBuffer3.Buffer, 0, GAnisotropyResources.AnisoBuffer3.NumBytes, RLM_WriteOnly);
+
+					for (int32 i = 0; i < UserData->ParticleCount; i++)
+					{
+						AnisoBuffer1[i] = SceneProxy->Anisotropy1[i + UserData->ParticleOffset];
+						AnisoBuffer2[i] = SceneProxy->Anisotropy2[i + UserData->ParticleOffset];
+						AnisoBuffer3[i] = SceneProxy->Anisotropy3[i + UserData->ParticleOffset];
+					}
+					RHIUnlockVertexBuffer(GAnisotropyResources.AnisoBuffer1.Buffer);
+					RHIUnlockVertexBuffer(GAnisotropyResources.AnisoBuffer2.Buffer);
+					RHIUnlockVertexBuffer(GAnisotropyResources.AnisoBuffer3.Buffer);
+					bHasAnisotropy = true;
+				}
 			}
 
 			// Draw screen space surface
@@ -838,28 +867,40 @@ void FFlexFluidSurfaceRenderer::UpdateProxiesAndResources(FRHICommandList& RHICm
 			for (int32 MeshBatchIndex = 0; MeshBatchIndex < DynamicMeshElements.Num(); MeshBatchIndex++)
 			{
 				const FMeshBatchAndRelevance& MeshBatchAndRelevance = DynamicMeshElements[MeshBatchIndex];
-				
-				FDynamicEmitterDataBase* DynamicEmitterData = NULL;
-				for (int32 EmitterIndex = 0; EmitterIndex < Proxy->EmitterCount; EmitterIndex++)
+
+				if (!MeshBatchAndRelevance.Mesh->bFlexFluidParticles)
 				{
-					FParticleSystemSceneProxy* PSysSceneProxy = Proxy->ParticleSystemSceneProxyArray[EmitterIndex];
-					if (MeshBatchAndRelevance.PrimitiveSceneProxy == PSysSceneProxy)
+					FDynamicEmitterDataBase* DynamicEmitterData = NULL;
+					for (int32 EmitterIndex = 0; EmitterIndex < Proxy->EmitterCount; EmitterIndex++)
 					{
-						for (int32 CandidateIndex = 0; CandidateIndex < PSysSceneProxy->GetDynamicData()->DynamicEmitterDataArray.Num(); CandidateIndex++)
+						FParticleSystemSceneProxy* PSysSceneProxy = Proxy->ParticleSystemSceneProxyArray[EmitterIndex];
+						if (MeshBatchAndRelevance.PrimitiveSceneProxy == PSysSceneProxy)
 						{
-							if (PSysSceneProxy->GetDynamicData()->DynamicEmitterDataArray[CandidateIndex] == Proxy->DynamicEmitterDataArray[EmitterIndex])
+							for (int32 CandidateIndex = 0; CandidateIndex < PSysSceneProxy->GetDynamicData()->DynamicEmitterDataArray.Num(); CandidateIndex++)
 							{
-								DynamicEmitterData = Proxy->DynamicEmitterDataArray[EmitterIndex];
+								if (PSysSceneProxy->GetDynamicData()->DynamicEmitterDataArray[CandidateIndex] == Proxy->DynamicEmitterDataArray[EmitterIndex])
+								{
+									DynamicEmitterData = Proxy->DynamicEmitterDataArray[EmitterIndex];
+								}
 							}
 						}
 					}
-				}
 
-				if (DynamicEmitterData)
+					if (DynamicEmitterData)
+					{
+						FSurfaceParticleMesh ParticleMesh;
+						ParticleMesh.DynamicEmitterData = DynamicEmitterData;
+						ParticleMesh.PSysSceneProxy = MeshBatchAndRelevance.PrimitiveSceneProxy;
+						ParticleMesh.Mesh = MeshBatchAndRelevance.Mesh;
+
+						Proxy->VisibleParticleMeshes.Add(ParticleMesh);
+					}
+				}
+				else
 				{
 					FSurfaceParticleMesh ParticleMesh;
-					ParticleMesh.DynamicEmitterData = DynamicEmitterData;
-					ParticleMesh.PSysSceneProxy = (FParticleSystemSceneProxy*)MeshBatchAndRelevance.PrimitiveSceneProxy;
+					ParticleMesh.DynamicEmitterData = nullptr;
+					ParticleMesh.PSysSceneProxy = MeshBatchAndRelevance.PrimitiveSceneProxy;
 					ParticleMesh.Mesh = MeshBatchAndRelevance.Mesh;
 
 					Proxy->VisibleParticleMeshes.Add(ParticleMesh);

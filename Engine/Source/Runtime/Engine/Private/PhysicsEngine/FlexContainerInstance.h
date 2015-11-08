@@ -135,6 +135,9 @@ struct FFlexContainerInstance
 	int32 CreateParticle(const FVector4& pos, const FVector& vel, int32 phase);
 	void DestroyParticle(int32 index);
 
+	/** */
+	void CreateParticles(const TArray<FVector>& InPositions, const TArray<float>& InMasses, const TArray<FVector>& InVelocities, int32 InPhase, TArray<int32>& OutIndices);
+
 	// spawns a new instance of an asset into the container
 	FlexExtInstance* CreateInstance(FlexExtAsset* Asset, const FMatrix& Mat, const FVector& Velocity, int32 Phase);
 	void DestroyInstance(FlexExtInstance* Asset);
@@ -174,6 +177,12 @@ struct FFlexContainerInstance
 	FVector4* Normals;
 	int* Phases;
 
+	// Pointers to diffuse particles
+	TArray<FVector4, FFlexAllocator> DiffuseParticles;
+	TArray<FVector4, FFlexAllocator> DiffuseVelocities;
+	TArray<int32, FFlexAllocator> DiffuseIndices;
+	int32 NumDiffuseParticles;
+
 	// copy of particle data
 	TArray<FVector4, FFlexAllocator> Anisotropy1;
 	TArray<FVector4, FFlexAllocator> Anisotropy2;
@@ -207,6 +216,8 @@ struct FFlexContainerInstance
 	TArray<int32, FFlexAllocator> TriMeshIndices;
 
 	TArray<FlexExtForceField, FFlexAllocator> ForceFields;
+
+	uint32 bWarmup : 1;
 };
 
 #endif //WITH_FLEX

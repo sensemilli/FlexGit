@@ -58,6 +58,11 @@ UFlexContainer::UFlexContainer(const FObjectInitializer& ObjectInitializer)
 	VorticityConfinement = 0.0f;
 	EnableCCD = false;
 	FixedTimeStep = true;
+	MaxDiffuseParticles = 0;
+	DiffuseThreshold = 25.0f;
+	DiffuseBallistic = 16;
+	DiffuseBuoyancy = 1.0f;
+	DiffuseDrag = 1.0f;
 }
 
 

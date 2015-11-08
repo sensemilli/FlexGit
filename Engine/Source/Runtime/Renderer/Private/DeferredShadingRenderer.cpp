@@ -452,9 +452,15 @@ void FDeferredShadingSceneRenderer::RenderBasePassDynamicData(FRHICommandList& R
 		const FMeshBatchAndRelevance& MeshBatchAndRelevance = View.DynamicMeshElements[MeshBatchIndex];
 
 		if ((MeshBatchAndRelevance.bHasOpaqueOrMaskedMaterial || ViewFamily.EngineShowFlags.Wireframe)
-			&& MeshBatchAndRelevance.bRenderInMainPass && !MeshBatchAndRelevance.PrimitiveSceneProxy->IsFlexFluidSurface())
+			&& MeshBatchAndRelevance.bRenderInMainPass)
 		{
 			const FMeshBatch& MeshBatch = *MeshBatchAndRelevance.Mesh;
+
+#if WITH_FLEX
+			if (MeshBatchAndRelevance.PrimitiveSceneProxy->IsFlexFluidSurface() || MeshBatch.bFlexFluidParticles)
+				continue;
+#endif
+
 			FBasePassOpaqueDrawingPolicyFactory::DrawDynamicMesh(RHICmdList, View, Context, MeshBatch, false, true, MeshBatchAndRelevance.PrimitiveSceneProxy, MeshBatch.BatchHitProxyId);
 		}
 	}
