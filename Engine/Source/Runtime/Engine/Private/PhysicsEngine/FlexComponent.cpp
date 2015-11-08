@@ -248,6 +248,9 @@ void UFlexComponent::Synchronize()
 				DstNormals[i] = SrcNormals[ParticleIndex];
 			}
 
+			// update render transform
+			MarkRenderTransformDirty();
+
 			// update render thread data
 			MarkRenderDynamicDataDirty();
 		}
@@ -543,8 +546,19 @@ FBoxSphereBounds UFlexComponent::CalcBounds(const FTransform & LocalToWorld) con
 		{
 			if (ContainerInstance && bFlexParticlesSpawned)
 			{
-				FBoxSphereBounds NewBounds = FBoxSphereBounds(FSphere(LocalToWorld.GetLocation(), 65536.f));
-				return NewBounds;
+				//FBoxSphereBounds NewBounds = FBoxSphereBounds(FSphere(LocalToWorld.GetLocation(), 65536.f));
+				//return NewBounds;
+				TArray<FVector> Positions;
+				Positions.SetNum(ParticleIndices.Num());
+				
+				for (int32 i = 0; i < Positions.Num(); i++)
+					Positions[i] = FVector(
+						ContainerInstance->Particles[ParticleIndices[i]].X,
+						ContainerInstance->Particles[ParticleIndices[i]].Y,
+						ContainerInstance->Particles[ParticleIndices[i]].Z
+						);
+
+				return FBoxSphereBounds(Positions.GetData(), Positions.Num());
 			}
 			else if (ContainerInstance && ParticleMode == EFlexParticleMode::Shape)
 			{
