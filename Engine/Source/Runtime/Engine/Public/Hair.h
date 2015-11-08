@@ -21,7 +21,9 @@ class ENGINE_API UHair : public UObject
 	GFSDK_HairAssetID AssetId = AssetIdNull;
 	static const GFSDK_HairAssetID AssetIdNull;
 
+#if WITH_EDITORONLY_DATA
 	/** Importing data and options used for this asset */
 	UPROPERTY(EditAnywhere, Instanced, Category = ImportSettings)
 	class UAssetImportData* AssetImportData;
+#endif
 };
