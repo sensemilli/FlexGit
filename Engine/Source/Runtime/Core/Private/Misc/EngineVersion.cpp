@@ -6,6 +6,13 @@
 #include "EngineBuildSettings.h"
 #include "ModuleVersion.h"
 
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+#include "GFSDK_VXGI.h"
+#define VXGI_BRANCH_NAME BRANCH_NAME "+VXGI-" VXGI_VERSION_STRING
+#endif
+// NVCHANGE_END: Add VXGI
+
 FEngineVersionBase::FEngineVersionBase()
 : Major(0)
 , Minor(0)
@@ -141,6 +148,15 @@ FString FEngineVersion::ToString(EVersionComponent LastComponent) const
 					Result += FString::Printf(TEXT("+%s"), *Branch);
 				}
 			}
+
+			// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+			else
+			{
+				Result += FString(TEXT("+VXGI-") TEXT(VXGI_VERSION_STRING));
+			}
+#endif
+			// NVCHANGE_END: Add VXGI
 		}
 	}
 	return Result;
@@ -201,7 +217,15 @@ void operator<<(FArchive &Ar, FEngineVersion &Version)
 #define ENGINE_VERSION_INTERNAL_OR_LICENSEE (BUILT_FROM_CHANGELIST | (ENGINE_IS_LICENSEE_VERSION << 31))
 
 // Global instance of the current engine version
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+const FEngineVersion GEngineVersion(ENGINE_MAJOR_VERSION, ENGINE_MINOR_VERSION, ENGINE_PATCH_VERSION, ENGINE_VERSION_INTERNAL_OR_LICENSEE, VXGI_BRANCH_NAME);
+#else
+// NVCHANGE_END: Add VXGI
 const FEngineVersion GEngineVersion(ENGINE_MAJOR_VERSION, ENGINE_MINOR_VERSION, ENGINE_PATCH_VERSION, ENGINE_VERSION_INTERNAL_OR_LICENSEE, BRANCH_NAME);
+// NVCHANGE_BEGIN: Add VXGI
+#endif
+// NVCHANGE_END: Add VXGI
 
 // Version which this engine maintains strict API and package compatibility with. By default, we always maintain compatibility with the current major/minor version, unless we're built at a different changelist.
 const FEngineVersion GCompatibleWithEngineVersion(ENGINE_MAJOR_VERSION, ENGINE_MINOR_VERSION, 0, (MODULE_API_VERSION | (ENGINE_IS_LICENSEE_VERSION << 31)), BRANCH_NAME);

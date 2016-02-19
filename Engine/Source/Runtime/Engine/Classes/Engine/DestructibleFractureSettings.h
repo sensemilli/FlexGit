@@ -229,8 +229,7 @@ class UDestructibleFractureSettings
 	 *
 	 * @returns true if successful
 	 */
-	ENGINE_API	bool					SetRootMesh(const TArray<physx::apex::NxExplicitRenderTriangle>& MeshTriangles, const TArray<UMaterialInterface*>& Materials, const TArray<physx::apex::NxExplicitSubmeshData>& SubmeshData, const TArray<uint32>& MeshPartition = TArray<uint32>(),
-													bool bFirstPartitionIsDepthZero = false);
+	ENGINE_API	bool					SetRootMesh(const TArray<physx::apex::NxExplicitRenderTriangle>& MeshTriangles, const TArray<UMaterialInterface*>& Materials, const TArray<physx::apex::NxExplicitSubmeshData>& SubmeshData, const TArray<uint32>& MeshPartition = TArray<uint32>(), const TArray<int32>& ParentIndices = TArray<int32>());
 	/**
 	 * Creates a root mesh from an NxDestructibleAsset.  This is useful when importing an NxDestructibleAsset.
 	 *

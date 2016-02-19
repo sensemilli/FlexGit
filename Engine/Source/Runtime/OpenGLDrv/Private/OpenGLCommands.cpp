@@ -1267,7 +1267,7 @@ void FOpenGLDynamicRHI::RHISetShaderParameter(FComputeShaderRHIParamRef ComputeS
 	PendingState.ShaderParameters[CrossCompiler::SHADER_STAGE_COMPUTE].Set(BufferIndex, BaseIndex, NumBytes, NewValue);
 }
 
-void FOpenGLDynamicRHI::RHISetDepthStencilState(FDepthStencilStateRHIParamRef NewStateRHI,uint32 StencilRef)
+void FOpenGLDynamicRHI::RHISetDepthStencilState(FDepthStencilStateRHIParamRef NewStateRHI, uint32 StencilRef, bool bBypassValidation)
 {
 	VERIFY_GL_SCOPE();
 	FOpenGLDepthStencilState* NewState = ResourceCast(NewStateRHI);
@@ -3585,4 +3585,28 @@ IRHICommandContextContainer* FOpenGLDynamicRHI::RHIGetCommandContextContainer()
 	return nullptr;
 }
 
+namespace
+{
+	TArray<WaveWorksShaderInput> ShaderInput;
+	TArray<WaveWorksShaderInput> QuadTreeShaderInput;
+}
+
+const TArray<WaveWorksShaderInput>& FOpenGLDynamicRHI::RHIGetWaveWorksShaderInput()
+{
+	return ShaderInput;
+}
+
+const TArray<WaveWorksShaderInput>& FOpenGLDynamicRHI::RHIGetWaveWorksQuadTreeShaderInput()
+{
+	return QuadTreeShaderInput;
+}
+
+FWaveWorksRHIRef FOpenGLDynamicRHI::RHICreateWaveWorks(const struct GFSDK_WaveWorks_Simulation_Settings& Settings, const struct GFSDK_WaveWorks_Simulation_Params& Params)
+{
+	return nullptr;
+}
+
+void FOpenGLDynamicRHI::RHISetWaveWorksState(FWaveWorksRHIParamRef State, const FMatrix& ViewMatrix, const TArray<uint32>& ShaderInputMappings)
+{
+}
 

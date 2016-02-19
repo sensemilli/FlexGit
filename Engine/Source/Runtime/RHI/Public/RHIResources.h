@@ -629,7 +629,31 @@ public:
 class FRHIUnorderedAccessView : public FRHIResource {};
 class FRHIShaderResourceView : public FRHIResource {};
 
+//
+// WaveWorks
+//
 
+class FRHIWaveWorks : public FRHIResource
+{
+public:
+	FRHIWaveWorks() : Simulation(nullptr) {}
+	virtual void UpdateTick() {}
+	template<typename ShaderRHIParamRef>
+	void SetRenderState(FRHICommandList& RHICmdList, ShaderRHIParamRef Shader, const FMatrix ViewMatrix, const TArray<uint32>& ShaderInputMappings)
+	{
+		SetRenderState(ViewMatrix, ShaderInputMappings);
+	}
+	virtual void SetRenderState(const FMatrix ViewMatrix, const TArray<uint32>& ShaderInputMappings) {}
+	virtual void CreateQuadTree(struct GFSDK_WaveWorks_Quadtree** OutWaveWorksQuadTreeHandle, int32 MeshDim, float MinPatchLength, uint32 AutoRootLOD, float UpperGridCoverage, float SeaLevel, bool UseTessellation, float TessellationLOD, float GeoMoprhingDegree) {}
+	virtual void DrawQuadTree(struct GFSDK_WaveWorks_Quadtree* WaveWorksQuadTreeHandle, FMatrix ViewMatrix, FMatrix ProjMatrix, const TArray<uint32>& ShaderInputMappings) {}
+	virtual void DestroyQuadTree(struct GFSDK_WaveWorks_Quadtree* WaveWorksQuadTreeHandle) {}
+	virtual void GetDisplacements(TArray<FVector2D> InSamplePoints, TArray<FVector4>& OutDisplacements) {}
+	struct GFSDK_WaveWorks_Simulation* Simulation;
+	// FRHIUniformBuffer* VertexShaderUniformBuffer;
+};
+
+typedef FRHIWaveWorks*					FWaveWorksRHIParamRef;
+typedef TRefCountPtr<FRHIWaveWorks>		FWaveWorksRHIRef;
 
 typedef FRHISamplerState*              FSamplerStateRHIParamRef;
 typedef TRefCountPtr<FRHISamplerState> FSamplerStateRHIRef;

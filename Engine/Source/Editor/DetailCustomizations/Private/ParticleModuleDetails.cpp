@@ -261,3 +261,40 @@ void FParticleModuleVectorFieldScaleOverLifeDetails::CustomizeDetails( IDetailLa
 	RestrictionList.Add( GetDistributionsForGPURestriction() );
 	RestrictPropertiesOnGPUEmitter( DetailBuilder, DistributionsToRestrict, RestrictionList );
 }
+
+// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+//////////////////////////////////////////////////////////////////////////
+
+TSharedRef<IDetailCustomization> FParticleModuleColorOverDensityDetails::MakeInstance()
+{
+	return MakeShareable(new FParticleModuleColorOverDensityDetails);
+}
+
+void FParticleModuleColorOverDensityDetails::CustomizeDetails(IDetailLayoutBuilder& DetailBuilder)
+{
+	TArray<FString> DistributionsToRestrict;
+	DistributionsToRestrict.Add(TEXT("ColorOverDensity.Distribution"));
+	DistributionsToRestrict.Add(TEXT("AlphaOverDensity.Distribution"));
+
+	TRestrictionList RestrictionList;
+	RestrictionList.Add(GetDistributionsForGPURestriction());
+	RestrictPropertiesOnGPUEmitter(DetailBuilder, DistributionsToRestrict, RestrictionList);
+}
+
+//////////////////////////////////////////////////////////////////////////
+
+TSharedRef<IDetailCustomization> FParticleModuleSizeOverDensityDetails::MakeInstance()
+{
+	return MakeShareable(new FParticleModuleSizeOverDensityDetails);
+}
+
+void FParticleModuleSizeOverDensityDetails::CustomizeDetails(IDetailLayoutBuilder& DetailBuilder)
+{
+	TArray<FString> DistributionsToRestrict;
+	DistributionsToRestrict.Add(TEXT("SizeOverDensity.Distribution"));
+
+	TRestrictionList RestrictionList;
+	RestrictionList.Add(GetDistributionsForGPURestriction());
+	RestrictPropertiesOnGPUEmitter(DetailBuilder, DistributionsToRestrict, RestrictionList);
+}
+// NVCHANGE_END: JCAO - Grid Density with GPU particles

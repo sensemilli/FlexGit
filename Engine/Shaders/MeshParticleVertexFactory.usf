@@ -541,4 +541,11 @@ float4 VertexFactoryGetPreviousWorldPosition(FVertexFactoryInput Input, FVertexF
 
 		return TangentToWorld;
 	}
+
+	// Dummy function required to ensure shaders don't fail to compile
+	FVertexFactoryInterpolantsVSToDS VertexFactoryWaveWorksInterpolate(FVertexFactoryInterpolantsVSToDS Input, float4 nv_waveworks_attr36, float4 nv_waveworks_attr37, float4 nv_waveworks_attr38, float3 nv_waveworks_attr39)
+	{
+		return Input;
+	}
+
 #endif // #if USING_TESSELLATION

@@ -71,6 +71,17 @@ EnginePrivate.h: Unreal engine private header file.
 #include "Engine/NetDriver.h"
 #include "Engine/PendingNetGame.h"
 #include "PhysicalMaterials/PhysicalMaterialPropertyBase.h"
+/* FLEX */
+#include "PhysicsEngine/PhysicsAsset.h"
+#include "PhysicsEngine/PhysicsCollisionHandler.h"
+#include "PhysicsEngine/PhysicsConstraintTemplate.h"
+#include "PhysicsEngine/PhysicsSettings.h"
+#include "PhysicsEngine/FlexContainer.h"
+#include "PhysicsEngine/FlexComponent.h"
+#include "PhysicsEngine/FlexRopeComponent.h"
+#include "PhysicsEngine/FlexAsset.h"
+#include "PhysicsEngine/FlexAssetPreviewComponent.h"
+/* END FLEX*/
 #include "Engine/PlatformInterfaceBase.h"
 #include "Engine/Player.h"
 #include "Engine/LocalPlayer.h"
@@ -99,3 +110,39 @@ EnginePrivate.h: Unreal engine private header file.
 #include "Engine/TextureLODSettings.h"
 #include "DeviceProfiles/DeviceProfile.h"
 #include "DeviceProfiles/DeviceProfileManager.h"
+
+// WAVEWORKS
+#include "Engine/WaveWorks.h"
+#include "Components/WaveWorksComponent.h"
+#include "WaveWorksRender.h"
+
+#include "Engine/CanvasRenderTarget2D.h"
+#include "Engine/RenderToTextureFlowMap.h"
+// END WAVEWORKS
+
+// NVCHANGE_BEGIN: JCAO - Add Turbulence Header
+#include "FieldSampler/AttractorActor.h"
+#include "FieldSampler/AttractorAsset.h"
+#include "FieldSampler/AttractorComponent.h"
+#include "FieldSampler/FieldSamplerActor.h"
+#include "FieldSampler/FieldSamplerAsset.h"
+#include "FieldSampler/FieldSamplerComponent.h"
+#include "FieldSampler/GridActor.h"
+#include "FieldSampler/GridAsset.h"
+#include "FieldSampler/GridComponent.h"
+#include "FieldSampler/HeatSourceActor.h"
+#include "FieldSampler/HeatSourceAsset.h"
+#include "FieldSampler/HeatSourceComponent.h"
+#include "FieldSampler/JetActor.h"
+#include "FieldSampler/JetAsset.h"
+#include "FieldSampler/JetComponent.h"
+#include "FieldSampler/NoiseActor.h"
+#include "FieldSampler/NoiseAsset.h"
+#include "FieldSampler/NoiseComponent.h"
+#include "FieldSampler/VelocitySourceActor.h"
+#include "FieldSampler/VelocitySourceAsset.h"
+#include "FieldSampler/VelocitySourceComponent.h"
+#include "FieldSampler/VortexActor.h"
+#include "FieldSampler/VortexAsset.h"
+#include "FieldSampler/VortexComponent.h"
+// NVCHANGE_END: JCAO - Add Turbulence Header

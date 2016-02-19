@@ -827,11 +827,14 @@ void FD3D12CommandContext::ValidateExclusiveDepthStencilAccess(FExclusiveDepthSt
 	}
 	}
 
-void FD3D12CommandContext::RHISetDepthStencilState(FDepthStencilStateRHIParamRef NewStateRHI, uint32 StencilRef)
+void FD3D12CommandContext::RHISetDepthStencilState(FDepthStencilStateRHIParamRef NewStateRHI, uint32 StencilRef, bool bBypassValidation)
 {
 	FD3D12DepthStencilState* NewState = FD3D12DynamicRHI::ResourceCast(NewStateRHI);
 
-	ValidateExclusiveDepthStencilAccess(NewState->AccessType);
+	if (!bBypassValidation)
+	{
+		ValidateExclusiveDepthStencilAccess(NewState->AccessType);
+	}
 
 	StateCache.SetDepthStencilState(&NewState->Desc, StencilRef);
 }
@@ -2256,3 +2259,49 @@ void FD3D12CommandContext::RHISubmitCommandsHint()
 {
 
 }
+
+// NVCHANGE_BEGIN: Add HBAO+
+#if WITH_GFSDK_SSAO
+
+void FD3D12CommandContext::RHIRenderHBAO(
+	const FTextureRHIParamRef SceneDepthTextureRHI,
+	const FMatrix& ProjectionMatrix,
+	const FTextureRHIParamRef SceneNormalTextureRHI,
+	const FMatrix& ViewMatrix,
+	const FTextureRHIParamRef SceneColorTextureRHI,
+	const GFSDK_SSAO_Parameters& BaseParams
+	)
+{
+	// Empty method because HBAO+ doesn't support DX12 yet.
+	// Just override the base so that the engine doesn't crash.
+}
+
+#endif
+// NVCHANGE_END: Add HBAO+
+
+void FD3D12CommandContext::RHISetWaveWorksState(FWaveWorksRHIParamRef State, const FMatrix& ViewMatrix, const TArray<uint32>& ShaderInputMappings)
+{
+}
+
+namespace
+{
+	TArray<WaveWorksShaderInput> ShaderInput;
+	TArray<WaveWorksShaderInput> QuadTreeShaderInput;
+}
+
+
+const TArray<WaveWorksShaderInput>& FD3D12CommandContext::RHIGetWaveWorksShaderInput()
+{
+	return ShaderInput;
+}
+
+const TArray<WaveWorksShaderInput>& FD3D12CommandContext::RHIGetWaveWorksQuadTreeShaderInput()
+{
+	return QuadTreeShaderInput;
+}
+
+FWaveWorksRHIRef FD3D12CommandContext::RHICreateWaveWorks(const struct GFSDK_WaveWorks_Simulation_Settings& Settings, const struct GFSDK_WaveWorks_Simulation_Params& Params)
+{
+	return nullptr;
+}
+

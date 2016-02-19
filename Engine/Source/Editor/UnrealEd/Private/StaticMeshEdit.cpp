@@ -13,6 +13,7 @@
 #include "MeshUtilities.h"
 #include "Engine/Polys.h"
 #include "PhysicsEngine/BodySetup.h"
+#include "PhysicsEngine/FlexAsset.h"
 
 bool GBuildStaticMeshCollision = 1;
 
@@ -844,6 +845,7 @@ struct ExistingStaticMeshData
 
 	UModel*						ExistingCollisionModel;
 	UBodySetup*				ExistingBodySetup;
+	UFlexAsset*				ExistingFlexAsset;
 
 	float						ExistingStreamingDistanceMultiplier;
 
@@ -914,6 +916,7 @@ ExistingStaticMeshData* SaveExistingStaticMeshData(UStaticMesh* ExistingMesh)
 		ExistingMeshDataPtr->ExistingThumbnailInfo = ExistingMesh->ThumbnailInfo;
 
 		ExistingMeshDataPtr->ExistingBodySetup = ExistingMesh->BodySetup;
+		ExistingMeshDataPtr->ExistingFlexAsset = ExistingMesh->FlexAsset;
 
 		ExistingMeshDataPtr->ExistingStreamingDistanceMultiplier = ExistingMesh->StreamingDistanceMultiplier;
 	}
@@ -975,6 +978,11 @@ void RestoreExistingMeshData(struct ExistingStaticMeshData* ExistingMeshDataPtr,
 		NewMesh->ThumbnailInfo = ExistingMeshDataPtr->ExistingThumbnailInfo.Get();
 
 		NewMesh->StreamingDistanceMultiplier = ExistingMeshDataPtr->ExistingStreamingDistanceMultiplier;
+
+		if (ExistingMeshDataPtr->ExistingFlexAsset)
+		{
+			NewMesh->FlexAsset = ExistingMeshDataPtr->ExistingFlexAsset;
+		}
 
 		// If we already had some collision info...
 		if(ExistingMeshDataPtr->ExistingBodySetup)

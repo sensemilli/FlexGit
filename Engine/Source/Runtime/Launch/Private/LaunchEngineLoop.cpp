@@ -1354,6 +1354,12 @@ int32 FEngineLoop::PreInit( const TCHAR* CmdLine )
 	// Initialize the RHI.
 	RHIInit(bHasEditorToken);
 
+	// Init hair after D3D is created.	
+#ifdef WITH_ENGINE
+	ENGINE_API void InitializeHair();
+	InitializeHair();
+#endif
+
 	if (!FPlatformProperties::RequiresCookedData())
 	{
 		check(!GShaderCompilingManager);

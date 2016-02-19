@@ -481,7 +481,7 @@ enum ERHIResourceType
 	RRT_Viewport,
 	RRT_UnorderedAccessView,
 	RRT_ShaderResourceView,
-
+	RRT_WaveWorks,
 	RRT_Num
 };
 
@@ -704,6 +704,9 @@ inline bool IsFeatureLevelSupported(EShaderPlatform InShaderPlatform, ERHIFeatur
 	}	
 }
 
+// NVCHANGE_BEGIN: Add VXGI
+#if !WITH_GFSDK_VXGI
+
 inline bool RHISupportsTessellation(const EShaderPlatform Platform)
 {
 	if (IsFeatureLevelSupported(Platform, ERHIFeatureLevel::SM5))
@@ -712,6 +715,9 @@ inline bool RHISupportsTessellation(const EShaderPlatform Platform)
 	}
 	return false;
 }
+
+#endif
+// NVCHANGE_END: Add VXGI
 
 inline bool RHINeedsToSwitchVerticalAxis(EShaderPlatform Platform)
 {
@@ -784,5 +790,12 @@ inline bool IsUniformBufferResourceType(EUniformBufferBaseType BaseType)
 {
 	return BaseType == UBMT_SRV || BaseType == UBMT_UAV || BaseType == UBMT_SAMPLER || BaseType == UBMT_TEXTURE;
 }
+
+struct WaveWorksShaderInput
+{
+	EShaderFrequency Frequency;
+	ERHIResourceType Type;
+	FName Name;
+};
 
 #endif	// __RHIDEFINITIONS_H__

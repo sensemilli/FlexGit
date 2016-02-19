@@ -1,3 +1,24 @@
+NVIDIA Merged Branch for 4.9.2
+==============================
+
+This branch contains VXGI, HBAO+, WaveWorks, HairWorks, FLEX, and Turbulence merged together for UE4 4.9.2.
+
+Please follow the below instructions exactly, if you experience any issues, then please contact me, and tell me exactly what issue you are having.
+
+1. Download or Clone to your computer somewhere
+
+3. Double click Setup.bat in the root path (If asked to overwrite files, select 'N')
+
+4. Once the above has complete (needs to download about 3.4gb of prereqs). Double click GenerateProjectFiles.bat
+
+5. Open UE4.sln and set Configuration to "Development Editor". Right click on UE4 in the solution explorer and select "Build"
+
+6. Once compilation has completed, Find ShaderCompilerWorker under programs in Solution Explorer and right click on it and select "Build"
+
+7. Launch UE4Editor.exe (or Start Debugging)
+
+8. Wait for launch procedure to complete, it will get stuck on 45% for a while, since its compiling shaders. If you get an error relating to ShaderCompilerWorker, it means you did not complete Step 6
+
 Unreal Engine
 =============
 

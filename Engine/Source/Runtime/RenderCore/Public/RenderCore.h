@@ -33,6 +33,28 @@ DECLARE_CYCLE_STAT_EXTERN(TEXT("StaticDrawList drawing"),STAT_StaticDrawListDraw
 DECLARE_DWORD_ACCUMULATOR_STAT_EXTERN(TEXT("Lights in scene"),STAT_SceneLights,STATGROUP_SceneRendering, RENDERCORE_API);
 DECLARE_DWORD_COUNTER_STAT_EXTERN(TEXT("Mesh draw calls"),STAT_MeshDrawCalls,STATGROUP_SceneRendering, RENDERCORE_API);
 DECLARE_DWORD_COUNTER_STAT_EXTERN(TEXT("Dynamic path draw calls"),STAT_DynamicPathMeshDrawCalls,STATGROUP_SceneRendering, RENDERCORE_API);
+
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+
+DECLARE_STATS_GROUP(TEXT("VXGI Voxelization"), STATGROUP_VxgiVoxelization, STATCAT_Advanced);
+DECLARE_CYCLE_STAT_EXTERN(TEXT("VXGI Opacity"), STAT_VxgiVoxelizeOpacity, STATGROUP_VxgiVoxelization, RENDERCORE_API);
+DECLARE_CYCLE_STAT_EXTERN(TEXT("VXGI Emissive Materials and Indirect Irradiance"), STAT_VxgiVoxelizeEmissiveAndIndirectIrradiance, STATGROUP_VxgiVoxelization, RENDERCORE_API);
+DECLARE_CYCLE_STAT_EXTERN(TEXT("VXGI Emittance From Diffuse Materials Unshadowed"), STAT_VxgiVoxelizeEmittanceFromDiffuseMaterials, STATGROUP_VxgiVoxelization, RENDERCORE_API);
+DECLARE_CYCLE_STAT_EXTERN(TEXT("VXGI Emittance From Diffuse Materials Shadowed"), STAT_VxgiVoxelizeEmittanceFromDiffuseMaterialsShadowed, STATGROUP_VxgiVoxelization, RENDERCORE_API);
+DECLARE_CYCLE_STAT_EXTERN(TEXT("VXGI Visibility"), STAT_VxgiVoxelizationVisibility, STATGROUP_VxgiVoxelization, RENDERCORE_API);
+DECLARE_CYCLE_STAT_EXTERN(TEXT("VXGI Static Geometry"), STAT_VxgiVoxelizationStaticGeometry, STATGROUP_VxgiVoxelization, RENDERCORE_API);
+DECLARE_CYCLE_STAT_EXTERN(TEXT("VXGI Dynamic Geometry"), STAT_VxgiVoxelizationDynamicGeometry, STATGROUP_VxgiVoxelization, RENDERCORE_API);
+DECLARE_CYCLE_STAT_EXTERN(TEXT("VXGI SetMeshRenderState"), STAT_VxgiVoxelizationSetMeshRenderState, STATGROUP_VxgiVoxelization, RENDERCORE_API);
+DECLARE_CYCLE_STAT_EXTERN(TEXT("VXGI SetSharedState"), STAT_VxgiVoxelizationSetSharedState, STATGROUP_VxgiVoxelization, RENDERCORE_API);
+DECLARE_CYCLE_STAT_EXTERN(TEXT("VXGI ApplyNonShaderState"), STAT_VxgiVoxelizationApplyNonShaderState, STATGROUP_VxgiVoxelization, RENDERCORE_API);
+DECLARE_CYCLE_STAT_EXTERN(TEXT("VXGI SaveUserState"), STAT_VxgiVoxelizationSaveUserState, STATGROUP_VxgiVoxelization, RENDERCORE_API);
+DECLARE_CYCLE_STAT_EXTERN(TEXT("VXGI RestoreUserState"), STAT_VxgiVoxelizationRestoreUserState, STATGROUP_VxgiVoxelization, RENDERCORE_API);
+DECLARE_CYCLE_STAT_EXTERN(TEXT("VXGI ApplyVoxelizationDrawCallState"), STAT_VxgiApplyVoxelizationMaterialInfo, STATGROUP_VxgiVoxelization, RENDERCORE_API);
+
+#endif
+// NVCHANGE_END: Add VXGI
+
 DECLARE_DWORD_COUNTER_STAT_EXTERN(TEXT("Static list draw calls"),STAT_StaticDrawListMeshDrawCalls,STATGROUP_SceneRendering, RENDERCORE_API);
 DECLARE_CYCLE_STAT_EXTERN(TEXT("Present time"),STAT_PresentTime,STATGROUP_SceneRendering, RENDERCORE_API);
 DECLARE_DWORD_ACCUMULATOR_STAT_EXTERN(TEXT("Decals in scene"),STAT_SceneDecals,STATGROUP_SceneRendering, RENDERCORE_API);

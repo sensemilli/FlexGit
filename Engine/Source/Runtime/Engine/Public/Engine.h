@@ -304,6 +304,8 @@
 #include "Engine/UserDefinedEnum.h"
 #include "Engine/UserDefinedStruct.h"
 #include "Animation/VertexAnim/MorphTarget.h"
+#include "Engine/World.h"
+#include "Engine/WaveWorks.h"
 
 #include "SystemSettings.h"					// Scalability options.
 #include "SceneManagement.h"				// Scene management.
@@ -315,3 +317,33 @@
 #include "TimerManager.h"					// Game play timers
 #include "SlateCore.h"
 #include "SlateBasics.h"
+<<<<<<< HEAD
+=======
+
+// NVCHANGE_BEGIN: JCAO - Add Turbulence Header
+#include "FieldSampler/AttractorActor.h"
+#include "FieldSampler/AttractorAsset.h"
+#include "FieldSampler/AttractorComponent.h"
+#include "FieldSampler/FieldSamplerActor.h"
+#include "FieldSampler/FieldSamplerAsset.h"
+#include "FieldSampler/FieldSamplerComponent.h"
+#include "FieldSampler/GridActor.h"
+#include "FieldSampler/GridAsset.h"
+#include "FieldSampler/GridComponent.h"
+#include "FieldSampler/HeatSourceActor.h"
+#include "FieldSampler/HeatSourceAsset.h"
+#include "FieldSampler/HeatSourceComponent.h"
+#include "FieldSampler/JetActor.h"
+#include "FieldSampler/JetAsset.h"
+#include "FieldSampler/JetComponent.h"
+#include "FieldSampler/NoiseActor.h"
+#include "FieldSampler/NoiseAsset.h"
+#include "FieldSampler/NoiseComponent.h"
+#include "FieldSampler/VelocitySourceActor.h"
+#include "FieldSampler/VelocitySourceAsset.h"
+#include "FieldSampler/VelocitySourceComponent.h"
+#include "FieldSampler/VortexActor.h"
+#include "FieldSampler/VortexAsset.h"
+#include "FieldSampler/VortexComponent.h"
+// NVCHANGE_END: JCAO - Add Turbulence Header
+>>>>>>> remotes/MyGit/4.9.2_NVIDIA_Techs

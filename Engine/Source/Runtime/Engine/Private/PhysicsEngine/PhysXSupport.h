@@ -628,6 +628,15 @@ public:
 	virtual void	onDestructibleSleep(physx::NxDestructibleActor** destructibles, physx::PxU32 count) override;
 };
 extern FApexChunkReport GApexChunkReport;
+
+// NVCHANGE_BEGIN: JCAO - Add custom filter shader for turbulence interacting with the kinematic rigid body
+#if WITH_APEX_TURBULENCE
+PxFilterFlags TurbulenceFSFilterShader(PxFilterObjectAttributes attributes0, PxFilterData filterData0,
+	PxFilterObjectAttributes attributes1, PxFilterData filterData1,
+	PxPairFlags& pairFlags, const void* constantBlock, PxU32 constantBlockSize);
+#endif // WITH_APEX_TURBULENCE
+// NVCHANGE_END: JCAO - Add custom filter shader for turbulence interacting with the kinematic rigid body
+
 #endif // #if WITH_APEX
 
 /** Util to determine whether to use NegX version of mesh, and what transform (rotation) to apply. */

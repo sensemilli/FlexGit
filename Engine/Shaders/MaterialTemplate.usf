@@ -47,6 +47,17 @@
 //Materials also have to opt in to these features.
 #define USE_EDITOR_COMPOSITING (USE_EDITOR_SHADERS && EDITOR_PRIMITIVE_MATERIAL)
 
+// NVCHANGE_BEGIN: Add VXGI
+float GetVxgiVoxelizationActive()
+{
+#if VXGI_VOXELIZATION_SHADER
+	return 1.f;
+#else
+	return 0.f;
+#endif
+}
+// NVCHANGE_END: Add VXGI
+
 /**
  * Parameters used by vertex and pixel shaders to access particle properties.
  */
@@ -178,6 +189,14 @@ struct FMaterialPixelParameters
 #if (ES2_PROFILE || ES3_1_PROFILE)
 	float4 LayerWeights;
 #endif
+
+#if WITH_GFSDK_WAVEWORKS
+	float3 WaveWorksNormal;
+	float3 WaveWorksEyeDir;
+	float WaveWorksFoamSurfaceFolding;
+	float WaveWorksFoamTurbulentEnergy;
+	float WaveWorksFoamWaveHats;
+#endif
 };
 
 // @todo compat hack
@@ -252,6 +271,10 @@ struct FMaterialTessellationParameters
 
 	// TangentToWorld[2] is WorldVertexNormal, [0] and [1] are binormal and tangent
 	float3x3 TangentToWorld;
+
+#if WITH_GFSDK_WAVEWORKS
+	float3 WaveWorksDisplacement;
+#endif
 };
 
 /** 
@@ -286,6 +309,10 @@ struct FMaterialVertexParameters
 
 	/** Per-particle properties. Only valid for particle vertex factories. */
 	FMaterialParticleParameters Particle;
+
+#if !USING_TESSELLATION && WITH_GFSDK_WAVEWORKS
+	float3 WaveWorksDisplacement;
+#endif
 };
 
 float3 GetTranslatedWorldPosition(FMaterialVertexParameters Parameters)
@@ -986,6 +1013,39 @@ float3 GetSpeedTreeVertexOffset(FMaterialVertexParameters Parameters, int Geomet
 
 #endif
 
+/** Domain shader for WaveWorks */
+#if USING_TESSELLATION
+float3 WaveWorksDisplacement(FMaterialTessellationParameters Parameters)
+#else
+float3 WaveWorksDisplacement(FMaterialVertexParameters Parameters)
+#endif
+{
+#if WITH_GFSDK_WAVEWORKS
+	return Parameters.WaveWorksDisplacement;
+#else
+	return float3(0,0,0);
+#endif
+}
+
+/** Pixel shader for WaveWorks */
+float3 WaveWorksNormal(FMaterialPixelParameters Parameters)
+{
+#if WITH_GFSDK_WAVEWORKS
+	return Parameters.WaveWorksNormal;
+#else
+	return float3(0,0,0);
+#endif
+}
+
+float3 WaveWorksFoam(FMaterialPixelParameters Parameters)
+{
+#if WITH_GFSDK_WAVEWORKS
+	return float3(Parameters.WaveWorksFoamSurfaceFolding, Parameters.WaveWorksFoamTurbulentEnergy, Parameters.WaveWorksFoamWaveHats);
+#else
+	return float3(0,0,0);
+#endif
+}
+
 MaterialFloat2 GetLightmapUVs(FMaterialPixelParameters Parameters)
 {
 #if LIGHTMAP_UV_ACCESS
@@ -1161,6 +1221,14 @@ float4 SceneTextureLookup(float2 UV, int SceneTextureIndex, bool bFiltered)
 		case 23: return ScreenSpaceData.AmbientOcclusion;
 		// PPI_CustomStencil
 		case 24: return ScreenSpaceData.GBuffer.CustomStencil;
+
+		// NVCHANGE_BEGIN: Add VXGI
+		// PPI_VxgiDiffuse
+		case 25: return float4(ScreenSpaceData.VxgiDiffuse, 0);
+		// PPI_VxgiSpecular
+		case 26: return ScreenSpaceData.VxgiSpecular;
+		// NVCHANGE_END: Add VXGI
+
 		default:
 			return float4(0, 0, 0, 0);
 	}

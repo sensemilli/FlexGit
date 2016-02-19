@@ -51,7 +51,12 @@
 #include "Distributions/DistributionFloatConstantCurve.h"
 #include "Engine/InterpCurveEdSetup.h"
 #include "GameFramework/GameState.h"
+#include "PhysicsEngine/FlexFluidSurfaceComponent.h"
 
+// NVCHANGE_BEGIN: JCAO - Add Turbulence Header
+#include "Particles/Density/ParticleModuleColorOverDensity.h"
+#include "Particles/Density/ParticleModuleSizeOverDensity.h"
+// NVCHANGE_END: JCAO - Add Turbulence Header
 
 #define LOCTEXT_NAMESPACE "ParticleComponents"
 
@@ -697,6 +702,8 @@ UParticleEmitter::UParticleEmitter(const FObjectInitializer& ObjectInitializer)
 	EmitterEditorColor = FColor(0, 150, 150, 255);
 #endif // WITH_EDITORONLY_DATA
 
+	// Flex
+	Mass = 1.0f;
 }
 
 FParticleEmitterInstance* UParticleEmitter::CreateInstance(UParticleSystemComponent* InComponent)
@@ -2046,6 +2053,17 @@ void UParticleSystem::GetAssetRegistryTags(TArray<FAssetRegistryTag>& OutTags) c
 	Super::GetAssetRegistryTags(OutTags);
 }
 
+// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+void UParticleSystem::UpdateDensityModuleClampAlpha(UParticleModuleDensityBase* DensityModule)
+{
+	if (DensityModule)
+	{
+		TArray<const FCurveEdEntry*> CurveEntries;
+		DensityModule->RemoveModuleCurvesFromEditor(CurveEdSetup);
+		DensityModule->AddModuleCurvesToEditor(CurveEdSetup, CurveEntries);
+	}
+}
+// NVCHANGE_END: JCAO - Grid Density with GPU particles
 
 bool UParticleSystem::CalculateMaxActiveParticleCounts()
 {
@@ -3237,6 +3255,16 @@ FParticleDynamicData* UParticleSystemComponent::CreateDynamicData()
 							NewEmitterReplayFrame->OriginalEmitterIndex = EmitterIndex;
 							NewEmitterReplayFrame->FrameState = NewEmitterReplayData;
 						}
+
+#if WITH_FLEX
+						// Update fluid surface proxy with new dynamic emitter data
+						if (EmitterInst->SpriteTemplate->FlexFluidSurfaceTemplate)
+						{
+							UFlexFluidSurfaceComponent* SurfaceComponent = GetWorld()->GetFlexFluidSurface(EmitterInst->SpriteTemplate->FlexFluidSurfaceTemplate);
+							check(SurfaceComponent);
+							SurfaceComponent->SendRenderEmitterDynamicData_Concurrent(NewDynamicEmitterData, EmitterInst, (FParticleSystemSceneProxy*)SceneProxy);
+						}
+#endif
 					}
 				}
 			}

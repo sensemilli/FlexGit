@@ -602,6 +602,10 @@ public:
 	virtual void RenderPostOpaqueExtensions(const FSceneView& View, FRHICommandListImmediate& RHICmdList, class FSceneRenderTargets& SceneContext) = 0;
 	virtual void RenderOverlayExtensions(const FSceneView& View, FRHICommandListImmediate& RHICmdList, FSceneRenderTargets& SceneContext) = 0;
 	virtual bool HasPostOpaqueExtentions() const = 0;
+
+	/** */
+	virtual void SetLightGridResource(FRHICommandListImmediate& RHICmdList, FPixelShaderRHIParamRef PixelShader, class FShaderResourceParameter& LightGridParam) const = 0;
+	virtual void SetHeightFogParams(FRHICommandListImmediate& RHICmdList, FPixelShaderRHIParamRef PixelShader, const class FSceneView* View, class FShaderParameter& ExponentialFogParameters, class FShaderParameter& ExponentialFogColorParameter, class FShaderParameter& InscatteringLightDirection, class FShaderParameter& DirectionalInscatteringColor, class FShaderParameter& DirectionalInscatteringStartDistance) const = 0;
 };
 
 

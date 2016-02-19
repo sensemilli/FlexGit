@@ -171,6 +171,24 @@ struct FParticleEmitterBuildInfo
 	/** Tile vector field in z axis? */
 	uint32 bLocalVectorFieldTileZ : 1;
 
+	// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+	/** The color scale of a particle over density. */
+	FComposableVectorDistribution DensityColor;
+	/** The alpha scale of a particle over density. */
+	FComposableFloatDistribution DensityAlpha;
+	/** The size scale of a particle over density. */
+	FComposableVectorDistribution DensitySize;
+	/** If the color over density is working? */
+	uint32 bColorOverDensity : 1;
+	/** If the size over density is working? */
+	uint32 bSizeOverDensity : 1;
+	// NVCHANGE_END: JCAO - Grid Density with GPU particles
+	// NVCHANGE_BEGIN: JCAO - Field Sampler Module for GPU particle
+#if WITH_APEX_TURBULENCE
+	TArray<struct FGPUSpriteLocalFieldSamplerInfo> LocalFieldSamplers;
+#endif
+	// NVCHANGE_END: JCAO - Field Sampler Module for GPU particle
+
 	/** Default constructor. */
 	FParticleEmitterBuildInfo();
 };
@@ -285,6 +303,16 @@ public:
 	/** The emitter's delay for the current loop		*/
 	float CurrentDelay;
 
+#if WITH_FLEX
+	/** The offset to the index of the associated flex particle			*/
+	int32 FlexDataOffset;
+	/** Set if anisotropy data is available for rendering				*/
+	uint32 bFlexAnisotropyData : 1;
+	/** The container instance to emit into								*/
+	struct FFlexParticleEmitterInstance* FlexEmitterInstance;
+	/** Registered fluid surface component								*/
+	class UFlexFluidSurfaceComponent* FlexFluidSurfaceComponent;
+#endif // WITH_FLEX
 
 	/** The number of triangles to render								*/
 	int32	TrianglesToRender;

@@ -22,6 +22,11 @@ PxPhysics*				GPhysXSDK = NULL;
 PxCooking*				GPhysXCooking = NULL;
 #endif
 FPhysXAllocator*		GPhysXAllocator = NULL;
+// NVCHANGE_BEGIN: JCAO - Create a global cuda context used for all the physx scene
+#if WITH_CUDA_CONTEXT
+PxCudaContextManager*	GCudaContextManager = NULL;
+#endif //WITH_CUDA_CONTEXT
+// NVCHANGE_END: JCAO - Create a global cuda context used for all the physx scene
 
 #if WITH_APEX
 ENGINE_API NxApexSDK*				GApexSDK = NULL;
@@ -34,6 +39,19 @@ ENGINE_API NxModule*				GApexModuleLegacy = NULL;
 #if WITH_APEX_CLOTHING
 ENGINE_API NxModuleClothing*		GApexModuleClothing		= NULL;	
 #endif //WITH_APEX_CLOTHING
+
+// NVCHANGE_BEGIN : JCAO - Add Turbulence Module
+#if WITH_APEX_TURBULENCE
+ENGINE_API NxModuleTurbulenceFS*	GApexModuleTurbulenceFS = NULL;
+ENGINE_API NxModuleParticles*		GApexModuleParticles = NULL;
+ENGINE_API NxModuleBasicFS*			GApexModuleBasicFS = NULL;
+ENGINE_API NxModuleFieldSampler*	GApexModuleFieldSampler = NULL;
+#endif //WITH_APEX_TURBULENCE
+// NVCHANGE_END : JCAO - Add Turbulence Module
+
+#if WITH_FLEX
+ENGINE_API bool						GFlexIsInitialized = false;
+#endif //WITH_FLEX
 
 TMap<int16, NxApexScene*>				GPhysXSceneMap;
 FApexNullRenderResourceManager		GApexNullRenderResourceManager;
@@ -541,11 +559,17 @@ void FPhysXSimEventCallback::onSleep(PxActor** Actors, PxU32 Count)
 class FPhysXTask
 {
 	PxBaseTask&	Task;
+	// NVCHANGE_BEGIN : JCAO - Get the task name from physx task.
+	FString     TaskName;
+	// NVCHANGE_END : JCAO - Get the task name from physx task.
 
 public:
 	FPhysXTask(PxBaseTask* InTask)
 		: Task(*InTask)
-	{		
+	{
+		// NVCHANGE_BEGIN : JCAO - Get the task name from physx task.
+		TaskName = ANSI_TO_TCHAR(Task.getName());
+		// NVCHANGE_END : JCAO - Get the task name from physx task.
 	}
 
 	~FPhysXTask()
@@ -756,6 +780,54 @@ physx::PxPairFlags FApexPhysX3Interface::getContactReportFlags(const physx::PxSh
 	PxFilterData FilterData = PShape->getSimulationFilterData();
 	return (physx::PxPairFlags)FilterData.word3;
 }
+
+// NVCHANGE_BEGIN: JCAO - Add custom filter shader for turbulence interacting with the kinematic rigid body
+#if WITH_APEX_TURBULENCE
+PxFilterFlags TurbulenceFSFilterShader(PxFilterObjectAttributes attributes0, PxFilterData filterData0,
+	PxFilterObjectAttributes attributes1, PxFilterData filterData1,
+	PxPairFlags& pairFlags, const void* constantBlock, PxU32 constantBlockSize)
+{
+	// Find out which channels the objects are in
+	ECollisionChannel Channel0 = (ECollisionChannel)(filterData0.word3 >> 24);
+	ECollisionChannel Channel1 = (ECollisionChannel)(filterData1.word3 >> 24);
+
+
+	// if these bodies are from the same skeletal mesh component, use the disable table to see if we should disable collision
+	if ((filterData0.word2 == filterData1.word2) && (filterData0.word2 != 0))
+	{
+		check(constantBlockSize == sizeof(FPhysSceneShaderInfo));
+		const FPhysSceneShaderInfo * PhysSceneShaderInfo = (const FPhysSceneShaderInfo*)constantBlock;
+		check(PhysSceneShaderInfo);
+		FPhysScene * PhysScene = PhysSceneShaderInfo->PhysScene;
+		check(PhysScene);
+
+		const TMap<uint32, TMap<FRigidBodyIndexPair, bool> *> & CollisionDisableTableLookup = PhysScene->GetCollisionDisableTableLookup();
+		TMap<FRigidBodyIndexPair, bool>* const * DisableTablePtrPtr = CollisionDisableTableLookup.Find(filterData1.word2);
+		check(DisableTablePtrPtr);
+		TMap<FRigidBodyIndexPair, bool>* DisableTablePtr = *DisableTablePtrPtr;
+		FRigidBodyIndexPair BodyPair(filterData0.word0, filterData1.word0); // body indexes are stored in word 0
+		if (DisableTablePtr->Find(BodyPair))
+		{
+			return PxFilterFlag::eKILL;
+		}
+	}
+
+	// see if 0/1 would like to block the other 
+	PxU32 BlockFlagTo1 = (ECC_TO_BITFIELD(Channel1) & filterData0.word1);
+	PxU32 BlockFlagTo0 = (ECC_TO_BITFIELD(Channel0) & filterData1.word1);
+
+	bool bDoesWantToBlock = (BlockFlagTo1 && BlockFlagTo0);
+
+	// if don't want to block, suppress
+	if (!bDoesWantToBlock)
+	{
+		return PxFilterFlag::eSUPPRESS;
+	}
+
+	return PxFilterFlags();
+}
+#endif // WITH_APEX_TURBULENCE
+// NVCHANGE_END: JCAO - Add custom filter shader for turbulence interacting with the kinematic rigid body
 
 #endif	// WITH_APEX
 

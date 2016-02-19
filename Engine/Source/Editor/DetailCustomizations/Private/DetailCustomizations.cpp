@@ -107,6 +107,10 @@
 #include "TextCustomization.h"
 #include "ImportantToggleSettingCustomization.h"
 
+#if WITH_FLEX
+#include "FlexComponentDetails.h"
+#endif
+
 IMPLEMENT_MODULE( FDetailCustomizationsModule, DetailCustomizations );
 
 
@@ -304,8 +308,14 @@ void FDetailCustomizationsModule::RegisterObjectCustomizations()
 
 	RegisterCustomClassLayout("ConfigHierarchyPropertyView", FOnGetDetailCustomizationInstance::CreateStatic(&FConfigPropertyHelperDetails::MakeInstance));
 
+<<<<<<< HEAD
 	RegisterCustomClassLayout("AnalyticsPrivacySettings", FOnGetDetailCustomizationInstance::CreateStatic(&FImportantToggleSettingCustomization::MakeInstance));
 	RegisterCustomClassLayout("EndUserSettings", FOnGetDetailCustomizationInstance::CreateStatic(&FImportantToggleSettingCustomization::MakeInstance));
+=======
+#if WITH_FLEX
+	RegisterCustomClassLayout("FlexComponent", FOnGetDetailCustomizationInstance::CreateStatic(&FFlexComponentDetails::MakeInstance));
+#endif
+>>>>>>> remotes/MyGit/4.9.2_NVIDIA_Techs
 }
 
 

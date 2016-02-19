@@ -13,6 +13,9 @@
 #include "SceneFilterRendering.h"
 #include "SceneUtils.h"
 
+#include "WaveWorksRender.h"
+#include "WaveWorksResource.h"
+
 /**
 * A pixel shader for rendering the full screen refraction pass
 */
@@ -301,6 +304,250 @@ private:
 
 //** distortion accumulate pixel shader type implementation */
 IMPLEMENT_MATERIAL_SHADER_TYPE(template<>,TDistortionMeshPS<FDistortMeshAccumulatePolicy>,TEXT("DistortAccumulatePS"),TEXT("Main"),SF_Pixel);
+
+/*-----------------------------------------------------------------------------
+TDistortionWaveWorksMeshDrawingPolicy
+-----------------------------------------------------------------------------*/
+
+/**
+* Distortion mesh drawing policy for WaveWorks
+*/
+template<class DistortMeshPolicy>
+class TDistortionWaveWorksMeshDrawingPolicy : public FMeshDrawingPolicy
+{
+public:
+	/** context type */
+	typedef FMeshDrawingPolicy::ElementDataType ElementDataType;
+
+	/** Constructor */
+	TDistortionWaveWorksMeshDrawingPolicy(
+		const FVertexFactory* InVertexFactory,
+		const FMaterialRenderProxy* InMaterialRenderProxy,
+		const FMaterial& InMaterialResource,
+		FMatrix InViewMatrix,
+		FMatrix InProjMatrix,
+		bool bInInitializeOffsets,
+		bool bInOverrideWithShaderComplexity,
+		ERHIFeatureLevel::Type InFeatureLevel
+		)
+		: FMeshDrawingPolicy(InVertexFactory, InMaterialRenderProxy, InMaterialResource, bInOverrideWithShaderComplexity)
+		, bInitializeOffsets(bInInitializeOffsets)
+		, CurrentViewMatrix(InViewMatrix)
+		, CurrentProjMatrix(InProjMatrix)
+	{
+		HullShader = NULL;
+		DomainShader = NULL;
+
+		QuadTreeShaderInputMapping.Add(0xffffffff);
+		QuadTreeShaderInputMapping.Add(0xffffffff);
+
+		FWaveWorksShaderParameters* WaveWorksShaderParams = nullptr;
+
+		const EMaterialTessellationMode MaterialTessellationMode = MaterialResource->GetTessellationMode();
+		if (RHISupportsTessellation(GShaderPlatformForFeatureLevel[InFeatureLevel])
+			&& InVertexFactory->GetType()->SupportsTessellationShaders()
+			&& MaterialTessellationMode != MTM_NoTessellation)
+		{
+			HullShader = InMaterialResource.GetShader<TDistortionMeshHS<DistortMeshPolicy>>(VertexFactory->GetType());
+			DomainShader = InMaterialResource.GetShader<TDistortionMeshDS<DistortMeshPolicy>>(VertexFactory->GetType());
+
+			WaveWorksShaderParams = HullShader->GetWaveWorksShaderParameters();
+			if (WaveWorksShaderParams->QuadTreeShaderInputMappings.Num() > 1)
+			{
+				QuadTreeShaderInputMapping[1] = WaveWorksShaderParams->QuadTreeShaderInputMappings[1];
+			}
+		}
+
+		VertexShader = InMaterialResource.GetShader<TDistortionMeshVS<DistortMeshPolicy> >(InVertexFactory->GetType());
+
+		WaveWorksShaderParams = VertexShader->GetWaveWorksShaderParameters();
+		if (WaveWorksShaderParams->QuadTreeShaderInputMappings.Num() > 0)
+		{
+			QuadTreeShaderInputMapping[0] = WaveWorksShaderParams->QuadTreeShaderInputMappings[0];
+		}
+
+		if (bInitializeOffsets)
+		{
+			DistortPixelShader = NULL;
+		}
+		else
+		{
+			DistortPixelShader = InMaterialResource.GetShader<TDistortionMeshPS<DistortMeshPolicy> >(InVertexFactory->GetType());
+		}
+	}
+
+	// FMeshDrawingPolicy interface.
+
+	/**
+	* Match two draw policies
+	* @param Other - draw policy to compare
+	* @return true if the draw policies are a match
+	*/
+	bool Matches(const TDistortionWaveWorksMeshDrawingPolicy& Other) const
+	{
+		return FMeshDrawingPolicy::Matches(Other) &&
+			VertexShader == Other.VertexShader &&
+			HullShader == Other.HullShader &&
+			DomainShader == Other.DomainShader &&
+			bInitializeOffsets == Other.bInitializeOffsets &&
+			DistortPixelShader == Other.DistortPixelShader;
+	}
+
+	/**
+	* Executes the draw commands which can be shared between any meshes using this drawer.
+	* @param CI - The command interface to execute the draw commands on.
+	* @param View - The view of the scene being drawn.
+	*/
+	void SetSharedState(FRHICommandList& RHICmdList, const FSceneView* View, const ContextDataType PolicyContext) const
+	{
+		// Set shared mesh resources
+		FMeshDrawingPolicy::SetSharedState(RHICmdList, View, PolicyContext);
+
+		// Set the translucent shader parameters for the material instance
+		VertexShader->SetParameters(RHICmdList, VertexFactory, MaterialRenderProxy, View);
+
+		if (HullShader && DomainShader)
+		{
+			HullShader->SetParameters(RHICmdList, MaterialRenderProxy, *View);
+			DomainShader->SetParameters(RHICmdList, MaterialRenderProxy, *View);
+		}
+
+		if (bOverrideWithShaderComplexity)
+		{
+			check(!bInitializeOffsets);
+		}
+		if (bInitializeOffsets)
+		{
+		}
+		else
+		{
+			DistortPixelShader->SetParameters(RHICmdList, MaterialRenderProxy, *View);
+		}
+	}
+
+	/**
+	* Create bound shader state using the vertex decl from the mesh draw policy
+	* as well as the shaders needed to draw the mesh
+	* @return new bound shader state object
+	*/
+	FBoundShaderStateInput GetBoundShaderStateInput(ERHIFeatureLevel::Type InFeatureLevel)
+	{
+		FPixelShaderRHIParamRef PixelShaderRHIRef = NULL;
+
+		if (bOverrideWithShaderComplexity)
+		{
+			check(!bInitializeOffsets);
+		}
+
+		if (bInitializeOffsets)
+		{
+		}
+		else
+		{
+			PixelShaderRHIRef = DistortPixelShader->GetPixelShader();
+		}
+
+		return FBoundShaderStateInput(
+			FMeshDrawingPolicy::GetVertexDeclaration(),
+			VertexShader->GetVertexShader(),
+			GETSAFERHISHADER_HULL(HullShader),
+			GETSAFERHISHADER_DOMAIN(DomainShader),
+			PixelShaderRHIRef,
+			FGeometryShaderRHIRef());
+
+	}
+
+	/**
+	* Sets the render states for drawing a mesh.
+	* @param PrimitiveSceneProxy - The primitive drawing the dynamic mesh.  If this is a view element, this will be NULL.
+	* @param Mesh - mesh element with data needed for rendering
+	* @param ElementData - context specific data for mesh rendering
+	*/
+	void SetMeshRenderState(
+		FRHICommandList& RHICmdList,
+		const FSceneView& View,
+		const FPrimitiveSceneProxy* PrimitiveSceneProxy,
+		const FMeshBatch& Mesh,
+		int32 BatchElementIndex,
+		bool bBackFace,
+		float DitheredLODTransitionValue,
+		const ElementDataType& ElementData,
+		const ContextDataType PolicyContext
+		) const
+	{
+
+		const FMeshBatchElement& BatchElement = Mesh.Elements[BatchElementIndex];
+
+		EmitMeshDrawEvents(RHICmdList, PrimitiveSceneProxy, Mesh);
+
+		// Set transforms
+		VertexShader->SetMesh(RHICmdList, VertexFactory, View, PrimitiveSceneProxy, BatchElement, DitheredLODTransitionValue);
+
+		if (HullShader && DomainShader)
+		{
+			HullShader->SetMesh(RHICmdList, VertexFactory, View, PrimitiveSceneProxy, BatchElement, DitheredLODTransitionValue);
+			DomainShader->SetMesh(RHICmdList, VertexFactory, View, PrimitiveSceneProxy, BatchElement, DitheredLODTransitionValue);
+		}
+
+
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+		// Don't set pixel shader constants if we are overriding with the shader complexity pixel shader
+		if (!bOverrideWithShaderComplexity)
+#endif // !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+		{
+			if (!bInitializeOffsets)
+			{
+				DistortPixelShader->SetMesh(RHICmdList, VertexFactory, View, PrimitiveSceneProxy, BatchElement, DitheredLODTransitionValue);
+			}
+		}
+
+		// Set rasterizer state.
+		RHICmdList.SetRasterizerState(GetStaticRasterizerState<true>(
+			(Mesh.bWireframe || IsWireframe()) ? FM_Wireframe : FM_Solid,
+			IsTwoSided() ? CM_None : (XOR(XOR(View.bReverseCulling, bBackFace), Mesh.ReverseCulling) ? CM_CCW : CM_CW)));
+	}
+
+	void DrawMesh(FRHICommandList& RHICmdList, const FMeshBatch& Mesh, int32 BatchElementIndex)
+	{
+		if (SceneProxy->QuadTreeHandle)
+		{
+			auto WaveWorksRHI = SceneProxy->WaveWorksResource->GetWaveWorksRHI();
+			WaveWorksRHI->DrawQuadTree(
+				SceneProxy->QuadTreeHandle,
+				CurrentViewMatrix,
+				CurrentProjMatrix,
+				QuadTreeShaderInputMapping
+				);
+		}
+	}
+
+private:
+	/** vertex shader based on policy type */
+	TDistortionMeshVS<DistortMeshPolicy>* VertexShader;
+
+	TDistortionMeshHS<DistortMeshPolicy>* HullShader;
+	TDistortionMeshDS<DistortMeshPolicy>* DomainShader;
+
+	/** whether we are initializing offsets or accumulating them */
+	bool bInitializeOffsets;
+	/** pixel shader based on policy type */
+	TDistortionMeshPS<DistortMeshPolicy>* DistortPixelShader;
+	/** pixel shader used to initialize offsets */
+	
+public:
+
+	/** Vertex/Hull Shader Input Mappings */
+	TArray<uint32> QuadTreeShaderInputMapping;
+
+	/** The WaveWorks scene proxy */
+	class FWaveWorksSceneProxy* SceneProxy;
+
+	/** The current View matrix */
+	FMatrix CurrentViewMatrix;
+
+	/** The current Projection matrix */
+	FMatrix CurrentProjMatrix;
+};
 
 /*-----------------------------------------------------------------------------
 TDistortionMeshDrawingPolicy
@@ -644,23 +891,50 @@ bool TDistortionMeshDrawingPolicyFactory<DistortMeshPolicy>::DrawDynamicMesh(
 	const auto FeatureLevel = View.GetFeatureLevel();
 	bool bDistorted = Mesh.MaterialRenderProxy && Mesh.MaterialRenderProxy->GetMaterial(FeatureLevel)->IsDistorted();
 
-	if(bDistorted && !bBackFace)
+	if (bDistorted && !bBackFace)
 	{
-		// draw dynamic mesh element using distortion mesh policy
-		TDistortionMeshDrawingPolicy<DistortMeshPolicy> DrawingPolicy(
-			Mesh.VertexFactory,
-			Mesh.MaterialRenderProxy,
-			*Mesh.MaterialRenderProxy->GetMaterial(FeatureLevel),
-			bInitializeOffsets,
-			View.Family->EngineShowFlags.ShaderComplexity,
-			FeatureLevel
-			);
-		RHICmdList.BuildAndSetLocalBoundShaderState(DrawingPolicy.GetBoundShaderStateInput(View.GetFeatureLevel()));
-		DrawingPolicy.SetSharedState(RHICmdList, &View, typename TDistortionMeshDrawingPolicy<DistortMeshPolicy>::ContextDataType());
-		for (int32 BatchElementIndex = 0; BatchElementIndex < Mesh.Elements.Num(); BatchElementIndex++)
+		/* Use WaveWorks drawing policy instead */
+		if (PrimitiveSceneProxy && PrimitiveSceneProxy->IsWaveWorks())
 		{
-			DrawingPolicy.SetMeshRenderState(RHICmdList, View,PrimitiveSceneProxy,Mesh,BatchElementIndex,bBackFace,Mesh.DitheredLODTransitionAlpha,typename TDistortionMeshDrawingPolicy<DistortMeshPolicy>::ElementDataType(), typename TDistortionMeshDrawingPolicy<DistortMeshPolicy>::ContextDataType());
-			DrawingPolicy.DrawMesh(RHICmdList, Mesh,BatchElementIndex);
+			// draw dynamic mesh element using distortion mesh policy
+			TDistortionWaveWorksMeshDrawingPolicy<DistortMeshPolicy> DrawingPolicy(
+				Mesh.VertexFactory,
+				Mesh.MaterialRenderProxy,
+				*Mesh.MaterialRenderProxy->GetMaterial(FeatureLevel),
+				View.ViewMatrices.ViewMatrix,
+				View.ViewMatrices.ProjMatrix,
+				bInitializeOffsets,
+				View.Family->EngineShowFlags.ShaderComplexity,
+				FeatureLevel
+				);
+			RHICmdList.BuildAndSetLocalBoundShaderState(DrawingPolicy.GetBoundShaderStateInput(View.GetFeatureLevel()));
+			DrawingPolicy.SetSharedState(RHICmdList, &View, typename TDistortionMeshDrawingPolicy<DistortMeshPolicy>::ContextDataType());
+
+			DrawingPolicy.SetMeshRenderState(RHICmdList, View, PrimitiveSceneProxy, Mesh, 0, bBackFace, Mesh.DitheredLODTransitionAlpha, typename TDistortionMeshDrawingPolicy<DistortMeshPolicy>::ElementDataType(), typename TDistortionMeshDrawingPolicy<DistortMeshPolicy>::ContextDataType());
+
+			FWaveWorksSceneProxy* SceneProxy = static_cast<FWaveWorksSceneProxy*>(const_cast<FPrimitiveSceneProxy*>(PrimitiveSceneProxy));
+			DrawingPolicy.SceneProxy = SceneProxy;
+
+			DrawingPolicy.DrawMesh(RHICmdList, Mesh, 0);
+		}
+		else
+		{
+			// draw dynamic mesh element using distortion mesh policy
+			TDistortionMeshDrawingPolicy<DistortMeshPolicy> DrawingPolicy(
+				Mesh.VertexFactory,
+				Mesh.MaterialRenderProxy,
+				*Mesh.MaterialRenderProxy->GetMaterial(FeatureLevel),
+				bInitializeOffsets,
+				View.Family->EngineShowFlags.ShaderComplexity,
+				FeatureLevel
+				);
+			RHICmdList.BuildAndSetLocalBoundShaderState(DrawingPolicy.GetBoundShaderStateInput(View.GetFeatureLevel()));
+			DrawingPolicy.SetSharedState(RHICmdList, &View, typename TDistortionMeshDrawingPolicy<DistortMeshPolicy>::ContextDataType());
+			for (int32 BatchElementIndex = 0; BatchElementIndex < Mesh.Elements.Num(); BatchElementIndex++)
+			{
+				DrawingPolicy.SetMeshRenderState(RHICmdList, View, PrimitiveSceneProxy, Mesh, BatchElementIndex, bBackFace, Mesh.DitheredLODTransitionAlpha, typename TDistortionMeshDrawingPolicy<DistortMeshPolicy>::ElementDataType(), typename TDistortionMeshDrawingPolicy<DistortMeshPolicy>::ContextDataType());
+				DrawingPolicy.DrawMesh(RHICmdList, Mesh, BatchElementIndex);
+			}
 		}
 
 		return true;
@@ -750,6 +1024,10 @@ bool FDistortionPrimSet::DrawAccumulatedOffsets(FRHICommandListImmediate& RHICmd
 		for( int32 PrimIdx=0; PrimIdx < Prims.Num(); PrimIdx++ )
 		{
 			FPrimitiveSceneProxy* PrimitiveSceneProxy = Prims[PrimIdx];
+
+			if (PrimitiveSceneProxy->IsFlexFluidSurface())
+				continue;
+
 			const FPrimitiveViewRelevance& ViewRelevance = View.PrimitiveViewRelevanceMap[PrimitiveSceneProxy->GetPrimitiveSceneInfo()->GetIndex()];
 
 			TDistortionMeshDrawingPolicyFactory<FDistortMeshAccumulatePolicy>::ContextType Context(bInitializeOffsets);

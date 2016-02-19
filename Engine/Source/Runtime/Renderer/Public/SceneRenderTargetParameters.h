@@ -96,4 +96,13 @@ private:
 	FShaderResourceParameter CustomDepthTexture;
 	FShaderResourceParameter CustomDepthTextureSampler;
 	FShaderResourceParameter CustomStencilTexture;
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI	
+	FShaderResourceParameter VxgiDiffuseTexture;
+	FShaderResourceParameter VxgiDiffuseTextureSampler;
+	FShaderResourceParameter VxgiSpecularTexture;
+	FShaderResourceParameter VxgiSpecularTextureSampler;
+#endif
+	// NVCHANGE_END: Add VXGI
 };

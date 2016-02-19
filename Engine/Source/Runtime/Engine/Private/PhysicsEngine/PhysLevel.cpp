@@ -7,6 +7,9 @@
 
 #if WITH_PHYSX
 	#include "PhysXSupport.h"
+// NVCHANGE_BEGIN: JCAO - Replace vector fields with APEX turbulence velocity fields
+	#include "PhysXRender.h"
+// NVCHANGE_END: JCAO - Replace vector fields with APEX turbulence velocity fields
 #endif
 
 #if WITH_BOX2D
@@ -18,6 +21,10 @@
 	#define APEX_STATICALLY_LINKED	0
 #endif
 
+#if WITH_FLEX
+// fwd declare error func
+void FlexErrorFunc(FlexErrorSeverity level, const char* msg, const char* file, int line);
+#endif
 
 /** Physics stats */
 
@@ -311,6 +318,95 @@ FString FEndClothSimulationFunction::DiagnosticMessage()
 	return TEXT("FStartClothSimulationFunction");
 }
 
+// NVCHANGE_BEGIN: JCAO - Add PhysXLevel and blueprint node
+bool NvIsPhysXHighSupported()
+{
+#if WITH_CUDA_CONTEXT
+	const uint32 MB = 1024 * 1024;
+
+	bool Ret = false;
+
+	if (GPhysXSDK == NULL)
+		return false;
+
+	// SLI and PhysX high are not compatible due to cuda interop not working with SLI
+	if (GNumActiveGPUsForRendering > 1)
+		return false;
+
+	PxCudaContextManagerDesc CtxMgrDesc;
+	PxCudaContextManager* CudaCtxMgr = PxCreateCudaContextManager(GPhysXSDK->getFoundation(), CtxMgrDesc, GPhysXSDK->getProfileZoneManager());
+	if (CudaCtxMgr == NULL)
+		return false;
+
+	// Fermi and 1 GB of GPU memory for shared GFX and PhysX
+	// Fermi and 768 MB of GPU memory for dedicated PhysX
+	if (CudaCtxMgr->contextIsValid() /*&&
+									 CudaCtxMgr->supportsArchSM20()*/)
+	{
+		//if (CudaCtxMgr->usingDedicatedPhysXGPU() &&
+		//	CudaCtxMgr->getDeviceTotalMemBytes() >= 768 * MB)
+		//{
+		//	Ret = true;
+		//}
+		//else if (CudaCtxMgr->getDeviceTotalMemBytes() >= 1024 * MB)
+		//{
+		Ret = true;
+		//}
+	}
+
+	CudaCtxMgr->release();
+	return Ret;
+#else
+	return false;
+#endif
+}
+// NVCHANGE_END: JCAO - Add PhysXLevel and blueprint node
+
+// NVCHANGE_BEGIN: JCAO - Create a global cuda context used for all the physx scene
+#if WITH_CUDA_CONTEXT
+#if !USE_MULTIPLE_GPU_DISPATCHER_FOR_EACH_SCENE
+PxCudaContextManager* GetCudaContextManager()
+{
+	if (GCudaContextManager == NULL)
+	{
+		physx::PxCudaContextManagerDesc CtxMgrDesc;
+
+		if (GDynamicRHI && !GUsingNullRHI && GDynamicRHI)
+		{
+			CtxMgrDesc.graphicsDevice = GDynamicRHI->RHIGetNativeDevice();
+
+#if WITH_CUDA_INTEROP
+			CtxMgrDesc.interopMode = physx::PxCudaInteropMode::D3D11_INTEROP;
+#endif // WITH_CUDA_INTEROP
+
+			GCudaContextManager = PxCreateCudaContextManager(GPhysXSDK->getFoundation(), CtxMgrDesc, GPhysXSDK->getProfileZoneManager());
+
+			if (GCudaContextManager && !GCudaContextManager->contextIsValid())
+			{
+				TerminateCudaContextManager();
+			}
+
+			if (GCudaContextManager && GCudaContextManager->supportsArchSM30())
+			{
+				GCudaContextManager->setUsingConcurrentStreams(false);
+			}
+		}
+	}
+
+	return GCudaContextManager;
+}
+
+void TerminateCudaContextManager()
+{
+	if (GCudaContextManager != NULL)
+	{
+		GCudaContextManager->release();
+		GCudaContextManager = NULL;
+	}
+}
+#endif // USE_MULTIPLE_GPU_DISPATCHER_FOR_EACH_SCENE
+#endif //WITH_CUDA_CONTEXT
+// NVCHANGE_END: JCAO - Create a global cuda context used for all the physx scene
 
 void PvdConnect(FString Host);
 
@@ -404,7 +500,9 @@ void InitGamePhys()
 	NxApexSDKDesc ApexDesc;
 	ApexDesc.physXSDK				= GPhysXSDK;	// Pointer to the PhysXSDK
 	ApexDesc.cooking				= GPhysXCooking;	// Pointer to the cooking library
-	ApexDesc.renderResourceManager	= &GApexNullRenderResourceManager;	// We will not be using the APEX rendering API, so just use a dummy render resource manager
+	// NVCHANGE_BEGIN: JCAO - Replace vector fields with APEX turbulence velocity fields
+	ApexDesc.renderResourceManager = &GApexRenderResourceManager;
+	// NVCHANGE_END: JCAO - Replace vector fields with APEX turbulence velocity fields
 	ApexDesc.resourceCallback		= &GApexResourceCallback;	// The resource callback is how APEX asks the application to find assets when it needs them
 
 	// Create the APEX SDK
@@ -425,6 +523,12 @@ void InitGamePhys()
 #if WITH_APEX_LEGACY
 	instantiateModuleLegacy();
 #endif
+	// NVCHANGE_BEGIN : JCAO - Add Turbulence Module
+#if WITH_APEX_TURBULENCE
+	instantiateModuleTurbulenceFS();
+	instantiateModuleParticles();
+#endif //WITH_APEX_TURBULENCE
+	// NVCHANGE_END : JCAO - Add Turbulence Module
 #endif
 
 	// 1 legacy module for all in APEX 1.3
@@ -476,18 +580,72 @@ void InitGamePhys()
 	GApexModuleClothing->init(*ModuleParams);
 #endif	//WITH_APEX_CLOTHING
 
+	// NVCHANGE_BEGIN : JCAO - Add Turbulence Module
+#if WITH_APEX_TURBULENCE
+	GApexModuleTurbulenceFS = static_cast<NxModuleTurbulenceFS*>(GApexSDK->createModule("TurbulenceFS", &ErrorCode));
+	check(GApexModuleTurbulenceFS);
+	GApexModuleTurbulenceFS->enableOutputVelocityField();
+	GApexModuleTurbulenceFS->setLODEnabled(false);
+	// NVCHANGE_BEGIN: JCAO - Add custom filter shader for turbulence interacting with the kinematic rigid body
+	GApexModuleTurbulenceFS->setCustomFilterShader(TurbulenceFSFilterShader, NULL, 0);
+	// NVCHANGE_END: JCAO - Add custom filter shader for turbulence interacting with the kinematic rigid body
+
+	GApexModuleParticles = static_cast<NxModuleParticles*>(GApexSDK->createModule("Particles"));
+	check(GApexModuleParticles);
+
+	GApexModuleBasicFS = static_cast<NxModuleBasicFS*>(GApexModuleParticles->getModule("BasicFS"));
+	check(GApexModuleBasicFS);
+	GApexModuleBasicFS->setLODEnabled(false);
+
+	GApexModuleFieldSampler = static_cast<NxModuleFieldSampler*>(GApexModuleParticles->getModule("FieldSampler"));
+	check(GApexModuleFieldSampler);
+	GApexModuleFieldSampler->setLODEnabled(false);
+#endif // WITH_APEX_TURBULENCE
+	// NVCHANGE_END : JCAO - Add Turbulence Module
+
 #endif // #if WITH_APEX
+
+#if WITH_FLEX
+	if (flexInit(FLEX_VERSION, FlexErrorFunc) == eFlexErrorNone)
+	{
+		GFlexIsInitialized = true;
+	}
+#endif // WITH_FLEX
 
 #endif // WITH_PHYSX
 }
 
 void TermGamePhys()
 {
+
+#if WITH_FLEX
+	if (GFlexIsInitialized)
+	{
+		flexShutdown();
+		GFlexIsInitialized = false;
+	}
+#endif // WITH_FLEX
+
 #if WITH_BOX2D
 	FPhysicsIntegration2D::ShutdownPhysics();
 #endif
 
 #if WITH_PHYSX
+	// NVCHANGE_BEGIN: JCAO - Fix the crash caused by missing release apex scene
+	// Force flushing the deferred commands before releasing APEX SDK
+	if (GPhysCommandHandler != NULL)
+	{
+		GPhysCommandHandler->Flush();
+	}
+	// NVCHANGE_END: JCAO - Fix the crash caused by missing release apex scene
+	// NVCHANGE_BEGIN: JCAO - Create a global cuda context used for all the physx scene
+#if WITH_CUDA_CONTEXT
+#if !USE_MULTIPLE_GPU_DISPATCHER_FOR_EACH_SCENE
+	TerminateCudaContextManager();
+#endif
+#endif //WITH_CUDA_CONTEXT
+	// NVCHANGE_END: JCAO - Create a global cuda context used for all the physx scene
+
 	FPhysxSharedData::Terminate();
 
 	// Do nothing if they were never initialized

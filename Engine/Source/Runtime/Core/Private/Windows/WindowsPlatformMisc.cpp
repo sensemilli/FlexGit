@@ -1888,6 +1888,12 @@ void FWindowsPlatformMisc::LoadPreInitModules()
 			FModuleManager::Get().LoadModule(TEXT("D3D12RHI"));
 		}
 		FModuleManager::Get().LoadModule(TEXT("D3D11RHI"));
+
+		// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+		LoadVxgiModule();
+#endif
+		// NVCHANGE_END: Add VXGI
 	}
 	FModuleManager::Get().LoadModule(TEXT("OpenGLDrv"));
 }

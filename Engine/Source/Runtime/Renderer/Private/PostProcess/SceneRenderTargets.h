@@ -11,6 +11,13 @@
 #include "../SystemTextures.h"
 #include "RHIStaticStates.h"
 
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+#include "GFSDK_VXGI.h"
+#define NUM_SHADOW_CASCADE_SURFACES 4
+#endif
+// NVCHANGE_END: Add VXGI
+
 struct IPooledRenderTarget;
 
 /** Number of cube map shadow depth surfaces that will be created and used for rendering one pass point light shadows. */
@@ -154,6 +161,11 @@ protected:
 		CurrentShadingPath(EShadingPath::Num),
 		bAllocateVelocityGBuffer(false),
 		bSnapshot(false)
+		// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+		, VxgiCurrentInputBufferIndex(0)
+#endif
+		// NVCHANGE_END: Add VXGI
 		{
 		}
 	/** Constructor that creates snapshot */
@@ -222,6 +234,14 @@ public:
 	 */
 	void FinishRenderingShadowDepth(FRHICommandList& RHICmdList, const FResolveRect& ResolveRect = FResolveRect());
 
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	bool IsValidCascadeIndex(int32 CascadeIndex) { return CascadeIndex < ARRAY_COUNT(CascadedShadowDepthZ); }
+	void BeginRenderingCascadedShadowDepth(FRHICommandList& RHICmdList, bool bClear, int32 CascadeIndex);
+	void FinishRenderingCascadedShadowDepth(FRHICommandList& RHICmdList, int32 CascadeIndex);
+#endif
+	// NVCHANGE_END: Add VXGI
+
 	void BeginRenderingReflectiveShadowMap(FRHICommandList& RHICmdList, class FLightPropagationVolume* Lpv);
 	void FinishRenderingReflectiveShadowMap(FRHICommandList& RHICmdList, const FResolveRect& ResolveRect = FResolveRect());
 
@@ -287,6 +307,24 @@ public:
 		check(!GSupportsDepthFetchDuringDepthTest);
 		return (const FTexture2DRHIRef&)AuxiliarySceneDepthZ->GetRenderTargetItem().ShaderResourceTexture; 
 	}
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	const FTexture2DRHIRef& GetShadowDepthZTexture(int32 CascadeIndex = 0, bool bInPreshadowCache = false) const
+	{
+		if (bInPreshadowCache)
+		{
+			return (const FTexture2DRHIRef&)PreShadowCacheDepthZ->GetRenderTargetItem().ShaderResourceTexture;
+		}
+		else
+		{
+			check(CascadeIndex < ARRAY_COUNT(CascadedShadowDepthZ));
+			return (const FTexture2DRHIRef&)CascadedShadowDepthZ[CascadeIndex]->GetRenderTargetItem().ShaderResourceTexture;
+		}
+	}
+#else
+	// NVCHANGE_END: Add VXGI
+
 	const FTexture2DRHIRef& GetShadowDepthZTexture(bool bInPreshadowCache = false) const 
 	{ 
 		if (bInPreshadowCache)
@@ -298,6 +336,10 @@ public:
 			return (const FTexture2DRHIRef&)ShadowDepthZ->GetRenderTargetItem().ShaderResourceTexture; 
 		}
 	}
+	// NVCHANGE_BEGIN: Add VXGI
+#endif
+	// NVCHANGE_END: Add VXGI
+
 	const FTexture2DRHIRef* GetActualDepthTexture() const;
 	const FTexture2DRHIRef& GetReflectiveShadowMapDepthTexture() const { return (const FTexture2DRHIRef&)ReflectiveShadowMapDepth->GetRenderTargetItem().ShaderResourceTexture; }
 	const FTexture2DRHIRef& GetReflectiveShadowMapNormalTexture() const { return (const FTexture2DRHIRef&)ReflectiveShadowMapNormal->GetRenderTargetItem().ShaderResourceTexture; }
@@ -334,10 +376,22 @@ public:
 	const FTexture2DRHIRef& GetSceneAlphaCopySurface() const						{ return (const FTexture2DRHIRef&)SceneAlphaCopy->GetRenderTargetItem().TargetableTexture; }
 	const FTexture2DRHIRef& GetSceneDepthSurface() const							{ return (const FTexture2DRHIRef&)SceneDepthZ->GetRenderTargetItem().TargetableTexture; }
 	const FTexture2DRHIRef& GetSmallDepthSurface() const							{ return (const FTexture2DRHIRef&)SmallDepthZ->GetRenderTargetItem().TargetableTexture; }
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	const FTexture2DRHIRef& GetShadowDepthZSurface(int32 CascadeIndex = 0) const
+	{
+		check(CascadeIndex < ARRAY_COUNT(CascadedShadowDepthZ));
+		return (const FTexture2DRHIRef&)CascadedShadowDepthZ[CascadeIndex]->GetRenderTargetItem().TargetableTexture;
+	}
+#else
+	// NVCHANGE_END: Add VXGI
 	const FTexture2DRHIRef& GetShadowDepthZSurface() const						
 	{ 
 		return (const FTexture2DRHIRef&)ShadowDepthZ->GetRenderTargetItem().TargetableTexture; 
 	}
+	// NVCHANGE_BEGIN: Add VXGI
+#endif
+	// NVCHANGE_END: Add VXGI
 	const FTexture2DRHIRef& GetOptionalShadowDepthColorSurface() const 
 	{ 
 		return (const FTexture2DRHIRef&)OptionalShadowDepthColor->GetRenderTargetItem().TargetableTexture; 
@@ -488,9 +542,16 @@ private: // Get...() methods instead of direct access
 	// 0 before BeginRenderingSceneColor and after tone mapping in deferred shading
 	// Permanently allocated for forward shading
 	TRefCountPtr<IPooledRenderTarget> SceneColor[(int32)EShadingPath::Num];
+
+public:
+
 	// also used as LDR scene color
 	TRefCountPtr<IPooledRenderTarget> LightAttenuation;
-public:
+
+	TRefCountPtr<IPooledRenderTarget> HairMask;
+	TRefCountPtr<IPooledRenderTarget> HairLightAttenuation;
+	TRefCountPtr<IPooledRenderTarget> HairDepthZ;
+
 	// Reflection Environment: Bringing back light accumulation buffer to apply indirect reflections
 	TRefCountPtr<IPooledRenderTarget> LightAccumulation;
 
@@ -525,8 +586,20 @@ public:
 	TRefCountPtr<IPooledRenderTarget> CustomDepth;
 	// used by the CustomDepth material feature for stencil
 	TRefCountPtr<FRHIShaderResourceView> CustomStencilSRV;
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	TRefCountPtr<IPooledRenderTarget> CascadedShadowDepthZ[NUM_SHADOW_CASCADE_SURFACES];
+#else
+	// NVCHANGE_END: Add VXGI
+
 	// Render target for per-object shadow depths.
 	TRefCountPtr<IPooledRenderTarget> ShadowDepthZ;
+
+	// NVCHANGE_BEGIN: Add VXGI
+#endif
+	// NVCHANGE_END: Add VXGI
+
 	// optional in case this RHI requires a color render target
 	TRefCountPtr<IPooledRenderTarget> OptionalShadowDepthColor;
 	// Cache of preshadow depths
@@ -534,6 +607,42 @@ public:
 	TRefCountPtr<IPooledRenderTarget> PreShadowCacheDepthZ;
 	// Stores accumulated density for shadows from translucency
 	TRefCountPtr<IPooledRenderTarget> TranslucencyShadowTransmission[NumTranslucencyShadowSurfaces];
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+private:
+	bool VxgiCurrentInputBufferIndex;
+	TRefCountPtr<IPooledRenderTarget> VxgiSceneDepthZArray[2];
+	TRefCountPtr<IPooledRenderTarget> VxgiNormalAndRoughnessArray[2];
+
+	const FTexture2DRHIRef& GetVxgiSceneDepthTexture(bool BufferIndex) const { return (const FTexture2DRHIRef&)VxgiSceneDepthZArray[BufferIndex]->GetRenderTargetItem().ShaderResourceTexture; }
+	const FTexture2DRHIRef& GetVxgiNormalAndRoughnessTexture(bool BufferIndex) const { return (const FTexture2DRHIRef&)VxgiNormalAndRoughnessArray[BufferIndex]->GetRenderTargetItem().ShaderResourceTexture; }
+
+	const NVRHI::TextureHandle GetVxgiSceneDepthTextureHandle(bool BufferIndex) const { return GDynamicRHI->GetVXGITextureFromRHI((FRHITexture*)GetVxgiSceneDepthTexture(BufferIndex)); }
+	const NVRHI::TextureHandle GetVxgiNormalAndRoughnessTextureHandle(bool BufferIndex) const { return GDynamicRHI->GetVXGITextureFromRHI((FRHITexture*)GetVxgiNormalAndRoughnessTexture(BufferIndex)); }
+
+public:
+	TRefCountPtr<IPooledRenderTarget> VxgiNormalAndRoughness;
+	TArray<FTexture2DRHIRef> VxgiOutputDiffuse;
+	TArray<FTexture2DRHIRef> VxgiOutputSpec;
+
+	void SwapVxgiInputBuffers()
+	{
+		VxgiCurrentInputBufferIndex = !VxgiCurrentInputBufferIndex;
+		VxgiNormalAndRoughness = VxgiNormalAndRoughnessArray[VxgiCurrentInputBufferIndex];
+		SceneDepthZ = VxgiSceneDepthZArray[VxgiCurrentInputBufferIndex];
+	}
+
+	FTextureRHIParamRef GetVxgiOutputDiffuse(int32 ViewIndex) const { return VxgiOutputDiffuse.IsValidIndex(ViewIndex) && IsValidRef(VxgiOutputDiffuse[ViewIndex]) ? (FTextureRHIParamRef)VxgiOutputDiffuse[ViewIndex] : GSystemTextures.BlackDummy->GetRenderTargetItem().ShaderResourceTexture; }
+	FTextureRHIParamRef GetVxgiOutputSpecular(int32 ViewIndex) const { return VxgiOutputSpec.IsValidIndex(ViewIndex) && IsValidRef(VxgiOutputSpec[ViewIndex]) ? (FTextureRHIParamRef)VxgiOutputSpec[ViewIndex] : GSystemTextures.BlackDummy->GetRenderTargetItem().ShaderResourceTexture; }
+
+	const NVRHI::TextureHandle GetCurrentVxgiSceneDepthTextureHandle() const { return GetVxgiSceneDepthTextureHandle(VxgiCurrentInputBufferIndex); }
+	const NVRHI::TextureHandle GetCurrentVxgiNormalAndRoughnessTextureHandle() const { return GetVxgiNormalAndRoughnessTextureHandle(VxgiCurrentInputBufferIndex); }
+
+	const NVRHI::TextureHandle GetPreviousVxgiSceneDepthTextureHandle() const { return GetVxgiSceneDepthTextureHandle(!VxgiCurrentInputBufferIndex); }
+	const NVRHI::TextureHandle GetPreviousVxgiNormalAndRoughnessTextureHandle() const { return GetVxgiNormalAndRoughnessTextureHandle(!VxgiCurrentInputBufferIndex); }
+#endif
+	// NVCHANGE_END: Add VXGI
 
 	TRefCountPtr<IPooledRenderTarget> ReflectiveShadowMapNormal;
 	TRefCountPtr<IPooledRenderTarget> ReflectiveShadowMapDiffuse;

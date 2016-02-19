@@ -1014,6 +1014,25 @@ void FPostProcessing::Process(FRHICommandListImmediate& RHICmdList, FViewInfo& V
 		bool bAllowTonemapper = true;
 		EStereoscopicPass StereoPass = View.StereoPass;
 
+		// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+		{
+			// Disable the tonemapper for opacity voxels visualization, enable it for emittance and irradiance
+			if (View.Family->EngineShowFlags.VxgiOpacityVoxels)
+			{
+				bAllowTonemapper = false;
+			}
+		}
+		{
+			static const auto CVar = IConsoleManager::Get().FindTConsoleVariableDataInt(TEXT("r.VXGI.ForceDisableTonemapper"));
+			if (CVar->GetValueOnRenderThread())
+			{
+				bAllowTonemapper = false;
+			}
+		}
+#endif
+		// NVCHANGE_END: Add VXGI
+
 		FSceneViewState* ViewState = (FSceneViewState*)Context.View.State;
 
 		{

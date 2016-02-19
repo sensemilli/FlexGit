@@ -17,7 +17,7 @@ void FRHICommandSetRasterizerState::Execute(FRHICommandListBase& CmdList)
 void FRHICommandSetDepthStencilState::Execute(FRHICommandListBase& CmdList)
 {
 	RHISTAT(SetDepthStencilState);
-	INTERNAL_DECORATOR(SetDepthStencilState)(State, StencilRef);
+	INTERNAL_DECORATOR(SetDepthStencilState)(State, StencilRef, bBypassValidation);
 }
 
 template <typename TShaderRHIParamRef>
@@ -100,6 +100,12 @@ template struct FRHICommandSetShaderSampler<FDomainShaderRHIParamRef>;
 template struct FRHICommandSetShaderSampler<FGeometryShaderRHIParamRef>;
 template struct FRHICommandSetShaderSampler<FPixelShaderRHIParamRef>;
 template struct FRHICommandSetShaderSampler<FComputeShaderRHIParamRef>;
+
+void FRHICommandSetWaveWorksState::Execute(FRHICommandListBase& CmdList)
+{
+	RHISTAT(SetWaveWorksState);
+	INTERNAL_DECORATOR(SetWaveWorksState)(State, ViewMatrix, ShaderInputMappings);
+}
 
 void FRHICommandDrawPrimitive::Execute(FRHICommandListBase& CmdList)
 {
@@ -294,6 +300,54 @@ void FRHIGraphicsWaitOnAsyncComputeJob::Execute(FRHICommandListBase& CmdList)
 	RHISTAT(GraphicsWaitOnAsyncComputeJob);
 	INTERNAL_DECORATOR(GraphicsWaitOnAsyncComputeJob)(FenceIndex);
 }
+
+// NVCHANGE_BEGIN: Add HBAO+
+#if WITH_GFSDK_SSAO
+
+void FRHICommandRenderHBAO::Execute(FRHICommandListBase& CmdList)
+{
+	RHISTAT(RenderHBAO);
+	INTERNAL_DECORATOR(RenderHBAO)(
+		SceneDepthTextureRHI,
+		ProjectionMatrix,
+		SceneNormalTextureRHI,
+		ViewMatrix,
+		SceneColorTextureRHI,
+		AOParams);
+}
+
+#endif
+// NVCHANGE_END: Add HBAO+
+
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+
+void FRHIVXGICleanupAfterVoxelization::Execute(FRHICommandListBase& CmdList)
+{
+	RHISTAT(VXGICleanupAfterVoxelization);
+	INTERNAL_DECORATOR(VXGICleanupAfterVoxelization)();
+}
+
+void FRHISetViewportsAndScissorRects::Execute(FRHICommandListBase& CmdList)
+{
+	RHISTAT(SetViewportsAndScissorRects);
+	INTERNAL_DECORATOR(SetViewportsAndScissorRects)(Count, Viewports.GetData(), ScissorRects.GetData());
+}
+
+void FRHIDispatchIndirectComputeShaderStructured::Execute(FRHICommandListBase& CmdList)
+{
+	RHISTAT(DispatchIndirectComputeShaderStructured);
+	INTERNAL_DECORATOR(DispatchIndirectComputeShaderStructured)(ArgumentBuffer, ArgumentOffset);
+}
+
+void FRHICopyStructuredBufferData::Execute(FRHICommandListBase& CmdList)
+{
+	RHISTAT(CopyStructuredBufferData);
+	INTERNAL_DECORATOR(CopyStructuredBufferData)(DestBuffer, DestOffset, SrcBuffer, SrcOffset, DataSize);
+}
+
+#endif
+// NVCHANGE_END: Add VXGI
 
 void FRHICommandBuildLocalBoundShaderState::Execute(FRHICommandListBase& CmdList)
 {

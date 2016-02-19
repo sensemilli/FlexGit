@@ -8,6 +8,10 @@
 
 #include "DepthRendering.h"		// EDepthDrawingMode
 
+// NVCHANGE_BEGIN: Add VXGI
+#include "GFSDK_VXGI.h"
+// NVCHANGE_END: Add VXGI
+
 class FLightShaftsOutput
 {
 public:
@@ -216,6 +220,47 @@ private:
 	/** Renders the lights in SortedLights in the range [0, NumUnshadowedLights) using tiled deferred shading. */
 	void RenderTiledDeferredLighting(FRHICommandListImmediate& RHICmdList, const TArray<FSortedLightSceneInfo, SceneRenderingAllocator>& SortedLights, int32 NumUnshadowedLights, const FSimpleLightArray& SimpleLights);
 
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	bool IsVxgiEnabled(const FViewInfo& View);
+	bool IsVxgiEnabled();
+	VXGI::Box3f GetVxgiWorldSpaceSceneBounds();
+	void PrepareForVxgiOpacityVoxelization(FRHICommandList& RHICmdList);
+	void PrepareForVxgiEmittanceVoxelization(FRHICommandList& RHICmdList);
+	void VoxelizeVxgiEmissiveAndIndirectIrradiance(FRHICommandList& RHICmdList);
+	void VoxelizeVxgiOpacity(FRHICommandList& RHICmdList);
+	void InitializeVxgiVoxelization(FRHICommandList& RHICmdList);
+	void RenderForVxgiVoxelization(FRHICommandList& RHICmdList, int32 VoxelizationPass, const VXGI::EmittanceVoxelizationArgs& Args);
+	void FinalizeVxgiVoxelization(FRHICommandList& RHICmdList);
+	void EndVxgiFinalPostProcessSettings(FFinalPostProcessSettings& FinalPostProcessSettings, const VXGI::VoxelizationParameters& VParams);
+
+	void SetVxgiDiffuseTracingParameters(const FViewInfo& View, VXGI::DiffuseTracingParameters &TracingParams);
+	void SetVxgiSpecularTracingParameters(const FViewInfo& View, VXGI::SpecularTracingParameters &TracingParams);
+	void SetVxgiInputBuffers(FSceneRenderTargets& SceneContext, const FViewInfo& View, VXGI::IViewTracer::InputBuffers& InputBuffers, VXGI::IViewTracer::InputBuffers& InputBuffersPreviousFrame);
+	void PrepareVxgiGBuffer(FRHICommandListImmediate& RHICmdList, const FViewInfo& View);
+	void RenderVxgiTracing(FRHICommandListImmediate& RHICmdList, const FViewInfo& View);
+	void CompositeVxgiDiffuseTracing(FRHICommandListImmediate& RHICmdList, const FViewInfo& View);
+	void RenderVxgiDebug(FRHICommandListImmediate& RHICmdList, const FViewInfo& View);
+	void SetVxgiVoxelizationParameters(VXGI::VoxelizationParameters& Params);
+	void InitVxgiRenderingState(const FSceneViewFamily* InViewFamily);
+
+	float VxgiRange;
+	FVector VxgiAnchorPoint;
+	FBoxSphereBounds VxgiClipmapBounds;
+	VXGI::VoxelizationParameters VxgiVoxelizationParameters;
+	VXGI::Matrix4f VxgiViewMatrix;
+	bool bVxgiPerformOpacityVoxelization;
+	bool bVxgiPerformEmittanceVoxelization;
+	bool bVxgiUseDiffuseMaterials;
+	bool bVxgiUseEmissiveMaterials;
+	bool bVxgiDebugRendering;
+	bool bVxgiTemporalReprojectionEnable;
+	bool bVxgiAmbientOcclusionMode;
+	bool bVxgiMultiBounceEnable;
+	bool bVxgiEmissiveMaterialsEnable;
+#endif
+	// NVCHANGE_END: Add VXGI
+
 	/** Renders the scene's lighting. */
 	void RenderLights(FRHICommandListImmediate& RHICmdList);
 
@@ -356,3 +401,4 @@ private:
 
 	friend class FTranslucentPrimSet;
 };
+

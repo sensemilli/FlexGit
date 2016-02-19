@@ -203,6 +203,20 @@ public:
 
 	bool IsCreatedByConstructionScript() const;
 
+	// NVCHANGE_BEGIN: JCAO - Check if to enable the component by the defined PhysX Level
+	/** If False, the component will be destroyed when PhysX level equals 0 */
+	UPROPERTY(EditAnywhere, Category = PhysX)
+	uint32 bEnableForPhysXLevel0 : 1;
+
+	/** If False, the component will be destroyed when PhysX level equals 1 */
+	UPROPERTY(EditAnywhere, Category = PhysX)
+	uint32 bEnableForPhysXLevel1 : 1;
+
+	/** If False, the component will be destroyed when PhysX level equals 2 */
+	UPROPERTY(EditAnywhere, Category = PhysX)
+	uint32 bEnableForPhysXLevel2 : 1;
+	// NVCHANGE_END: JCAO - Check if to enable the component by the defined PhysX Level
+
 	UFUNCTION()
 	void OnRep_IsActive();
 

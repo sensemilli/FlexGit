@@ -43,6 +43,8 @@ struct FPrimitiveViewRelevance
 	uint32 bHasWorldPositionOffset : 1;
 	uint32 bUsesGlobalDistanceField : 1;
 
+	uint32 bHair : 1;
+
 	/** 
 	 * Whether this primitive view relevance has been initialized this frame.  
 	 * Primitives that have not had ComputeRelevanceForView called on them (because they were culled) will not be initialized,
@@ -74,7 +76,8 @@ struct FPrimitiveViewRelevance
 		bNormalTranslucencyRelevance(false),		
 		bHasWorldPositionOffset(false),
 		bUsesGlobalDistanceField(false),
-		bInitializedThisFrame(false)
+		bInitializedThisFrame(false),
+		bHair(false)
 	{}
 
 	/** Bitwise OR operator.  Sets any relevance bits which are present in either FPrimitiveViewRelevance. */

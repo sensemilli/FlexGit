@@ -108,6 +108,15 @@ which can be configured via defines for various temporal AA passes.
 	#define AA_DOF 0
 #endif
 
+	if (bHasHair)
+	{
+		float HairMask = HairMaskTexture.SampleLevel(PostprocessInput0Sampler, UVAndScreenPos.xy, 0).r;
+		if (HairMask > 0)
+		{
+			OutColor = PostprocessInput0.SampleLevel(PostprocessInput0Sampler, UVAndScreenPos.xy, 0);
+			return;
+		}
+	}
 
 	// FIND MOTION OF PIXEL AND NEAREST IN NEIGHBORHOOD
     // ------------------------------------------------

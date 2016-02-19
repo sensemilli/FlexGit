@@ -317,3 +317,75 @@ DEFINE_LOG_CATEGORY(LogProfilingDebugging);
 DEFINE_LOG_CATEGORY(LogTemp);
 
 #undef LOCTEXT_NAMESPACE
+
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+
+#if PLATFORM_WINDOWS
+
+static HMODULE VXGIDLLHandle = 0;
+static HMODULE VXGINvapiDLLHandle = 0;
+static int32 VXGIDLLHandleRefCount = 0;
+static FCriticalSection VXGILoadCS;
+
+void CORE_API LoadVxgiModule()
+{
+	if (FPlatformAtomics::InterlockedIncrement(&VXGIDLLHandleRefCount) == 1)
+	{
+		VXGILoadCS.Lock();
+		check(VXGIDLLHandle == 0);
+		FString VXGIBinariesRoot = FPaths::EngineDir() / TEXT("Binaries/ThirdParty/GameWorks/VXGI/");
+#if PLATFORM_64BITS
+		FString VXGINvapiPath(VXGIBinariesRoot + TEXT("GFSDK_VXGI_NVAPI_x64.dll"));
+#else
+		FString VXGINvapiPath(VXGIBinariesRoot + TEXT("GFSDK_VXGI_NVAPI_x86.dll"));
+#endif
+#if UE_BUILD_DEBUG
+#if PLATFORM_64BITS
+		FString VXGIPath(VXGIBinariesRoot + TEXT("GFSDK_VXGId_x64.dll"));
+#else
+		FString VXGIPath(VXGIBinariesRoot + TEXT("GFSDK_VXGId_x86.dll"));
+#endif
+#else
+#if PLATFORM_64BITS
+		FString VXGIPath(VXGIBinariesRoot + TEXT("GFSDK_VXGI_x64.dll"));
+#else
+		FString VXGIPath(VXGIBinariesRoot + TEXT("GFSDK_VXGI_x86.dll"));
+#endif
+#endif
+		VXGINvapiDLLHandle = LoadLibraryW(*VXGINvapiPath);
+		check(VXGINvapiDLLHandle);
+		VXGIDLLHandle = LoadLibraryW(*VXGIPath);
+		check(VXGIDLLHandle);
+		VXGILoadCS.Unlock();
+	}
+}
+
+void CORE_API UnloadVxgiModule()
+{
+	if (FPlatformAtomics::InterlockedDecrement(&VXGIDLLHandleRefCount) == 0)
+	{
+		VXGILoadCS.Lock();
+		check(VXGIDLLHandle != 0);
+		FreeLibrary(VXGIDLLHandle);
+		check(VXGINvapiDLLHandle != 0);
+		FreeLibrary(VXGINvapiDLLHandle);
+		VXGIDLLHandle = 0;
+		VXGINvapiDLLHandle = 0;
+		VXGILoadCS.Unlock();
+	}
+}
+
+#else // PLATFORM_WINDOWS
+
+void CORE_API LoadVxgiModule()
+{
+}
+void CORE_API UnloadVxgiModule()
+{
+}
+
+#endif // PLATFORM_WINDOWS
+
+#endif
+// NVCHANGE_END: Add VXGI

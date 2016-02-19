@@ -252,6 +252,12 @@ FD3D12DynamicRHI::FD3D12DynamicRHI(IDXGIFactory4* InDXGIFactory, FD3D12Adapter& 
 	ViewportFrameCounter(0),
 	MainAdapter(InAdapter),
 	MainDevice(nullptr)
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	, VxgiInterface(NULL)
+	, VxgiRendererD3D12(NULL)
+#endif
+	// NVCHANGE_END: Add VXGI
 {
 	FMemory::Memzero(ThreadDynamicHeapAllocatorArray, sizeof(ThreadDynamicHeapAllocatorArray));
 
@@ -441,6 +447,13 @@ FD3D12DynamicRHI::~FD3D12DynamicRHI()
 void FD3D12DynamicRHI::Shutdown()
 {
 	check(IsInGameThread() && IsInRenderingThread());  // require that the render thread has been shut down
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	ReleaseVxgiInterface();
+	UnloadVxgiModule();
+#endif
+	// NVCHANGE_END: Add VXGI
 
 	// Cleanup the D3D devices.
 	MainDevice->CleanupD3DDevice();

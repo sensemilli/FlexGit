@@ -35,6 +35,20 @@ public abstract class BaseWinPlatform : Platform
 			StageExecutable("exe", SC, CommandUtils.CombinePaths(SC.LocalRoot, "Engine/Binaries", SC.PlatformDir), "CrashReportClient.");
 		}
 
+        // Hairworks DLL
+        StageExecutable("dll", SC, CommandUtils.CombinePaths(SC.LocalRoot, "Engine/Binaries/ThirdParty/Hairworks"), "*.", true);
+		
+		// WaveWorks DLL
+        StageExecutable("dll", SC, CommandUtils.CombinePaths(SC.LocalRoot, "Engine/Binaries/ThirdParty/WaveWorks"), "*.", true);
+
+        // NVCHANGE_BEGIN: Add VXGI
+        StageExecutable("dll", SC, CommandUtils.CombinePaths(SC.LocalRoot, "Engine/Binaries/ThirdParty/GameWorks/VXGI"), "*.", true);
+        // NVCHANGE_END: Add VXGI
+
+        // NVCHANGE_BEGIN: Add HBAO+
+        StageExecutable("dll", SC, CommandUtils.CombinePaths(SC.LocalRoot, "Engine/Binaries/ThirdParty/GameWorks/GFSDK_SSAO"), "*.", true);
+        // NVCHANGE_END: Add HBAO+
+
 		// Stage all the build products
 		foreach(BuildReceipt Receipt in SC.StageTargetReceipts)
 		{

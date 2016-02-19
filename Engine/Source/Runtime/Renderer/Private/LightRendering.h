@@ -91,6 +91,11 @@ void SetDeferredLightParameters(
 		DeferredLightUniformsValue.LightColor *= LightSceneInfo->Proxy->GetIndirectLightingScale();
 	}
 
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	if (!View.bIsVxgiVoxelization)
+#endif
+		// NVCHANGE_END: Add VXGI
 	{
 		// Distance fade
 		FSphere Bounds = LightSceneInfo->Proxy->GetBoundingSphere();

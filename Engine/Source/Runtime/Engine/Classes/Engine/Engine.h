@@ -1279,6 +1279,20 @@ public:
 	UPROPERTY(config, EditAnywhere, Category=Framerate, meta=(UIMin=0, ClampMin=0, EditCondition="!bUseFixedFrameRate"))
 	float MinDesiredFrameRate;
 
+	// NVCHANGE_BEGIN: JCAO - Add PhysXLevel and blueprint node
+	/** 0 (PhysX hardware acceleration off), 1 (Low PhysX hardware acceleration), 2 (High PhysX hardware acceleration) */
+	UPROPERTY(globalconfig)
+	int32 PhysXLevel;
+	UPROPERTY(globalconfig)
+	int32 NextPhysXLevel;
+	// NVCHANGE_END: JCAO - Add PhysXLevel and blueprint node
+
+	// NVCHANGE_BEGIN: JCAO - Add Distance at which APEX Turbulence and GPU clothing will be disabled.
+	/** Distance at which APEX Turbulence and GPU clothing will be disabled. */
+	UPROPERTY(globalconfig)
+	float ApexTurbulenceDisabledDistance;
+	// NVCHANGE_END: JCAO - Add Distance at which APEX Turbulence and GPU clothing will be disabled.
+
 private:
 	/** Default color of selected objects in the level viewport (additive) */
 	UPROPERTY(globalconfig)
@@ -2578,6 +2592,19 @@ public:
 	const UGameUserSettings* GetGameUserSettings() const;
 	UGameUserSettings* GetGameUserSettings();
 
+<<<<<<< HEAD
+=======
+	/** Delegate handler for screenshots */
+	void HandleScreenshotCaptured(int32 Width, int32 Height, const TArray<FColor>& Colors);
+
+	// NVCHANGE_BEGIN: JCAO - Add PhysXLevel and blueprint node
+	const int32 GetPhysXLevel() const;
+	const int32 GetNextPhysXLevel() const;
+	void SetPhysXLevel(int32 InLevel);
+	void SetNextPhysXLevel(int32 InLevel);
+	// NVCHANGE_END: JCAO - Add PhysXLevel and blueprint node
+
+>>>>>>> remotes/MyGit/4.9.2_NVIDIA_Techs
 private:
 	void CreateGameUserSettings();
 

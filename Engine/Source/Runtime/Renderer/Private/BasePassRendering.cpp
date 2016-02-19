@@ -7,6 +7,9 @@
 #include "RendererPrivate.h"
 #include "ScenePrivate.h"
 
+#include "WaveWorksRender.h"
+#include "WaveWorksResource.h"
+
 /** Whether to replace lightmap textures with solid colors to visualize the mip-levels. */
 bool GVisualizeMipLevels = false;
 
@@ -363,37 +366,76 @@ public:
 #endif
 		const FScene* Scene = Parameters.PrimitiveSceneProxy ? Parameters.PrimitiveSceneProxy->GetPrimitiveSceneInfo()->Scene : NULL;
 
-		TBasePassDrawingPolicy<LightMapPolicyType> DrawingPolicy(
-			Parameters.Mesh.VertexFactory,
-			Parameters.Mesh.MaterialRenderProxy,
-			*Parameters.Material,
-			Parameters.FeatureLevel,
-			LightMapPolicy,
-			Parameters.BlendMode,
-			Parameters.TextureMode,
-			Scene && Scene->SkyLight && !Scene->SkyLight->bHasStaticLighting && Scene->SkyLight->bWantsStaticShadowing && bIsLitMaterial,
-			IsTranslucentBlendMode(Parameters.BlendMode) && (Scene && Scene->HasAtmosphericFog()) && View.Family->EngineShowFlags.AtmosphericFog,
-			View.Family->EngineShowFlags.ShaderComplexity,
-			false,
-			Parameters.bEditorCompositeDepthTest
-			);
-		RHICmdList.BuildAndSetLocalBoundShaderState(DrawingPolicy.GetBoundShaderStateInput(View.GetFeatureLevel()));
-		DrawingPolicy.SetSharedState(RHICmdList, &View, typename TBasePassDrawingPolicy<LightMapPolicyType>::ContextDataType());
-
-		for( int32 BatchElementIndex = 0, Num = Parameters.Mesh.Elements.Num(); BatchElementIndex < Num; BatchElementIndex++ )
+		if (Parameters.PrimitiveSceneProxy && Parameters.PrimitiveSceneProxy->IsWaveWorks())
 		{
+			TBasePassWaveWorksDrawingPolicy<LightMapPolicyType> DrawingPolicy(
+				Parameters.Mesh.VertexFactory,
+				Parameters.Mesh.MaterialRenderProxy,
+				*Parameters.Material,
+				Parameters.FeatureLevel,
+				LightMapPolicy,
+				Parameters.BlendMode,
+				Parameters.TextureMode,
+				View.ViewMatrices.ViewMatrix,
+				View.ViewMatrices.ProjMatrix,
+				Scene && Scene->SkyLight && !Scene->SkyLight->bHasStaticLighting && Scene->SkyLight->bWantsStaticShadowing && bIsLitMaterial,
+				IsTranslucentBlendMode(Parameters.BlendMode) && (Scene && Scene->HasAtmosphericFog()) && View.Family->EngineShowFlags.AtmosphericFog,
+				View.Family->EngineShowFlags.ShaderComplexity,
+				false,
+				Parameters.bEditorCompositeDepthTest
+				);
+			RHICmdList.BuildAndSetLocalBoundShaderState(DrawingPolicy.GetBoundShaderStateInput(View.GetFeatureLevel()));
+			DrawingPolicy.SetSharedState(RHICmdList, &View, typename TBasePassDrawingPolicy<LightMapPolicyType>::ContextDataType());
+
 			DrawingPolicy.SetMeshRenderState(
-				RHICmdList, 
+				RHICmdList,
 				View,
 				Parameters.PrimitiveSceneProxy,
 				Parameters.Mesh,
-				BatchElementIndex,
+				0,
 				bBackFace,
 				DitheredLODTransitionValue,
-				typename TBasePassDrawingPolicy<LightMapPolicyType>::ElementDataType(LightMapElementData),
-				typename TBasePassDrawingPolicy<LightMapPolicyType>::ContextDataType()
+				typename TBasePassWaveWorksDrawingPolicy<LightMapPolicyType>::ElementDataType(LightMapElementData),
+				typename TBasePassWaveWorksDrawingPolicy<LightMapPolicyType>::ContextDataType()
 				);
-			DrawingPolicy.DrawMesh(RHICmdList, Parameters.Mesh, BatchElementIndex);
+			FWaveWorksSceneProxy* SceneProxy = static_cast<FWaveWorksSceneProxy*>(const_cast<FPrimitiveSceneProxy*>(Parameters.PrimitiveSceneProxy));
+			DrawingPolicy.SceneProxy = SceneProxy;
+			DrawingPolicy.DrawMesh(RHICmdList, Parameters.Mesh, 0);
+		}
+		else
+		{
+			TBasePassDrawingPolicy<LightMapPolicyType> DrawingPolicy(
+				Parameters.Mesh.VertexFactory,
+				Parameters.Mesh.MaterialRenderProxy,
+				*Parameters.Material,
+				Parameters.FeatureLevel,
+				LightMapPolicy,
+				Parameters.BlendMode,
+				Parameters.TextureMode,
+				Scene && Scene->SkyLight && !Scene->SkyLight->bHasStaticLighting && Scene->SkyLight->bWantsStaticShadowing && bIsLitMaterial,
+				IsTranslucentBlendMode(Parameters.BlendMode) && (Scene && Scene->HasAtmosphericFog()) && View.Family->EngineShowFlags.AtmosphericFog,
+				View.Family->EngineShowFlags.ShaderComplexity,
+				false,
+				Parameters.bEditorCompositeDepthTest
+				);
+			RHICmdList.BuildAndSetLocalBoundShaderState(DrawingPolicy.GetBoundShaderStateInput(View.GetFeatureLevel()));
+			DrawingPolicy.SetSharedState(RHICmdList, &View, typename TBasePassDrawingPolicy<LightMapPolicyType>::ContextDataType());
+
+			for (int32 BatchElementIndex = 0, Num = Parameters.Mesh.Elements.Num(); BatchElementIndex < Num; BatchElementIndex++)
+			{
+				DrawingPolicy.SetMeshRenderState(
+					RHICmdList,
+					View,
+					Parameters.PrimitiveSceneProxy,
+					Parameters.Mesh,
+					BatchElementIndex,
+					bBackFace,
+					DitheredLODTransitionValue,
+					typename TBasePassDrawingPolicy<LightMapPolicyType>::ElementDataType(LightMapElementData),
+					typename TBasePassDrawingPolicy<LightMapPolicyType>::ContextDataType()
+					);
+				DrawingPolicy.DrawMesh(RHICmdList, Parameters.Mesh, BatchElementIndex);
+			}
 		}
 
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)

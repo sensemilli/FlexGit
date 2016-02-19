@@ -18,6 +18,7 @@
 #include "ComponentReregisterContext.h"
 #include "ComponentRecreateRenderStateContext.h"
 #include "EngineModule.h"
+#include "WaveWorksResource.h"
 #include "Engine/Font.h"
 
 #include "LocalVertexFactory.h"
@@ -754,6 +755,11 @@ bool FMaterialResource::IsUsedWithStaticLighting() const
 	return Material->bUsedWithStaticLighting;
 }
 
+bool FMaterialResource::IsUsedWithFlexFluidSurfaces() const
+{
+	return Material->bUsedWithFlexFluidSurfaces;
+}
+
 bool FMaterialResource::IsUsedWithMorphTargets() const
 {
 	return Material->bUsedWithMorphTargets;
@@ -762,6 +768,11 @@ bool FMaterialResource::IsUsedWithMorphTargets() const
 bool FMaterialResource::IsUsedWithSplineMeshes() const
 {
 	return Material->bUsedWithSplineMeshes;
+}
+
+bool FMaterialResource::IsUsedWithFlexMeshes() const
+{
+	return Material->bUsedWithFlexMeshes;
 }
 
 bool FMaterialResource::IsUsedWithInstancedStaticMeshes() const
@@ -778,6 +789,62 @@ bool FMaterialResource::IsUsedWithUI() const
 {
 	return IsUIMaterial();
 }
+
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+
+bool FMaterialResource::IsUsedWithVxgiVoxelization() const
+{
+	return Material->bUsedWithVxgiVoxelization;
+}
+
+bool FMaterialResource::IsVxgiOmniDirectional() const
+{
+	return Material->bVxgiOmniDirectional;
+}
+
+bool FMaterialResource::IsVxgiProportionalEmittance() const
+{
+	return Material->bVxgiProportionalEmittance;
+}
+
+bool FMaterialResource::GetVxgiAllowTesselationDuringVoxelization() const
+{
+	return Material->bVxgiAllowTesselationDuringVoxelization;
+}
+
+float FMaterialResource::GetVxgiVoxelizationThickness() const
+{
+	return Material->VxgiVoxelizationThickness;
+}
+
+FVector2D FMaterialResource::GetVxgiOpacityNoiseScaleBias() const
+{
+	return Material->VxgiOpacityNoiseScaleBias;
+}
+
+bool FMaterialResource::GetVxgiCoverageSupersampling() const
+{
+	return Material->bVxgiCoverageSupersampling;
+}
+
+EVxgiMaterialSamplingRate FMaterialResource::GetVxgiMaterialSamplingRate() const
+{
+	return Material->VxgiMaterialSamplingRate;
+}
+
+bool FMaterialResource::IsPreviewMaterial() const
+{
+	return Material->bIsPreviewMaterial;
+}
+
+bool FMaterialResource::HasEmissiveColorConnected() const
+{
+	return Material->EmissiveColor.IsConnected();
+}
+
+#endif
+// NVCHANGE_END: Add VXGI
 
 EMaterialTessellationMode FMaterialResource::GetTessellationMode() const 
 { 
@@ -1594,6 +1661,8 @@ void FMaterialRenderProxy::EvaluateUniformExpressions(FUniformExpressionCache& O
 	OutUniformExpressionCache.UniformBuffer = UniformExpressionSet.CreateUniformBuffer(Context, CommandListIfLocalMode, &OutUniformExpressionCache.LocalUniformBuffer);
 
 	OutUniformExpressionCache.ParameterCollections = UniformExpressionSet.ParameterCollections;
+
+	OutUniformExpressionCache.WaveWorks = UniformExpressionSet.WaveWorks;
 
 	OutUniformExpressionCache.bUpToDate = true;
 }

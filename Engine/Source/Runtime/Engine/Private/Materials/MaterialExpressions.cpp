@@ -101,6 +101,7 @@
 #include "Materials/MaterialExpressionSceneDepth.h"
 #include "Materials/MaterialExpressionSceneTexelSize.h"
 #include "Materials/MaterialExpressionSceneTexture.h"
+#include "Materials/MaterialExpressionFlexFluidSurfaceThickness.h"
 #include "Materials/MaterialExpressionScreenPosition.h"
 #include "Materials/MaterialExpressionSine.h"
 #include "Materials/MaterialExpressionSpeedTree.h"
@@ -134,6 +135,12 @@
 #include "Materials/MaterialExpressionDistanceFieldGradient.h"
 #include "Materials/MaterialFunction.h"
 #include "Materials/MaterialParameterCollection.h"
+
+// NVCHANGE_BEGIN: Add VXGI
+#include "Materials/MaterialExpressionVxgiVoxelization.h"
+// NVCHANGE_END: Add VXGI
+
+#include "Materials/MaterialExpressionWaveWorks.h"
 
 #include "EditorSupportDelegates.h"
 #include "MaterialCompiler.h"
@@ -1099,6 +1106,8 @@ EMaterialSamplerType UMaterialExpressionTextureBase::GetSamplerTypeForTexture(co
 				return SAMPLERTYPE_Alpha;
 			case TC_Masks:
 				return SAMPLERTYPE_Masks;
+			case TC_UV:
+				return SAMPLERTYPE_UV;
 			case TC_DistanceFieldFont:
 				return SAMPLERTYPE_DistanceFieldFont;
 			default:
@@ -1974,6 +1983,77 @@ const TCHAR* UMaterialExpressionTextureSampleParameterSubUV::GetRequirements()
 	return UMaterialExpressionTextureSampleParameter2D::GetRequirements();
 }
 
+///////////////////////////////////////////////////////////////////////////////
+// UMaterialExpressionFlexFluidSurfaceThickness
+///////////////////////////////////////////////////////////////////////////////
+UMaterialExpressionFlexFluidSurfaceThickness::UMaterialExpressionFlexFluidSurfaceThickness(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	// Structure to hold one-time initialization
+	struct FConstructorStatics
+	{
+		FText NAME_Texture;
+		FConstructorStatics()
+			: NAME_Texture(LOCTEXT("Texture", "Texture"))
+		{
+		}
+	};
+	static FConstructorStatics ConstructorStatics;
+
+	MenuCategories.Add(ConstructorStatics.NAME_Texture);
+	bShaderInputData = true;
+	ConstInput = FVector2D(0.f, 0.f);
+}
+
+int32 UMaterialExpressionFlexFluidSurfaceThickness::Compile(class FMaterialCompiler* Compiler, int32 OutputIndex, int32 MultiplexIndex)
+{
+	int32 OffsetIndex = INDEX_NONE;
+	int32 CoordinateIndex = INDEX_NONE;
+	bool bUseOffset = false;
+
+
+	if (InputMode == EMaterialSceneAttributeInputMode::OffsetFraction)
+	{
+		if (Input.Expression)
+		{
+			OffsetIndex = Input.Compile(Compiler);
+		}
+		else
+		{
+			OffsetIndex = Compiler->Constant2(ConstInput.X, ConstInput.Y);
+		}
+
+		bUseOffset = true;
+	}
+	else if (InputMode == EMaterialSceneAttributeInputMode::Coordinates)
+	{
+		if (Input.Expression)
+		{
+			CoordinateIndex = Input.Compile(Compiler);
+		}
+	}
+
+	int32 Result = Compiler->FlexFluidSurfaceThickness(OffsetIndex, CoordinateIndex, bUseOffset);
+	return Result;
+}
+
+void UMaterialExpressionFlexFluidSurfaceThickness::GetCaption(TArray<FString>& OutCaptions) const
+{
+	OutCaptions.Add(TEXT("FlexFluidSurface Thickness"));
+}
+
+FString UMaterialExpressionFlexFluidSurfaceThickness::GetInputName(int32 InputIndex) const
+{
+	if (InputIndex == 0)
+	{
+		// Display the current InputMode enum's display name.
+		UByteProperty* InputModeProperty = NULL;
+		InputModeProperty = FindField<UByteProperty>(UMaterialExpressionFlexFluidSurfaceThickness::StaticClass(), "InputMode");
+		return InputModeProperty->Enum->GetEnumName((int32)InputMode.GetValue());
+	}
+	return TEXT("");
+}
+
 
 int32 UMaterialExpressionAdd::Compile(class FMaterialCompiler* Compiler, int32 OutputIndex, int32 MultiplexIndex)
 {
@@ -2788,6 +2868,46 @@ bool UMaterialExpressionStaticComponentMaskParameter::IsNamedParameter(FName InP
 
 	return false;
 }
+
+// NVCHANGE_BEGIN: Add VXGI
+
+//
+//	UMaterialExpressionVxgiVoxelization
+//
+
+UMaterialExpressionVxgiVoxelization::UMaterialExpressionVxgiVoxelization(const class FObjectInitializer& PCIP)
+	: Super(PCIP)
+{
+	// Structure to hold one-time initialization
+	struct FConstructorStatics
+	{
+		FText NAME_Constants;
+		FConstructorStatics()
+			: NAME_Constants(LOCTEXT("Constants", "Constants"))
+		{
+		}
+	};
+	static FConstructorStatics ConstructorStatics;
+
+	MenuCategories.Add(ConstructorStatics.NAME_Constants);
+	bShaderInputData = true;
+}
+
+int32 UMaterialExpressionVxgiVoxelization::Compile(class FMaterialCompiler* Compiler, int32 OutputIndex, int32 MultiplexIndex)
+{
+#if WITH_GFSDK_VXGI
+	return Compiler->VxgiVoxelization();
+#else
+	return Compiler->Constant(0);
+#endif
+}
+
+void UMaterialExpressionVxgiVoxelization::GetCaption(TArray<FString>& OutCaptions) const
+{
+	OutCaptions.Add(TEXT("VXGIVoxelization"));
+}
+
+// NVCHANGE_END: Add VXGI
 
 //
 //	UMaterialExpressionTime
@@ -9401,6 +9521,55 @@ int32 UMaterialExpressionEyeAdaptation::Compile(class FMaterialCompiler* Compile
 void UMaterialExpressionEyeAdaptation::GetCaption(TArray<FString>& OutCaptions) const
 {
 	OutCaptions.Add(FString(TEXT("EyeAdaptation")));
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// UMaterialExpressionWaveWorks
+///////////////////////////////////////////////////////////////////////////////
+UMaterialExpressionWaveWorks::UMaterialExpressionWaveWorks(const class FObjectInitializer& PCIP)
+	: Super(PCIP)
+{
+	// Structure to hold one-time initialization
+	struct FConstructorStatics
+	{
+		FText NAME_WaveWorks;
+		FConstructorStatics()
+			: NAME_WaveWorks(LOCTEXT("WaveWorks", "WaveWorks"))
+		{
+		}
+	};
+	static FConstructorStatics ConstructorStatics;
+
+	MenuCategories.Add(ConstructorStatics.NAME_WaveWorks);
+
+	WaveWorks = nullptr;
+	DistanceScale = 0.25f;
+
+	Outputs.Reset();
+	Outputs.Add(FExpressionOutput(TEXT("Foam"), 1, 1, 1, 1, 0));
+	Outputs.Add(FExpressionOutput(TEXT("Normal"), 1, 1, 1, 1, 0));
+	Outputs.Add(FExpressionOutput(TEXT("Displacement"), 1, 1, 1, 1, 0));
+	bShowOutputNameOnPin = true;
+}
+
+int32 UMaterialExpressionWaveWorks::Compile(class FMaterialCompiler* Compiler, int32 OutputIndex, int32 MultiplexIndex)
+{
+	if (!WaveWorks)
+	{
+		return Compiler->Errorf(TEXT("Missing WaveWorks input"));
+	}
+
+	if (!Coordinates.Expression)
+	{
+		return Compiler->Errorf(TEXT("Missing Coordinates input"));
+	}
+
+	return Compiler->WaveWorks(WaveWorks, Coordinates.Compile(Compiler), DistanceScale, GetOutputs()[OutputIndex].OutputName);
+}
+
+void UMaterialExpressionWaveWorks::GetCaption(TArray<FString>& OutCaptions) const
+{
+	OutCaptions.Add(TEXT("WaveWorks"));
 }
 
 #undef LOCTEXT_NAMESPACE

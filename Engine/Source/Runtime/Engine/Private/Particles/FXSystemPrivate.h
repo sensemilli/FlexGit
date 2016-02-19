@@ -8,6 +8,9 @@
 
 #include "FXSystem.h"
 #include "../VectorField.h"
+// NVCHANGE_BEGIN: JCAO - Replace vector fields with APEX turbulence velocity fields
+#include "../FieldSampler/TurbulenceFS.h"
+// NVCHANGE_END: JCAO - Replace vector fields with APEX turbulence velocity fields
 
 /*-----------------------------------------------------------------------------
 	Forward declarations.
@@ -69,6 +72,15 @@ public:
 	virtual bool UsesGlobalDistanceField() const override;
 	virtual void PreRender(FRHICommandListImmediate& RHICmdList, const FGlobalDistanceFieldParameterData* GlobalDistanceFieldParameterData) override;
 	virtual void PostRenderOpaque(FRHICommandListImmediate& RHICmdList, const class FSceneView* CollisionView, FTexture2DRHIParamRef SceneDepthTexture, FTexture2DRHIParamRef GBufferATexture) override;
+	// NVCHANGE_BEGIN: JCAO - Replace vector fields with APEX turbulence velocity fields
+	virtual void AddFieldSampler(UFieldSamplerComponent* FieldSamplerComponent) override;
+	virtual void RemoveFieldSampler(UFieldSamplerComponent* FieldSamplerComponent) override;
+	virtual void UpdateFieldSampler(UFieldSamplerComponent* FieldSamplerComponent) override;
+	// NVCHANGE_BEGIN: JCAO - Field Sampler Module for GPU particle
+	virtual void AddFieldSampler(FFieldSamplerInstance* FieldSamplerInstance, const FMatrix& LocalToWorld) override;
+	virtual void RemoveFieldSampler(FFieldSamplerInstance* FieldSamplerInstance) override;
+	// NVCHANGE_END: JCAO - Field Sampler Module for GPU particle
+	// NVCHANGE_END: JCAO - Replace vector fields with APEX turbulence velocity fields
 	// End FFXSystemInterface.
 
 	/*--------------------------------------------------------------------------
@@ -189,6 +201,19 @@ private:
 	ERHIFeatureLevel::Type FeatureLevel;
 	/** Shader platform that will be rendering this effects system */
 	EShaderPlatform ShaderPlatform;
+
+#if WITH_APEX_TURBULENCE
+	// NVCHANGE_BEGIN: JCAO - Replace vector fields with APEX turbulence velocity fields
+	/** List of all turbulence FS */
+	FTurbulenceFSInstanceList TurbulenceFSList;
+	// NVCHANGE_END: JCAO - Replace vector fields with APEX turbulence velocity fields
+	// NVCHANGE_BEGIN: JCAO - Add Attractor working with GPU particles
+	FAttractorFSInstanceList	AttractorFSList;
+	// NVCHANGE_END: JCAO - Add Attractor working with GPU particles
+	// NVCHANGE_BEGIN: JCAO - Support Force Type Noise
+	FNoiseFSInstanceList		NoiseFSList;
+	// NVCHANGE_END: JCAO - Support Force Type Noise
+#endif // WITH_APEX_TURBULENCE
 
 #if WITH_EDITOR
 	/** true if the system has been suspended. */

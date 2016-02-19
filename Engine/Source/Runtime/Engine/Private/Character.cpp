@@ -47,6 +47,10 @@ ACharacter::ACharacter(const FObjectInitializer& ObjectInitializer)
 	CapsuleComponent = CreateDefaultSubobject<UCapsuleComponent>(ACharacter::CapsuleComponentName);
 	CapsuleComponent->InitCapsuleSize(34.0f, 88.0f);
 
+	// NVCHANGE_BEGIN: JCAO - The movement collision of Character is mirrored to the async scene by default.
+	CapsuleComponent->BodyInstance.bBlockTurbulence = true;
+	// NVCHANGE_END: JCAO - The movement collision of Character is mirrored to the async scene by default.
+
 	static FName CollisionProfileName(TEXT("Pawn"));
 	CapsuleComponent->SetCollisionProfileName(CollisionProfileName);
 

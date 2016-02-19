@@ -926,7 +926,15 @@ public:
 				ShadowDepthTexture,
 				ShadowDepthTextureSampler,
 				TStaticSamplerState<SF_Point,AM_Clamp,AM_Clamp,AM_Clamp>::GetRHI(),
+				// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+				FSceneRenderTargets::Get(RHICmdList).GetShadowDepthZTexture(ShadowMap->CascadeSurfaceIndex)
+#else
+				// NVCHANGE_END: Add VXGI
 				FSceneRenderTargets::Get(RHICmdList).GetShadowDepthZTexture()
+				// NVCHANGE_BEGIN: Add VXGI
+#endif
+				// NVCHANGE_END: Add VXGI
 				);
 		}
 

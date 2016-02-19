@@ -127,6 +127,23 @@ FString UKismetSystemLibrary::GetUniqueDeviceId()
 	return FPlatformMisc::GetUniqueDeviceId();
 }
 
+// NVCHANGE_BEGIN: JCAO - Add PhysXLevel and blueprint node
+bool UKismetSystemLibrary::IsPhysXLevel0()
+{
+	return (GEngine->GetPhysXLevel() == 0);
+}
+
+bool UKismetSystemLibrary::IsPhysXLevel1()
+{
+	return (GEngine->GetPhysXLevel() == 1);
+}
+
+bool UKismetSystemLibrary::IsPhysXLevel2()
+{
+	return (GEngine->GetPhysXLevel() == 2);
+}
+// NVCHANGE_END: JCAO - Add PhysXLevel and blueprint node
+
 int32 UKismetSystemLibrary::MakeLiteralInt(int32 Value)
 {
 	return Value;

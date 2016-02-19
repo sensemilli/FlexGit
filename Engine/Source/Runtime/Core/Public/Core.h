@@ -116,3 +116,10 @@
 #include "Optional.h"
 #include "EnumClassFlags.h"
 #include "Misc/DisableOldUETypes.h"
+
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+void CORE_API LoadVxgiModule();
+void CORE_API UnloadVxgiModule();
+#endif
+// NVCHANGE_END: Add VXGI

@@ -4092,10 +4092,20 @@ bool UDistributionVectorParticleParameter::GetParamValue(UObject* Data, FName Pa
 /*-----------------------------------------------------------------------------
 	Type data module for GPU particles.
 -----------------------------------------------------------------------------*/
+// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+const static int32 GGridDensityResolution[] = { 8, 16, 32, 64, 128, 256 };
+// NVCHANGE_END: JCAO - Grid Density with GPU particles
+
 UParticleModuleTypeDataGpu::UParticleModuleTypeDataGpu(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 	, bClearExistingParticlesOnInit(false)
 {
+	// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+	bEnableGridDensity = false;
+	Resolution = EGDR_16;
+	MaxCellCount = 16;
+	GridDepth = 10.0f;
+	// NVCHANGE_END: JCAO - Grid Density with GPU particles
 }
 
 void UParticleModuleTypeDataGpu::PostLoad()
@@ -4343,7 +4353,11 @@ void UParticleModuleTypeDataGpu::Build( FParticleEmitterBuildInfo& EmitterBuildI
 	EmitterInfo.LocalVectorField.bTileX = EmitterBuildInfo.bLocalVectorFieldTileX;
 	EmitterInfo.LocalVectorField.bTileY = EmitterBuildInfo.bLocalVectorFieldTileY;
 	EmitterInfo.LocalVectorField.bTileZ = EmitterBuildInfo.bLocalVectorFieldTileZ;
-
+	// NVCHANGE_BEGIN: JCAO - Field Sampler Module for GPU particle
+#if WITH_APEX_TURBULENCE
+	EmitterInfo.LocalFieldSamplers = EmitterBuildInfo.LocalFieldSamplers;
+#endif
+	// NVCHANGE_END: JCAO - Field Sampler Module for GPU particle
 
 	// Vector field scales.
 	FComposableFloatDistribution NormalizedVectorFieldScale(EmitterBuildInfo.VectorFieldScale);
@@ -4413,6 +4427,50 @@ void UParticleModuleTypeDataGpu::Build( FParticleEmitterBuildInfo& EmitterBuildI
 	// Collision flag.
 	EmitterInfo.bEnableCollision = EmitterBuildInfo.bEnableCollision;
 	EmitterInfo.CollisionMode = (EParticleCollisionMode::Type)EmitterBuildInfo.CollisionMode;
+
+	// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+	// Grid Density
+	// sample color over density
+	ResourceData.bColorOverDensityEnabled = EmitterBuildInfo.bColorOverDensity;
+	EmitterBuildInfo.DensityColor.Resample(0.0f, 1.0f);
+	EmitterBuildInfo.DensityAlpha.Resample(0.0f, 1.0f);
+	FComposableDistribution::BuildVector4(
+		Curve,
+		EmitterBuildInfo.DensityColor,
+		EmitterBuildInfo.DensityAlpha);
+	FComposableDistribution::QuantizeVector4(
+		ResourceData.QuantizedDensityColorSamples,
+		ResourceData.DensityColorScale,
+		ResourceData.DensityColorBias,
+		Curve);
+
+	// sample size over density
+	ResourceData.bSizeOverDensityEnabled = EmitterBuildInfo.bSizeOverDensity;
+	EmitterBuildInfo.DensitySize.Resample(0.0f, 1.0f);
+	FComposableDistribution::BuildVector4(
+		Curve,
+		EmitterBuildInfo.DensitySize,
+		ZeroDistribution,
+		ZeroDistribution);
+	FComposableDistribution::QuantizeVector4(
+		ResourceData.QuantizedDensitySizeSamples,
+		ResourceData.DensitySizeScale,
+		ResourceData.DensitySizeBias,
+		Curve);
+
+	if (this->bEnableGridDensity)
+	{
+		ResourceData.GridResolution = GGridDensityResolution[this->Resolution];
+		ResourceData.GridMaxCellCount = this->MaxCellCount;
+		ResourceData.GridDepth = this->GridDepth;
+	}
+	else
+	{
+		ResourceData.GridResolution = 0;
+		ResourceData.GridMaxCellCount = 0;
+		ResourceData.GridDepth = 0;
+	}
+	// NVCHANGE_END: JCAO - Grid Density with GPU particles
 
 	// Create or update GPU resources.
 	if ( EmitterInfo.Resources )

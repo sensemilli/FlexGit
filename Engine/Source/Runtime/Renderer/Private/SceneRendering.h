@@ -12,6 +12,12 @@
 #include "HeightfieldLighting.h"
 #include "GlobalDistanceFieldParameters.h"
 
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+#include "GFSDK_VXGI.h"
+#endif
+// NVCHANGE_END: Add VXGI
+
 // Forward declarations.
 class FPostprocessContext;
 
@@ -518,6 +524,8 @@ public:
 	/** Bitmask of all shading models used by primitives in this view */
 	uint16 ShadingModelMaskInView;
 
+	uint32 bHasHair : 1;
+
 	FViewMatrices PrevViewMatrices;
 
 	/** Last frame's view and projection matrices */
@@ -819,14 +827,21 @@ protected:
 	/** Gathers dynamic mesh elements for all shadows. */
 	void GatherShadowDynamicMeshElements();
 
+	// NVCHANGE_BEGIN: Add VXGI
+
 	/** Performs once per frame setup prior to visibility determination. */
-	void PreVisibilityFrameSetup(FRHICommandListImmediate& RHICmdList);
+	//void PreVisibilityFrameSetup(FRHICommandListImmediate& RHICmdList);
+	void PreVisibilityFrameSetup(FRHICommandListImmediate& RHICmdList, TArray<FViewInfo>* ViewArrayPtr = NULL);
 
 	/** Computes which primitives are visible and relevant for each view. */
-	void ComputeViewVisibility(FRHICommandListImmediate& RHICmdList);
+	//void ComputeViewVisibility(FRHICommandListImmediate& RHICmdList);
+	void ComputeViewVisibility(FRHICommandListImmediate& RHICmdList, TArray<FViewInfo>* ViewArrayPtr = NULL);
 
 	/** Performs once per frame setup after to visibility determination. */
-	void PostVisibilityFrameSetup();
+	//void PostVisibilityFrameSetup();
+	void PostVisibilityFrameSetup(TArray<FViewInfo>* ViewArrayPtr = NULL);
+
+	// NVCHANGE_END: Add VXGI
 
 	void GatherDynamicMeshElements(
 		TArray<FViewInfo>& InViews, 

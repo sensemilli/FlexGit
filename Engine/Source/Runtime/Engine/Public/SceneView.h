@@ -17,6 +17,28 @@ class FViewUniformShaderParameters;
 class FViewElementDrawer;
 class FSceneViewFamily;
 
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+#include "RendererInterface.h"
+class FLightSceneInfo;
+class FProjectedShadowInfo;
+namespace VXGI
+{
+	struct EmittanceVoxelizationArgs
+	{
+		EmittanceVoxelizationArgs()
+			: LightSceneInfo(NULL)
+			, bEnableEmissiveMaterials(false)
+		{
+		}
+		const FLightSceneInfo* LightSceneInfo;
+		TArray<FProjectedShadowInfo*, SceneRenderingAllocator> Shadows;
+		bool bEnableEmissiveMaterials;
+	};
+}
+#endif
+//NVCHANGE_END: Add VXGI
+
 // Projection data for a FSceneView
 struct FSceneViewProjectionData
 {
@@ -369,6 +391,7 @@ BEGIN_UNIFORM_BUFFER_STRUCT_WITH_CONSTRUCTOR(FViewUniformShaderParameters,ENGINE
 	DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER_EX(FVector4,ViewRectMin, EShaderPrecisionModifier::Half)
 	DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(FVector4,ViewSizeAndInvSize)
 	DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(FVector4,BufferSizeAndInvSize)
+	DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(FVector4, ViewSizeAndSceneTexelSize)
 	DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(FVector4,ViewOrigin)
 	DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(FVector4,TranslatedViewOrigin)
 	// The exposure scale is just a scalar but needs to be a float4 to workaround a driver bug on IOS.
@@ -765,6 +788,22 @@ public:
 
 	/** Get the feature level for this view **/
 	EShaderPlatform GetShaderPlatform() const;
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	bool ApplyVoxelizationMaterialInfo(const VXGI::MaterialInfo& MaterialInfo, bool bUpdateStateWhenConstantsChange) const;
+
+	bool bIsVxgiVoxelization;
+	VXGI::EmittanceVoxelizationArgs VxgiEmittanceVoxelizationArgs;
+	mutable NVRHI::DrawCallState VxgiDrawCallState;
+
+	int32 VxgiVoxelizationPass;
+	int32 VxgiViewIndex;
+
+private:
+	mutable VXGI::MaterialInfo VxgiPreviousMaterialInfo;
+#endif
+	// NVCHANGE_END: Add VXGI
 };
 
 //////////////////////////////////////////////////////////////////////////

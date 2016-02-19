@@ -82,6 +82,16 @@ public:
 	TSharedPtr<FUICommandInfo> NewEmitterAfter;
 	TSharedPtr<FUICommandInfo> RemoveDuplicateModules;
 
+#if WITH_APEX_TURBULENCE
+	TSharedPtr<FUICommandInfo>  ToggleVelocityField;
+	TSharedPtr<FUICommandInfo>  ToggleStreamLines;
+	TSharedPtr<FUICommandInfo>  ToggleBBox;
+
+	TSharedPtr<FUICommandInfo>  ToggleJetActor;
+	TSharedPtr<FUICommandInfo>  ToggleNoiseActor;
+	TSharedPtr<FUICommandInfo>  ToggleVortexActor;
+#endif
+
 	/** Initialize commands */
 	virtual void RegisterCommands() override;
 };

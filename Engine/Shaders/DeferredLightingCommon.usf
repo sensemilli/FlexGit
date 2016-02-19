@@ -344,6 +344,15 @@ float4 GetDynamicLighting(float3 WorldPosition, float3 CameraVector, float2 InUV
 		{
 			const float3 LightColor = LightData.LightColorAndFalloffExponent.rgb;
 
+// NVCHANGE_BEGIN: Add VXGI
+#if VXGI_EMITTANCE_VOXELIZATION
+
+			float3 SurfaceLightingDiff = Diffuse_Lambert(ScreenSpaceData.GBuffer.DiffuseColor);
+			LightAccumulator_Add(LightAccumulator, SurfaceLightingDiff, 0, LightColor * (NoL * SurfaceAttenuation));
+
+#else
+// NVCHANGE_END: Add VXGI
+
 			const float ClearCoatRoughness	= ScreenSpaceData.GBuffer.CustomData.y;
 
 			float3 LobeRoughness = float3(ClearCoatRoughness, ScreenSpaceData.GBuffer.Roughness, 1);
@@ -371,6 +380,11 @@ float4 GetDynamicLighting(float3 WorldPosition, float3 CameraVector, float2 InUV
 
 				LightAccumulator.EstimatedCost += 0.4f;		// add the cost of the lighting computations (should sum up to 1 form one light)
 			}
+
+// NVCHANGE_BEGIN: Add VXGI
+#endif // VXGI_EMITTANCE_VOXELIZATION
+// NVCHANGE_END: Add VXGI
+
 		}
 	}
 

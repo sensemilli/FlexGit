@@ -181,6 +181,30 @@ void FShaderCompilerOutput::GenerateOutputHash()
 	FSHA1 HashState;
 	HashState.Update(Code.GetData(), Code.Num() * Code.GetTypeSize());
 	ParameterMap.UpdateHash(HashState);
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	HashState.Update(VxgiGSCode.GetData(), VxgiGSCode.Num() * VxgiGSCode.GetTypeSize());
+	if (bIsVxgiPS)
+	{
+		for (int32 Index = 0; Index < ParameterMapForVxgiPSPermutation.Num(); ++Index)
+		{
+			ParameterMapForVxgiPSPermutation[Index].UpdateHash(HashState);
+		}
+		for (int32 Index = 0; Index < ShaderResouceTableVxgiPSPermutation.Num(); ++Index)
+		{
+			const TArray<uint8> &SRT = ShaderResouceTableVxgiPSPermutation[Index];
+			HashState.Update(SRT.GetData(), SRT.Num() * SRT.GetTypeSize());
+		}
+		for (int32 Index = 0; Index < UsesGlobalCBForVxgiPSPermutation.Num(); ++Index)
+		{
+			const uint8 bUsesGlobalCB = UsesGlobalCBForVxgiPSPermutation[Index];
+			HashState.Update(&bUsesGlobalCB, sizeof(bUsesGlobalCB));
+		}
+	}
+#endif
+	// NVCHANGE_END: Add VXGI
+
 	HashState.Final();
 	HashState.GetHash(&OutputHash.Hash[0]);
 }

@@ -11,6 +11,12 @@
 #include "RHIDefinitions.h"
 #include "StaticArray.h"
 
+// NVCHANGE_BEGIN: Add HBAO+
+#if WITH_GFSDK_SSAO
+#include "GFSDK_SSAO.h"
+#endif
+// NVCHANGE_END: Add HBAO+
+
 #define INVALID_FENCE_ID (0xffffffffffffffffull)
 
 inline const bool IsValidFenceID( const uint64 FenceID )
@@ -52,6 +58,34 @@ class RHI_API FRHICommandList;
  * RHI capabilities.
  */
 
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+
+namespace VXGI
+{
+	class IRenderThreadCommand;
+	struct DrawCallState;
+	class IGlobalIllumination;
+}
+extern RHI_API void RHIAllowTessellation(bool bAllowTessellation);
+extern RHI_API bool RHITessellationAllowed();
+
+// Moved RHISupportsTessellation from RHIDefinitions.h
+inline bool RHISupportsTessellation(const EShaderPlatform Platform)
+{
+	if (RHITessellationAllowed() == false)
+	{
+		return false;
+	}
+	if (IsFeatureLevelSupported(Platform, ERHIFeatureLevel::SM5))
+	{
+		return ((Platform == SP_PCD3D_SM5) || (Platform == SP_XBOXONE) || (Platform == SP_OPENGL_SM5) || (Platform == SP_OPENGL_ES31_EXT));
+	}
+	return false;
+}
+
+#endif
+// NVCHANGE_END: Add VXGI
 
 /** The maximum number of mip-maps that a texture can contain. 	*/
 extern	RHI_API int32		GMaxTextureMipCount;
@@ -724,6 +758,17 @@ struct FViewportBounds
 	}
 };
 
+/**
+*	Scissor rectangle structure to set multiple scissor rects
+*  (needs to be 1:1 to the D3D11 structure)
+*/
+struct FScissorRect
+{
+	int32 Left;
+	int32 Top;
+	int32 Right;
+	int32 Bottom;
+};
 
 typedef TArray<FScreenResolutionRHI>	FScreenResolutionArray;
 

@@ -23,6 +23,13 @@ DECLARE_LOG_CATEGORY_EXTERN(LogD3D12RHI, Log, All);
 #include "D3D12RHIBasePrivate.h"
 #include "StaticArray.h"
 
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+#include "GFSDK_VXGI.h"
+#include "D3D12NvRHI.h"
+#endif
+// NVCHANGE_END: Add VXGI
+
 #include "AllowWindowsPlatformTypes.h"
 #include "dxgi1_4.h"
 #include "HideWindowsPlatformTypes.h"
@@ -711,7 +718,7 @@ public:
 	virtual void RHISetShaderParameter(FDomainShaderRHIParamRef DomainShader, uint32 BufferIndex, uint32 BaseIndex, uint32 NumBytes, const void* NewValue) final override;
 	virtual void RHISetShaderParameter(FGeometryShaderRHIParamRef GeometryShader, uint32 BufferIndex, uint32 BaseIndex, uint32 NumBytes, const void* NewValue) final override;
 	virtual void RHISetShaderParameter(FComputeShaderRHIParamRef ComputeShader, uint32 BufferIndex, uint32 BaseIndex, uint32 NumBytes, const void* NewValue) final override;
-	virtual void RHISetDepthStencilState(FDepthStencilStateRHIParamRef NewState, uint32 StencilRef) final override;
+	virtual void RHISetDepthStencilState(FDepthStencilStateRHIParamRef NewState, uint32 StencilRef, bool bBypassValidation = false) final override;
 	virtual void RHISetBlendState(FBlendStateRHIParamRef NewState, const FLinearColor& BlendFactor) final override;
 	virtual void RHISetRenderTargets(uint32 NumSimultaneousRenderTargets, const FRHIRenderTargetView* NewRenderTargets, const FRHIDepthRenderTargetView* NewDepthStencilTarget, uint32 NumUAVs, const FUnorderedAccessViewRHIParamRef* UAVs) final override;
 	virtual void RHISetRenderTargetsAndClear(const FRHISetRenderTargetsInfo& RenderTargetsInfo) final override;
@@ -736,6 +743,32 @@ public:
 	virtual void RHIGraphicsWaitOnAsyncComputeJob(uint32 FenceIndex) override;
 
 	virtual void RHIClearMRTImpl(bool bClearColor, int32 NumClearColors, const FLinearColor* ColorArray, bool bClearDepth, float Depth, bool bClearStencil, uint32 Stencil, FIntRect ExcludeRect, bool bForceShaderClear);
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	virtual void RHIVXGICleanupAfterVoxelization() final override;
+	virtual void RHISetViewportsAndScissorRects(uint32 Count, const FViewportBounds* Viewports, const FScissorRect* ScissorRects) final override;
+	virtual void RHIDispatchIndirectComputeShaderStructured(FStructuredBufferRHIParamRef ArgumentBuffer, uint32 ArgumentOffset) final override;
+	virtual void RHICopyStructuredBufferData(FStructuredBufferRHIParamRef DestBuffer, uint32 DestOffset, FStructuredBufferRHIParamRef SrcBuffer, uint32 SrcOffset, uint32 DataSize) final override;
+#endif
+	// NVCHANGE_END: Add VXGI
+
+	// NVCHANGE_BEGIN: Add HBAO+
+#if WITH_GFSDK_SSAO
+	virtual void RHIRenderHBAO(
+		const FTextureRHIParamRef SceneDepthTextureRHI,
+		const FMatrix& ProjectionMatrix,
+		const FTextureRHIParamRef SceneNormalTextureRHI,
+		const FMatrix& ViewMatrix,
+		const FTextureRHIParamRef SceneColorTextureRHI,
+		const GFSDK_SSAO_Parameters& AOParams) final override;
+#endif
+	// NVCHANGE_END: Add HBAO+
+
+	virtual const TArray<WaveWorksShaderInput>& RHIGetWaveWorksShaderInput() final override;
+	virtual const TArray<WaveWorksShaderInput>& RHIGetWaveWorksQuadTreeShaderInput() final override;
+	virtual FWaveWorksRHIRef RHICreateWaveWorks(const struct GFSDK_WaveWorks_Simulation_Settings& Settings, const struct GFSDK_WaveWorks_Simulation_Params& Params) final override;
+	virtual void RHISetWaveWorksState(FWaveWorksRHIParamRef State, const FMatrix& ViewMatrix, const TArray<uint32>& ShaderInputMappings) final override;
 };
 
 struct FD3D12Adapter
@@ -1060,6 +1093,27 @@ public:
 	virtual void* RHIGetNativeDevice() final override;
 	virtual class IRHICommandContext* RHIGetDefaultContext() final override;
 	virtual class IRHICommandContextContainer* RHIGetCommandContextContainer() final override;
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	NVRHI::FRendererInterfaceD3D12* VxgiRendererD3D12;
+	virtual VXGI::IGlobalIllumination* RHIVXGIGetInterface() final override;
+	virtual void RHIVXGISetVoxelizationParameters(const VXGI::VoxelizationParameters& Parameters) final override;
+	virtual void RHIVXGISetPixelShaderResourceAttributes(NVRHI::ShaderHandle PixelShader, const TArray<uint8>& ShaderResourceTable, bool bUsesGlobalCB) final override;
+	virtual void RHIVXGIApplyDrawStateButNotShaders(const NVRHI::DrawCallState& DrawCallState) final override;
+	virtual void RHIVXGISetCommandList(FRHICommandList& RHICommandList) final override;
+	virtual FRHITexture* GetRHITextureFromVXGI(NVRHI::TextureHandle texture) final override;
+	virtual NVRHI::TextureHandle GetVXGITextureFromRHI(FRHITexture* texture) final override;
+
+private:
+	VXGI::IGlobalIllumination* VxgiInterface;
+	VXGI::VoxelizationParameters VxgiVoxelizationParameters;
+	bool bVxgiVoxelizationParametersSet;
+	void CreateVxgiInterface();
+	void ReleaseVxgiInterface();
+public:
+#endif
+	// NVCHANGE_END: Add VXGI
 
 #if UE_BUILD_DEBUG	
 	uint32 SubmissionLockStalls;
@@ -1455,6 +1509,22 @@ public:
 				ResourceBarrier(hCommandList, pResource, before, after, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
 				ResourceState.SetResourceState(after);
 			}
+			// NVCHANGE_BEGIN: Add VXGI
+			else if (before == D3D12_RESOURCE_STATE_UNORDERED_ACCESS && after == D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+			{
+				if (pResource->RequestUAVBarrier())
+				{
+					D3D12_RESOURCE_BARRIER desc = {};
+					desc.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+					desc.UAV.pResource = pResource->GetResource();
+
+					// Skipping the call to LogResourceBarriers because it doesn't understand UAV barriers.
+
+					hCommandList.GetCurrentOwningContext()->numBarriers++;
+					hCommandList->ResourceBarrier(1, &desc);
+				}
+			}
+			// NVCHANGE_END: Add VXGI
 		}
 		else
 		{

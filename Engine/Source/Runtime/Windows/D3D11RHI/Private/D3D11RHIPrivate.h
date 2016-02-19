@@ -20,6 +20,19 @@ DECLARE_LOG_CATEGORY_EXTERN(LogD3D11RHI, Log, All);
 #include "D3D11RHIBasePrivate.h"
 #include "StaticArray.h"
 
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+#include "GFSDK_VXGI.h"
+#include "D3D11NvRHI.h"
+#endif
+// NVCHANGE_END: Add VXGI
+
+// NVCHANGE_BEGIN: Add HBAO+
+#if WITH_GFSDK_SSAO
+#include "GFSDK_SSAO.h"
+#endif
+// NVCHANGE_END: Add HBAO+
+
 // D3D RHI public headers.
 #include "D3D11Util.h"
 #include "D3D11State.h"
@@ -255,10 +268,27 @@ struct FD3DGPUProfiler : public FGPUProfiler
 	/** GPU hitch profile histories */
 	TIndirectArray<FD3D11EventNodeFrame> GPUHitchEventNodeFrames;
 
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI 
+	bool bRequestProfileForStatUnitVxgi;
+	bool bLatchedRequestProfileForStatUnitVxgi;
+	float VxgiWorldSpaceTime;
+	float VxgiScreenSpaceTime;
+#endif
+	// NVCHANGE_END: Add VXGI
+
 	FD3DGPUProfiler(class FD3D11DynamicRHI* InD3DRHI) :
 		FGPUProfiler(),
 		FrameTiming(InD3DRHI, 4),
 		D3D11RHI(InD3DRHI)
+		// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI 
+		, bRequestProfileForStatUnitVxgi(false)
+		, bLatchedRequestProfileForStatUnitVxgi(false)
+		, VxgiWorldSpaceTime(0.f)
+		, VxgiScreenSpaceTime(0.f)
+#endif
+		// NVCHANGE_END: Add VXGI
 	{
 		// Initialize Buffered timestamp queries 
 		FrameTiming.InitResource();
@@ -473,7 +503,7 @@ public:
 	virtual void RHISetShaderParameter(FDomainShaderRHIParamRef DomainShader, uint32 BufferIndex, uint32 BaseIndex, uint32 NumBytes, const void* NewValue) final override;
 	virtual void RHISetShaderParameter(FGeometryShaderRHIParamRef GeometryShader, uint32 BufferIndex, uint32 BaseIndex, uint32 NumBytes, const void* NewValue) final override;
 	virtual void RHISetShaderParameter(FComputeShaderRHIParamRef ComputeShader, uint32 BufferIndex, uint32 BaseIndex, uint32 NumBytes, const void* NewValue) final override;
-	virtual void RHISetDepthStencilState(FDepthStencilStateRHIParamRef NewState, uint32 StencilRef) final override;
+	virtual void RHISetDepthStencilState(FDepthStencilStateRHIParamRef NewState, uint32 StencilRef, bool bBypassValidation = false) final override;
 	virtual void RHISetBlendState(FBlendStateRHIParamRef NewState, const FLinearColor& BlendFactor) final override;
 	virtual void RHISetRenderTargets(uint32 NumSimultaneousRenderTargets, const FRHIRenderTargetView* NewRenderTargets, const FRHIDepthRenderTargetView* NewDepthStencilTarget, uint32 NumUAVs, const FUnorderedAccessViewRHIParamRef* UAVs) final override;
 	virtual void RHISetRenderTargetsAndClear(const FRHISetRenderTargetsInfo& RenderTargetsInfo) final override;
@@ -495,6 +525,49 @@ public:
 	virtual void RHIBeginAsyncComputeJob_DrawThread(EAsyncComputePriority Priority);
 	virtual void RHIEndAsyncComputeJob_DrawThread(uint32 FenceIndex);
 	virtual void RHIGraphicsWaitOnAsyncComputeJob(uint32 FenceIndex);
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	NVRHI::FRendererInterfaceD3D11* VxgiRendererD3D11;
+	virtual VXGI::IGlobalIllumination* RHIVXGIGetInterface() final override;
+	virtual void RHIVXGISetVoxelizationParameters(const VXGI::VoxelizationParameters& Parameters) final override;
+	virtual void RHIVXGISetPixelShaderResourceAttributes(NVRHI::ShaderHandle PixelShader, const TArray<uint8>& ShaderResourceTable, bool bUsesGlobalCB) final override;
+	virtual void RHIVXGIApplyDrawStateButNotShaders(const NVRHI::DrawCallState& DrawCallState) final override;
+	virtual void RHIVXGISetCommandList(FRHICommandList& RHICommandList) final override;
+	virtual FRHITexture* GetRHITextureFromVXGI(NVRHI::TextureHandle texture) final override;
+	virtual NVRHI::TextureHandle GetVXGITextureFromRHI(FRHITexture* texture) final override;
+	virtual void FD3D11DynamicRHI::RHIVXGIGetGPUTime(float& OutWorldSpaceTime, float& OutScreenSpaceTime) final override;
+
+	virtual void RHIVXGICleanupAfterVoxelization() final override;
+	virtual void RHISetViewportsAndScissorRects(uint32 Count, const FViewportBounds* Viewports, const FScissorRect* ScissorRects) final override;
+	virtual void RHIDispatchIndirectComputeShaderStructured(FStructuredBufferRHIParamRef ArgumentBuffer, uint32 ArgumentOffset) final override;
+	virtual void RHICopyStructuredBufferData(FStructuredBufferRHIParamRef DestBuffer, uint32 DestOffset, FStructuredBufferRHIParamRef SrcBuffer, uint32 SrcOffset, uint32 DataSize) final override;
+private:
+	VXGI::IGlobalIllumination* VxgiInterface;
+	VXGI::VoxelizationParameters VxgiVoxelizationParameters;
+	bool bVxgiVoxelizationParametersSet;
+	void CreateVxgiInterface();
+	void ReleaseVxgiInterface();
+public:
+#endif
+	// NVCHANGE_END: Add VXGI
+
+	// NVCHANGE_BEGIN: Add HBAO+
+#if WITH_GFSDK_SSAO
+	virtual void RHIRenderHBAO(
+		const FTextureRHIParamRef SceneDepthTextureRHI,
+		const FMatrix& ProjectionMatrix,
+		const FTextureRHIParamRef SceneNormalTextureRHI,
+		const FMatrix& ViewMatrix,
+		const FTextureRHIParamRef SceneColorTextureRHI,
+		const GFSDK_SSAO_Parameters& AOParams) final override;
+#endif
+	// NVCHANGE_END: Add HBAO+
+
+	virtual const TArray<WaveWorksShaderInput>& RHIGetWaveWorksShaderInput() final override;
+	virtual const TArray<WaveWorksShaderInput>& RHIGetWaveWorksQuadTreeShaderInput() final override;
+	virtual FWaveWorksRHIRef RHICreateWaveWorks(const struct GFSDK_WaveWorks_Simulation_Settings& Settings, const struct GFSDK_WaveWorks_Simulation_Params& Params) final override;
+	virtual void RHISetWaveWorksState(FWaveWorksRHIParamRef State, const FMatrix& ViewMatrix, const TArray<uint32>& ShaderInputMappings) final override;
 
 	// Accessors.
 	ID3D11Device* GetDevice() const
@@ -566,6 +639,13 @@ protected:
 
 	/** The global D3D device's immediate context */
 	TRefCountPtr<FD3D11Device> Direct3DDevice;
+
+	// NVCHANGE_BEGIN: Add HBAO+
+#if WITH_GFSDK_SSAO
+	GFSDK_SSAO_Context_D3D11* HBAOContext;
+	HMODULE HBAOModuleHandle;
+#endif
+	// NVCHANGE_END: Add HBAO+
 
 	FD3D11StateCache StateCache;
 
@@ -704,6 +784,13 @@ protected:
 
 	/** needs to be called before each dispatch call */
 	virtual void CommitComputeShaderConstants();
+
+public:
+
+	/** @temp */
+	void SetWaveWorksState();
+
+protected:
 
 	template <class ShaderType> void SetResourcesFromTables(const ShaderType* RESTRICT);
 	void CommitGraphicsResourceTables();
@@ -968,8 +1055,6 @@ public:
 
 	static FFastVRAMAllocator* GetFastVRAMAllocator();
 };
-
-
 
 
 

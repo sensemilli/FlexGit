@@ -30,6 +30,13 @@ struct FVertexFactoryInterpolantsVSToPS
 #if NEEDS_LIGHTMAP_COORDINATE
 	float4	LightMapCoordinate : TEXCOORD4;
 #endif
+
+#if WITH_GFSDK_WAVEWORKS
+	float4 nv_waveworks_attr36 : TEXCOORD20;
+    float4 nv_waveworks_attr37 : TEXCOORD21;
+    float4 nv_waveworks_attr38 : TEXCOORD22;
+    float3 nv_waveworks_attr39 : TEXCOORD23;
+#endif
 };
 
 #if NUM_MATERIAL_TEXCOORDS || USE_PARTICLE_SUBUVS

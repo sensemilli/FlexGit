@@ -175,6 +175,11 @@
 #define FCOLOR_COMPONENT_SWIZZLE
 #endif
 
+#if FLEX_FLUID_SURFACE_FACTORY
+Texture2D FlexFluidSurfaceThicknessTexture;
+SamplerState FlexFluidSurfaceThicknessTextureSampler;
+#endif
+
 // Whether the platform supports independent texture and samplers
 // When enabled, different texture lookups can share samplers to allow more artist samplers in the base pass
 // Ideally this would just be enabled for all SM4 and above feature level platforms
@@ -813,6 +818,16 @@ float3 DecodeSceneColorForMaterialNode(float2 ScreenUV)
 #endif
 }
 
+// Returns thickness provided for flex fluid surface rendering
+float CalcFlexFluidSurfaceThicknessForMaterialNode(float2 ScreenUV)
+{
+#if FLEX_FLUID_SURFACE_FACTORY
+	return Texture2DSampleLevel(FlexFluidSurfaceThicknessTexture, FlexFluidSurfaceThicknessTextureSampler, ScreenUV, 0);
+#else
+	return 0.0f;
+#endif
+}
+
 // Converts depth buffer Z / W into W
 float ConvertFromDeviceZ(float DeviceZ)
 {
@@ -1287,4 +1302,46 @@ uint ReverseBits32( uint bits )
 	bits = ( (bits & 0x55555555) << 1 ) | ( (bits & 0xaaaaaaaa) >> 1 );
 	return bits;
 #endif
+}
+
+float FilterUV(float2 Values, float Weight)
+{
+	float Max = max(Values.x, Values.y);
+	Values += Max - Values > 0.5f;
+	float Result = lerp(Values.x, Values.y, Weight);
+	return frac(Result);
+}
+
+float FilterUV(float4 Values, float2 Weights)
+{
+	float2 Max = max(Values.wx, Values.zy);
+	Values += Max.yyxx - Values > 0.5f;
+	float2 Result = lerp(Values.wx, Values.zy, Weights.x);
+	return FilterUV(frac(Result), Weights.y);
+}
+
+MaterialFloat4 Texture2DSampleUV(Texture2D Tex, SamplerState Sampler, float2 UV)
+{
+	// Sample order for gather:
+	// v
+	// | x y
+	// | w z
+	//  ----- u
+	float4 Red   = Tex.GatherRed  (Sampler, UV);
+	float4 Green = Tex.GatherGreen(Sampler, UV);
+	float2 Dimensions;
+	Tex.GetDimensions(Dimensions.x, Dimensions.y);
+	float2 TexelWidth = 1 / Dimensions;
+	float2 Weights = frac(UV * Dimensions + 0.5);
+	float2 SampleOffset = Weights * TexelWidth;
+	float2 LLSampleUV = UV - SampleOffset;
+	float2 URSampleUV = UV + TexelWidth - SampleOffset;
+	float2 HalfTexelWidth = 0.5 * TexelWidth;
+	float2 LLClampAmount = min(LLSampleUV - HalfTexelWidth, max(0, LLSampleUV - 1 + HalfTexelWidth));
+	float2 URClampAmount = min(URSampleUV - HalfTexelWidth, max(0, URSampleUV - 1 + HalfTexelWidth));
+	float2 ClampAmountU = float2(LLClampAmount.x, URClampAmount.x);
+	float2 ClampAmountV = float2(LLClampAmount.y, URClampAmount.y);
+	float  FilteredRed   = FilterUV(Red   + ClampAmountU.xyyx, Weights);
+	float  FilteredGreen = FilterUV(Green + ClampAmountV.yyxx, Weights);
+	return float4(FilteredRed, FilteredGreen, 0, 0);
 }

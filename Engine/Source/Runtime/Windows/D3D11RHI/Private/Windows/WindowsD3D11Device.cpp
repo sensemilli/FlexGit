@@ -365,6 +365,12 @@ FDynamicRHI* FD3D11DynamicRHIModule::CreateRHI()
 void FD3D11DynamicRHI::Init()
 {
 	InitD3DDevice();
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	CreateVxgiInterface();
+#endif
+	// NVCHANGE_END: Add VXGI
 }
 
 void FD3D11DynamicRHI::InitD3DDevice()
@@ -659,6 +665,31 @@ void FD3D11DynamicRHI::InitD3DDevice()
 			}
 		}
 #endif
+
+		// NVCHANGE_BEGIN: Add HBAO+
+#if WITH_GFSDK_SSAO
+		if (GMaxRHIFeatureLevel >= ERHIFeatureLevel::SM5)
+		{
+			FString HBAOBinariesPath = FPaths::EngineDir() / TEXT("Binaries/ThirdParty/GameWorks/GFSDK_SSAO/");
+#if PLATFORM_64BITS
+			HBAOModuleHandle = LoadLibraryW(*(HBAOBinariesPath + "GFSDK_SSAO.win64.dll"));
+#else
+			HBAOModuleHandle = LoadLibraryW(*(HBAOBinariesPath + "GFSDK_SSAO.win32.dll"));
+#endif
+			check(HBAOModuleHandle);
+
+			GFSDK_SSAO_Status status;
+			status = GFSDK_SSAO_CreateContext_D3D11(Direct3DDevice, &HBAOContext);
+			check(status == GFSDK_SSAO_OK);
+
+			GFSDK_SSAO_Version Version;
+			status = GFSDK_SSAO_GetVersion(&Version);
+			check(status == GFSDK_SSAO_OK);
+
+			UE_LOG(LogD3D11RHI, Log, TEXT("HBAO+ %d.%d.%d.%d"), Version.Major, Version.Minor, Version.Branch, Version.Revision);
+		}
+#endif
+		// NVCHANGE_END: Add HBAO+
 
 		FHardwareInfo::RegisterHardwareInfo( NAME_RHI, TEXT( "D3D11" ) );
 

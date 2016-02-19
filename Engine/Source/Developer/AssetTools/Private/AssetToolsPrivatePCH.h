@@ -91,6 +91,20 @@ DECLARE_LOG_CATEGORY_EXTERN(LogAssetTools, Log, All);
 #include "AssetTypeActions/AssetTypeActions_VectorFieldStatic.h"
 #include "AssetTypeActions/AssetTypeActions_VertexAnimation.h"
 #include "AssetTypeActions/AssetTypeActions_World.h"
+#include "AssetTypeActions/AssetTypeActions_FlexContainer.h"
+#include "AssetTypeActions/AssetTypeActions_FlexFluidSurface.h"
+#include "AssetTypeActions/AssetTypeActions_Hair.h"
+#include "AssetTypeActions/AssetTypeActions_WaveWorks.h"
+
+// NVCHANGE_BEGIN: JCAO - Add Field Sampler Asset
+#include "AssetTypeActions/AssetTypeActions_AttractorAsset.h"
+#include "AssetTypeActions/AssetTypeActions_JetAsset.h"
+#include "AssetTypeActions/AssetTypeActions_GridAsset.h"
+#include "AssetTypeActions/AssetTypeActions_NoiseAsset.h"
+#include "AssetTypeActions/AssetTypeActions_VortexAsset.h"
+#include "AssetTypeActions/AssetTypeActions_HeatSourceAsset.h"
+#include "AssetTypeActions/AssetTypeActions_VelocitySourceAsset.h"
+// NVCHANGE_END: JCAO - Add Field Sampler Asset
 
 #include "SDiscoveringAssetsDialog.h"
 #include "AssetRenameManager.h"

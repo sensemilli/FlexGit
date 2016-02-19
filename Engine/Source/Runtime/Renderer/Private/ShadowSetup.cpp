@@ -384,6 +384,14 @@ FProjectedShadowInfo::FProjectedShadowInfo()
 	, LightSceneInfo(0)
 	, ParentSceneInfo(0)
 	, ShaderDepthBias(0.0f)
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	, CascadeSurfaceIndex(0)
+#endif
+	// NVCHANGE_END: Add VXGI
+
+	, bHairReceiver(false)
+	, bHairRenderProjection(false)
 {
 }
 
@@ -654,7 +662,16 @@ void FProjectedShadowInfo::AddSubjectPrimitive(FPrimitiveSceneInfo* PrimitiveSce
 	QUICK_SCOPE_CYCLE_COUNTER(STAT_AddSubjectPrimitive);
 
 	// Ray traced shadows use the GPU managed distance field object buffers, no CPU culling should be used
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	// But VXGI still needs a regular shadow map
+	check(!CascadeSettings.bRayTracedDistanceField || LightSceneInfo->Proxy->CastVxgiIndirectLighting());
+#else
+	// NVCHANGE_END: Add VXGI
 	check(!CascadeSettings.bRayTracedDistanceField);
+	// NVCHANGE_BEGIN: Add VXGI
+#endif
+	// NVCHANGE_END: Add VXGI
 
 	if (!ReceiverPrimitives.Contains(PrimitiveSceneInfo)
 		// Far cascade only casts from primitives marked for it
@@ -1389,7 +1406,17 @@ void FSceneRenderer::CreatePerObjectProjectedShadow(
 		MaxScreenPercent = FMath::Max(MaxScreenPercent, ScreenPercent);
 
 		// Determine the amount of shadow buffer resolution needed for this view.
-		const float UnclampedResolution = ScreenRadius * CVarShadowTexelsPerPixel.GetValueOnRenderThread();
+		float UnclampedResolution = ScreenRadius * CVarShadowTexelsPerPixel.GetValueOnRenderThread();
+
+		{
+			const auto& PrimViewRel = View.PrimitiveViewRelevanceMap[ShadowGroupPrimitives[0]->GetIndex()];
+			if (PrimViewRel.bHair)
+			{
+				static const auto& CVarHairTexelsScale = *IConsoleManager::Get().FindConsoleVariable(TEXT("r.Hair.Shadow.TexelsScale"));
+				UnclampedResolution *= CVarHairTexelsScale.GetFloat();
+			}
+		}
+
 		MaxUnclampedResolution = FMath::Max( MaxUnclampedResolution, UnclampedResolution );
 		MaxDesiredResolution = FMath::Max(
 			MaxDesiredResolution,
@@ -1748,7 +1775,15 @@ void FDeferredShadingSceneRenderer::CreateWholeSceneProjectedShadow(FLightSceneI
 				}
 
 				// Ray traced shadows use the GPU managed distance field object buffers, no CPU culling should be used
+				// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+				if (!ProjectedShadowInfo->CascadeSettings.bRayTracedDistanceField || LightSceneInfo->Proxy->CastVxgiIndirectLighting())
+#else
+				// NVCHANGE_END: Add VXGI
 				if (!ProjectedShadowInfo->CascadeSettings.bRayTracedDistanceField)
+				// NVCHANGE_BEGIN: Add VXGI
+#endif
+				// NVCHANGE_END: Add VXGI
 				{
 					// Add all the shadow casting primitives affected by the light to the shadow's subject primitive list.
 					for(FLightPrimitiveInteraction* Interaction = LightSceneInfo->DynamicPrimitiveList;
@@ -2265,7 +2300,15 @@ void FSceneRenderer::AddViewDependentWholeSceneShadowsForView(
 					ShadowInfos.Add(ProjectedShadowInfo);
 
 					// Ray traced shadows use the GPU managed distance field object buffers, no CPU culling needed
+					// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+					if (!ProjectedShadowInfo->CascadeSettings.bRayTracedDistanceField || LightSceneInfo.Proxy->CastVxgiIndirectLighting())
+#else
+					// NVCHANGE_END: Add VXGI
 					if (!ProjectedShadowInfo->CascadeSettings.bRayTracedDistanceField)
+					// NVCHANGE_BEGIN: Add VXGI
+#endif
+					// NVCHANGE_END: Add VXGI
 					{
 						ShadowInfosThatNeedCulling.Add(ProjectedShadowInfo);
 					}
@@ -2310,7 +2353,15 @@ void FSceneRenderer::AddViewDependentWholeSceneShadowsForView(
 						ShadowInfos.Add(ProjectedShadowInfo); // or separate list?
 
 						// Ray traced shadows use the GPU managed distance field object buffers, no CPU culling needed
+						// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+						if (!ProjectedShadowInfo->CascadeSettings.bRayTracedDistanceField || LightSceneInfo.Proxy->CastVxgiIndirectLighting())
+#else
+						// NVCHANGE_END: Add VXGI
 						if (!ProjectedShadowInfo->CascadeSettings.bRayTracedDistanceField)
+						// NVCHANGE_BEGIN: Add VXGI
+#endif
+						// NVCHANGE_END: Add VXGI
 						{
 							ShadowInfosThatNeedCulling.Add(ProjectedShadowInfo);
 						}

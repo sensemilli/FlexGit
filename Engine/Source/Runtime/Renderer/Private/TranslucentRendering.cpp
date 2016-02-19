@@ -10,6 +10,10 @@
 #include "SceneFilterRendering.h"
 #include "LightPropagationVolume.h"
 #include "SceneUtils.h"
+#include "HairSceneProxy.h"
+
+#include "WaveWorksRender.h"
+#include "WaveWorksResource.h"
 
 static void SetTranslucentRenderTargetAndState(FRHICommandList& RHICmdList, const FViewInfo& View, ETranslucencyPassType TranslucenyPassType, bool bFirstTimeThisFrame = false)
 {
@@ -280,46 +284,88 @@ public:
 
 		const FScene* Scene = Parameters.PrimitiveSceneProxy ? Parameters.PrimitiveSceneProxy->GetPrimitiveSceneInfo()->Scene : NULL;
 
-		TBasePassDrawingPolicy<LightMapPolicyType> DrawingPolicy(
-			Parameters.Mesh.VertexFactory,
-			Parameters.Mesh.MaterialRenderProxy,
-			*Parameters.Material,
-			Parameters.FeatureLevel,
-			LightMapPolicy,
-			Parameters.BlendMode,
-			// Translucent meshes need scene render targets set as textures
-			ESceneRenderTargetsMode::SetTextures,
-			bIsLitMaterial && Scene && Scene->SkyLight && !Scene->SkyLight->bHasStaticLighting,
-			Scene && Scene->HasAtmosphericFog() && View.Family->EngineShowFlags.AtmosphericFog && View.Family->EngineShowFlags.Fog,
-			View.Family->EngineShowFlags.ShaderComplexity,
-			Parameters.bAllowFog
-			);
-		RHICmdList.BuildAndSetLocalBoundShaderState(DrawingPolicy.GetBoundShaderStateInput(View.GetFeatureLevel()));
-		DrawingPolicy.SetSharedState(RHICmdList, &View, typename TBasePassDrawingPolicy<LightMapPolicyType>::ContextDataType());
-
-		int32 BatchElementIndex = 0;
-		uint64 BatchElementMask = Parameters.BatchElementMask;
-		do
+		/* Use WaveWorks drawing policy instead */
+		if (Parameters.PrimitiveSceneProxy && Parameters.PrimitiveSceneProxy->IsWaveWorks())
 		{
-			if(BatchElementMask & 1)
-			{
-				DrawingPolicy.SetMeshRenderState(
-					RHICmdList, 
-					View,
-					Parameters.PrimitiveSceneProxy,
-					Parameters.Mesh,
-					BatchElementIndex,
-					bBackFace,
-					DitheredLODTransitionValue,
-					typename TBasePassDrawingPolicy<LightMapPolicyType>::ElementDataType(LightMapElementData),
-					typename TBasePassDrawingPolicy<LightMapPolicyType>::ContextDataType()
-					);
-				DrawingPolicy.DrawMesh(RHICmdList, Parameters.Mesh,BatchElementIndex);
-			}
+			TBasePassWaveWorksDrawingPolicy<LightMapPolicyType> DrawingPolicy(
+				Parameters.Mesh.VertexFactory,
+				Parameters.Mesh.MaterialRenderProxy,
+				*Parameters.Material,
+				Parameters.FeatureLevel,
+				LightMapPolicy,
+				Parameters.BlendMode,
+				// Translucent meshes need scene render targets set as textures
+				ESceneRenderTargetsMode::SetTextures,
+				View.ViewMatrices.ViewMatrix,
+				View.ViewMatrices.ProjMatrix,
+				bIsLitMaterial && Scene && Scene->SkyLight && !Scene->SkyLight->bHasStaticLighting,
+				Scene && Scene->HasAtmosphericFog() && View.Family->EngineShowFlags.AtmosphericFog && View.Family->EngineShowFlags.Fog,
+				View.Family->EngineShowFlags.ShaderComplexity,
+				Parameters.bAllowFog
+				);
+			RHICmdList.BuildAndSetLocalBoundShaderState(DrawingPolicy.GetBoundShaderStateInput(View.GetFeatureLevel()));
+			DrawingPolicy.SetSharedState(RHICmdList, &View, typename TBasePassDrawingPolicy<LightMapPolicyType>::ContextDataType());
 
-			BatchElementMask >>= 1;
-			BatchElementIndex++;
-		} while(BatchElementMask);
+			DrawingPolicy.SetMeshRenderState(
+				RHICmdList,
+				View,
+				Parameters.PrimitiveSceneProxy,
+				Parameters.Mesh,
+				0,
+				bBackFace,
+				DitheredLODTransitionValue,
+				typename TBasePassWaveWorksDrawingPolicy<LightMapPolicyType>::ElementDataType(LightMapElementData),
+				typename TBasePassWaveWorksDrawingPolicy<LightMapPolicyType>::ContextDataType()
+				);
+
+			FWaveWorksSceneProxy* SceneProxy = static_cast<FWaveWorksSceneProxy*>(const_cast<FPrimitiveSceneProxy*>(Parameters.PrimitiveSceneProxy));
+			DrawingPolicy.SceneProxy = SceneProxy;
+
+			DrawingPolicy.DrawMesh(RHICmdList, Parameters.Mesh, 0);
+		}
+		else
+		{
+			TBasePassDrawingPolicy<LightMapPolicyType> DrawingPolicy(
+				Parameters.Mesh.VertexFactory,
+				Parameters.Mesh.MaterialRenderProxy,
+				*Parameters.Material,
+				Parameters.FeatureLevel,
+				LightMapPolicy,
+				Parameters.BlendMode,
+				// Translucent meshes need scene render targets set as textures
+				ESceneRenderTargetsMode::SetTextures,
+				bIsLitMaterial && Scene && Scene->SkyLight && !Scene->SkyLight->bHasStaticLighting,
+				Scene && Scene->HasAtmosphericFog() && View.Family->EngineShowFlags.AtmosphericFog && View.Family->EngineShowFlags.Fog,
+				View.Family->EngineShowFlags.ShaderComplexity,
+				Parameters.bAllowFog
+				);
+			RHICmdList.BuildAndSetLocalBoundShaderState(DrawingPolicy.GetBoundShaderStateInput(View.GetFeatureLevel()));
+			DrawingPolicy.SetSharedState(RHICmdList, &View, typename TBasePassDrawingPolicy<LightMapPolicyType>::ContextDataType());
+
+			int32 BatchElementIndex = 0;
+			uint64 BatchElementMask = Parameters.BatchElementMask;
+			do
+			{
+				if (BatchElementMask & 1)
+				{
+					DrawingPolicy.SetMeshRenderState(
+						RHICmdList,
+						View,
+						Parameters.PrimitiveSceneProxy,
+						Parameters.Mesh,
+						BatchElementIndex,
+						bBackFace,
+						DitheredLODTransitionValue,
+						typename TBasePassDrawingPolicy<LightMapPolicyType>::ElementDataType(LightMapElementData),
+						typename TBasePassDrawingPolicy<LightMapPolicyType>::ContextDataType()
+						);
+					DrawingPolicy.DrawMesh(RHICmdList, Parameters.Mesh, BatchElementIndex);
+				}
+
+				BatchElementMask >>= 1;
+				BatchElementIndex++;
+			} while (BatchElementMask);
+		}
 	}
 };
 
@@ -1043,6 +1089,13 @@ static TAutoConsoleVariable<int32> CVarParallelTranslucency(
 	ECVF_RenderThreadSafe
 	);
 
+namespace HairLight
+{
+	FVector Direction;
+	FLinearColor Color;
+	bool bShadowed = false;
+}
+
 void FDeferredShadingSceneRenderer::DrawAllTranslucencyPasses(FRHICommandListImmediate& RHICmdList, const FViewInfo& View, ETranslucencyPassType TranslucenyPassType)
 {
 	// Draw translucent prims
@@ -1077,6 +1130,48 @@ void FDeferredShadingSceneRenderer::RenderTranslucency(FRHICommandListImmediate&
 			// non separate translucency
 			{
 				SetTranslucentRenderTargetAndState(RHICmdList, View, TPT_NonSeparateTransluceny);
+
+				// Draw hairs in translucency pass
+				if (View.bHasHair)
+				{
+					FSceneRenderTargets& SceneContext = FSceneRenderTargets::Get(RHICmdList);
+					FHairSceneProxy::StartMsaa();
+
+					for (auto MeshIdx = 0; MeshIdx < View.VisibleDynamicPrimitives.Num(); ++MeshIdx)
+					{
+						auto& PrimitiveInfo = *View.VisibleDynamicPrimitives[MeshIdx];
+						auto& ViewRelevance = View.PrimitiveViewRelevanceMap[PrimitiveInfo.GetIndex()];
+						if (!ViewRelevance.bHair)
+							continue;
+
+						// Draw hair
+						auto& HairSceneProxy = static_cast<FHairSceneProxy&>(*PrimitiveInfo.Proxy);
+						FVector4 IndirectLight[sizeof(FSHVectorRGB2) / sizeof(FVector4)] = { FVector4(0, 0, 0, 0), FVector4(0, 0, 0, 0), FVector4(0, 0, 0, 0) };
+						if (PrimitiveInfo.IndirectLightingCacheAllocation
+							&& PrimitiveInfo.IndirectLightingCacheAllocation->IsValid()
+							&& View.Family->EngineShowFlags.GlobalIllumination)
+						{
+							const FIndirectLightingCacheAllocation& LightingAllocation = *PrimitiveInfo.IndirectLightingCacheAllocation;
+							IndirectLight[0] = LightingAllocation.SingleSamplePacked[0];
+							IndirectLight[1] = LightingAllocation.SingleSamplePacked[1];
+							IndirectLight[2] = LightingAllocation.SingleSamplePacked[2];
+						}
+
+						auto LightAttenuationTexture = SceneContext.HairLightAttenuation && HairLight::bShadowed ? SceneContext.HairLightAttenuation->GetRenderTargetItem().ShaderResourceTexture : nullptr;
+
+						HairSceneProxy.DrawTranslucency(
+							View,
+							HairLight::Direction,
+							HairLight::Color,
+							LightAttenuationTexture,
+							IndirectLight
+							);
+					}
+
+					FHairSceneProxy::FinishMsaa();
+
+					FHairSceneProxy::DrawColorAndDepth();
+				}
 
 				DrawAllTranslucencyPasses(RHICmdList, View, TPT_NonSeparateTransluceny);
 

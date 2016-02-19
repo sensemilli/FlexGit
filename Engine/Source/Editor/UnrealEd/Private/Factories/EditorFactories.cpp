@@ -52,6 +52,13 @@
 #include "ApexDestructibleAssetImport.h"
 #endif // WITH_APEX
 
+#include "PhysicsEngine/FlexContainer.h"
+#include "PhysicsEngine/FlexFluidSurface.h"
+
+#include "Hair.h"
+#include "HairSceneProxy.h"
+#include "HairComponent.h"
+
 #if PLATFORM_WINDOWS
 // Needed for DDS support.
 #include "AllowWindowsPlatformTypes.h"
@@ -2438,6 +2445,40 @@ UPhysicalMaterialFactoryNew::UPhysicalMaterialFactoryNew(const FObjectInitialize
 UObject* UPhysicalMaterialFactoryNew::FactoryCreateNew(UClass* Class,UObject* InParent,FName Name,EObjectFlags Flags,UObject* Context,FFeedbackContext* Warn)
 {
 	return NewObject<UObject>(InParent, Class, Name, Flags);
+}
+
+/*------------------------------------------------------------------------------
+UFlexContainerFactory
+------------------------------------------------------------------------------*/
+UFlexContainerFactory::UFlexContainerFactory(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+
+	SupportedClass = UFlexContainer::StaticClass();
+	bCreateNew = true;
+	bEditAfterNew = true;
+}
+
+UObject* UFlexContainerFactory::FactoryCreateNew(UClass* Class, UObject* InParent, FName Name, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn)
+{
+	return NewObject<UFlexContainer>(InParent, Class, Name, Flags);
+}
+
+/*------------------------------------------------------------------------------
+UFlexFluidSurfaceFactory
+------------------------------------------------------------------------------*/
+UFlexFluidSurfaceFactory::UFlexFluidSurfaceFactory(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+
+	SupportedClass = UFlexFluidSurface::StaticClass();
+	bCreateNew = true;
+	bEditAfterNew = true;
+}
+
+UObject* UFlexFluidSurfaceFactory::FactoryCreateNew(UClass* Class, UObject* InParent, FName Name, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn)
+{
+	return NewObject<UFlexFluidSurface>(InParent, Class, Name, Flags);
 }
 
 /*------------------------------------------------------------------------------
@@ -6678,6 +6719,18 @@ FText UDestructibleMeshFactory::GetDisplayName() const
 
 #if WITH_APEX
 
+bool UDestructibleMeshFactory::FactoryCanImport(const FString& Filename)
+{
+	auto Asset = CreateApexDestructibleAssetFromFile(Filename);
+	if (Asset)
+	{
+		Asset->release();
+		return true;
+	}
+	else
+		return false;
+}
+
 UObject* UDestructibleMeshFactory::FactoryCreateBinary
 (
 	UClass*				Class,
@@ -6711,12 +6764,9 @@ UObject* UDestructibleMeshFactory::FactoryCreateBinary
 		}
 	}
 #if WITH_APEX_CLOTHING
-	else
+	else if (NxClothingAsset* ApexClothingAsset = ApexClothingUtils::CreateApexClothingAssetFromBuffer(Buffer, (int32)(BufferEnd - Buffer)))	// verify whether this is an Apex Clothing asset or not 
 	{
-		// verify whether this is an Apex Clothing asset or not 
-		NxClothingAsset* ApexClothingAsset = ApexClothingUtils::CreateApexClothingAssetFromBuffer(Buffer, (int32)(BufferEnd-Buffer));
-		
-		if(ApexClothingAsset)
+		if (ApexClothingAsset)
 		{
 			FMessageDialog::Open( EAppMsgType::Ok, LOCTEXT("ApexClothingWrongImport", "The file you tried to import is an APEX clothing asset file. You need to use Persona to import this asset and associate it with a skeletal mesh.\n\n 1. Import a skeletal mesh from an FBX file, or choose an existing skeletal asset and open it up in Persona.\n 2. Choose \"Add APEX clothing file\" and choose this APEX clothing asset file." ));
 
@@ -6855,6 +6905,122 @@ int32 UReimportDestructibleMeshFactory::GetPriority() const
 }
 
 #endif // #if WITH_APEX
+
+/*------------------------------------------------------------------------------
+	UHairFactory.
+------------------------------------------------------------------------------*/
+UHairFactory::UHairFactory(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	SupportedClass = UHair::StaticClass();
+	bEditorImport = true;
+	bCreateNew = false;
+	Formats.Add(TEXT("apx;HairWorks Asset"));
+	Formats.Add(TEXT("apb;HairWorks Asset"));
+}
+
+bool UHairFactory::FactoryCanImport(const FString& Filename)
+{
+	// Skip APEX file that is not hair.
+	TArray<uint8> Buffer;
+	FFileHelper::LoadFileToArray(Buffer, *Filename);
+	return FHairSceneProxy::IsHair_GameThread(Buffer.GetData(), Buffer.Num());
+}
+
+FText UHairFactory::GetDisplayName() const
+{
+	return LOCTEXT("HairFactory", "Hair");
+}
+
+UObject* UHairFactory::FactoryCreateBinary(
+	UClass*				Class,
+	UObject*			InParent,
+	FName				Name,
+	EObjectFlags		Flags,
+	UObject*			Context,
+	const TCHAR*		FileType,
+	const uint8*&		Buffer,
+	const uint8*			BufferEnd,
+	FFeedbackContext*	Warn
+	)
+{
+	// Notify
+	FEditorDelegates::OnAssetPreImport.Broadcast(this, Class, InParent, Name, FileType);
+
+	// Check asset
+	if (!FHairSceneProxy::IsHair_GameThread(Buffer, BufferEnd - Buffer))
+		return nullptr;
+
+	// Create asset
+	auto* Hair = NewObject<UHair>(InParent, Name, Flags);
+
+	Hair->AssetData.SetNumUninitialized(BufferEnd - Buffer);
+	FMemory::Memcpy(Hair->AssetData.GetData(), Buffer, Hair->AssetData.Num());
+
+	return Hair;
+}
+
+bool UHairFactory::CanReimport(UObject* Obj, TArray<FString>& OutFilenames)
+{
+	auto* Hair = Cast<UHair>(Obj);
+	if (Hair && Hair->AssetImportData)
+	{
+		Hair->AssetImportData->ExtractFilenames(OutFilenames);
+		return true;
+	}
+	return false;
+}
+
+void UHairFactory::SetReimportPaths(UObject* Obj, const TArray<FString>& NewReimportPaths)
+{
+	auto* Hair = Cast<UHair>(Obj);
+	if (Hair && ensure(NewReimportPaths.Num() == 1))
+	{
+		Hair->AssetImportData->UpdateFilenameOnly(NewReimportPaths[0]);
+	}
+}
+
+EReimportResult::Type UHairFactory::Reimport(UObject* Obj)
+{
+	// Validate asset file.
+	auto* Hair = Cast<UHair>(Obj);
+	if (!Hair)
+		return EReimportResult::Failed;
+
+	// Make sure file is valid and exists
+	const FString Filename = Hair->AssetImportData->GetFirstFilename();
+	if (!Filename.Len() || IFileManager::Get().FileSize(*Filename) == INDEX_NONE)
+	{
+		return EReimportResult::Failed;
+	}
+
+	TArray<uint8> FileData;
+	FFileHelper::LoadFileToArray(FileData, *Filename);
+
+	if (!FHairSceneProxy::IsHair_GameThread(FileData.GetData(), FileData.Num()))
+		return EReimportResult::Failed;
+
+	// Finish render thread work.
+	FlushRenderingCommands();
+
+	// Load asset
+	Hair->AssetData = FileData;
+	Hair->AssetId = UHair::AssetIdNull;
+
+	// Notify components the change.
+	for (TObjectIterator<UHairComponent> It; It; ++It)
+	{
+		if (It->Hair != Hair)
+			continue;
+
+		It->RecreateRenderState_Concurrent();
+	}
+
+	// Mark package dirty.
+	(Obj->GetOuter() ? Obj->GetOuter() : Obj)->MarkPackageDirty();
+
+	return EReimportResult::Succeeded;
+}
 
 /*------------------------------------------------------------------------------
 	UBlendSpaceFactoryNew.
@@ -7205,8 +7371,6 @@ UDataTableFactory::UDataTableFactory(const FObjectInitializer& ObjectInitializer
 	: Super(ObjectInitializer)
 {
 	SupportedClass = UDataTable::StaticClass();
-	bCreateNew = true;
-	bEditAfterNew = true;
 }
 
 bool UDataTableFactory::ConfigureProperties()
@@ -7341,6 +7505,162 @@ UObject* UDataTableFactory::FactoryCreateNew(UClass* Class, UObject* InParent, F
 	return DataTable;
 }
 
+/*------------------------------------------------------------------------------
+UWaveWorksFactoryNew implementation.
+------------------------------------------------------------------------------*/
+UWaveWorksFactoryNew::UWaveWorksFactoryNew(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	SupportedClass = UWaveWorks::StaticClass();
+	bCreateNew = true;
+	bEditAfterNew = true;
+}
+UObject* UWaveWorksFactoryNew::FactoryCreateNew(UClass* Class, UObject* InParent, FName Name, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn)
+{
+	return NewObject<UWaveWorks>(InParent, Class, Name, Flags);
+}
+
+// NVCHANGE_BEGIN: JCAO - Add Field Sampler Asset
+/*-----------------------------------------------------------------------------
+UGridAssetFactory.
+-----------------------------------------------------------------------------*/
+UGridAssetFactory::UGridAssetFactory(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+
+	SupportedClass = UGridAsset::StaticClass();
+
+	bCreateNew = true;
+	bEditAfterNew = true;
+}
+
+UObject* UGridAssetFactory::FactoryCreateNew(UClass* InClass, UObject* InParent, FName InName, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn)
+{
+	UGridAsset* GridAsset = ConstructObject<UGridAsset>(UGridAsset::StaticClass(), InParent, InName, Flags);
+
+	return GridAsset;
+}
+
+/*-----------------------------------------------------------------------------
+UVortexAssetFactory.
+-----------------------------------------------------------------------------*/
+UVortexAssetFactory::UVortexAssetFactory(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+
+	SupportedClass = UVortexAsset::StaticClass();
+
+	bCreateNew = true;
+	bEditAfterNew = true;
+}
+
+UObject* UVortexAssetFactory::FactoryCreateNew(UClass* InClass, UObject* InParent, FName InName, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn)
+{
+	UVortexAsset* VortexAsset = ConstructObject<UVortexAsset>(UVortexAsset::StaticClass(), InParent, InName, Flags);
+
+	return VortexAsset;
+}
+
+/*-----------------------------------------------------------------------------
+UJetAssetFactory.
+-----------------------------------------------------------------------------*/
+UJetAssetFactory::UJetAssetFactory(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+
+	SupportedClass = UJetAsset::StaticClass();
+
+	bCreateNew = true;
+	bEditAfterNew = true;
+}
+
+UObject* UJetAssetFactory::FactoryCreateNew(UClass* InClass, UObject* InParent, FName InName, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn)
+{
+	UJetAsset* JetAsset = ConstructObject<UJetAsset>(UJetAsset::StaticClass(), InParent, InName, Flags);
+
+	return JetAsset;
+}
+
+/*-----------------------------------------------------------------------------
+UAttractorAssetFactory.
+-----------------------------------------------------------------------------*/
+UAttractorAssetFactory::UAttractorAssetFactory(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+
+	SupportedClass = UAttractorAsset::StaticClass();
+
+	bCreateNew = true;
+	bEditAfterNew = true;
+}
+
+UObject* UAttractorAssetFactory::FactoryCreateNew(UClass* InClass, UObject* InParent, FName InName, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn)
+{
+	UAttractorAsset* AttractorAsset = ConstructObject<UAttractorAsset>(UAttractorAsset::StaticClass(), InParent, InName, Flags);
+
+	return AttractorAsset;
+}
+
+/*-----------------------------------------------------------------------------
+UNoiseAssetFactory.
+-----------------------------------------------------------------------------*/
+UNoiseAssetFactory::UNoiseAssetFactory(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+
+	SupportedClass = UNoiseAsset::StaticClass();
+
+	bCreateNew = true;
+	bEditAfterNew = true;
+}
+
+UObject* UNoiseAssetFactory::FactoryCreateNew(UClass* InClass, UObject* InParent, FName InName, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn)
+{
+	UNoiseAsset* NoiseAsset = ConstructObject<UNoiseAsset>(UNoiseAsset::StaticClass(), InParent, InName, Flags);
+
+	return NoiseAsset;
+}
+
+/*-----------------------------------------------------------------------------
+UHeatSourceAssetFactory.
+-----------------------------------------------------------------------------*/
+UHeatSourceAssetFactory::UHeatSourceAssetFactory(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+
+	SupportedClass = UHeatSourceAsset::StaticClass();
+
+	bCreateNew = true;
+	bEditAfterNew = true;
+}
+
+UObject* UHeatSourceAssetFactory::FactoryCreateNew(UClass* InClass, UObject* InParent, FName InName, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn)
+{
+	UHeatSourceAsset* HeatSourceAsset = ConstructObject<UHeatSourceAsset>(UHeatSourceAsset::StaticClass(), InParent, InName, Flags);
+
+	return HeatSourceAsset;
+}
+
+/*-----------------------------------------------------------------------------
+UVelocitySourceAssetFactory.
+-----------------------------------------------------------------------------*/
+UVelocitySourceAssetFactory::UVelocitySourceAssetFactory(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+
+	SupportedClass = UVelocitySourceAsset::StaticClass();
+
+	bCreateNew = true;
+	bEditAfterNew = true;
+}
+
+UObject* UVelocitySourceAssetFactory::FactoryCreateNew(UClass* InClass, UObject* InParent, FName InName, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn)
+{
+	UVelocitySourceAsset* VelocitySourceAsset = ConstructObject<UVelocitySourceAsset>(UVelocitySourceAsset::StaticClass(), InParent, InName, Flags);
+
+	return VelocitySourceAsset;
+}
+// NVCHANGE_END: JCAO - Add Field Sampler Asset
 
 #undef LOCTEXT_NAMESPACE
 

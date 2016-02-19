@@ -557,6 +557,7 @@ bool UDestructibleMesh::BuildFractureSettingsFromStaticMesh(UStaticMesh* StaticM
 	TArray<const FStaticMeshLODResources*> RenderMeshes;
 	TArray<UStaticMesh*> StaticMeshes;
 	TArray<uint32> MeshPartitions;
+	TArray<int32> ParentIndices;
 
 	// Do we have a main static mesh?
 	const FStaticMeshLODResources& MainRenderMesh = StaticMesh->GetLODForExport(0);
@@ -626,7 +627,9 @@ bool UDestructibleMesh::BuildFractureSettingsFromStaticMesh(UStaticMesh* StaticM
 		}
 	}
 
-	FractureSettings->SetRootMesh(Triangles, Materials, Submeshes, MeshPartitions, true);
+	ParentIndices.Add(-1);
+
+	FractureSettings->SetRootMesh(Triangles, Materials, Submeshes, MeshPartitions, ParentIndices);
 	return true;
 #else // WITH_APEX && WITH_EDITOR
 	return false;

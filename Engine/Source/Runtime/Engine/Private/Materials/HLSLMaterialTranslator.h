@@ -150,6 +150,10 @@ protected:
 	/** Parameter collections referenced by this material.  The position in this array is used as an index on the shader parameter. */
 	TArray<UMaterialParameterCollection*> ParameterCollections;
 
+	/** WaveWorks resource referenced by this material */
+	FGuid WaveWorksId;
+	FString BlendFactorsCode;
+
 	// Index of the next symbol to create
 	int32 NextSymbolIndex;
 
@@ -340,6 +344,11 @@ public:
 
 			Chunk[MP_PixelDepthOffset] = Material->CompilePropertyAndSetMaterialProperty(MP_PixelDepthOffset,this);
 
+			if (WaveWorksId.IsValid())
+			{
+				NumUserTexCoords += 2;
+			}
+
 			// No more calls to non-vertex shader CompilePropertyAndSetMaterialProperty beyond this point
 			const uint32 SavedNumUserTexCoords = NumUserTexCoords;
 
@@ -352,6 +361,17 @@ public:
 				{
 					Chunk[CustomUVIndex] = Material->CompilePropertyAndSetMaterialProperty((EMaterialProperty)CustomUVIndex, this);
 				}
+			}
+
+			if (WaveWorksId.IsValid())
+			{
+				int32 BlendFactor0 = MP_CustomizedUVs0 + NumUserTexCoords;
+				SetMaterialProperty((EMaterialProperty)BlendFactor0, SF_Vertex);
+				Chunk[BlendFactor0] = AddInlinedCodeChunk(MCT_Float2, TEXT("%s.xy"), *BlendFactorsCode);
+
+				int32 BlendFactor1 = MP_CustomizedUVs1 + NumUserTexCoords;
+				SetMaterialProperty((EMaterialProperty)BlendFactor1, SF_Vertex);
+				Chunk[BlendFactor1] = AddInlinedCodeChunk(MCT_Float2, TEXT("%s.zw"), *BlendFactorsCode);
 			}
 
 			bUsesPixelDepthOffset = IsMaterialPropertyUsed(MP_PixelDepthOffset, Chunk[MP_PixelDepthOffset], FLinearColor(0, 0, 0, 0), 1)
@@ -552,6 +572,8 @@ public:
 
 			// Create the material uniform buffer struct.
 			MaterialCompilationOutput.UniformExpressionSet.CreateBufferStruct();
+
+			MaterialCompilationOutput.UniformExpressionSet.WaveWorks = WaveWorksId;
 		}
 		INC_FLOAT_STAT_BY(STAT_ShaderCompiling_HLSLTranslation,(float)HLSLTranslateTime);
 
@@ -608,6 +630,11 @@ public:
 		if (bUsesSpeedTree)
 		{
 			OutEnvironment.SetDefine(TEXT("USES_SPEEDTREE"),TEXT("1"));
+		}
+
+		if (WaveWorksId.IsValid())
+		{
+			OutEnvironment.SetDefine(TEXT("USES_WAVEWORKS"), TEXT("1"));
 		}
 
 		if (bNeedsWorldPositionExcludingShaderOffsets)
@@ -1931,6 +1958,17 @@ protected:
 		return AddInlinedCodeChunk(MCT_Float3,TEXT("Parameters.CameraVector"));
 	}
 
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	// So we can tell if the current render pass is voxelizing or not inside the material graph.
+	// Typically this node is connected as the input of a switch or branch node to select different sub-parts of the material graph
+	virtual int32 VxgiVoxelization() override
+	{
+		return AddCodeChunk(MCT_Float, TEXT("GetVxgiVoxelizationActive()"));
+	}
+#endif
+	// NVCHANGE_END: Add VXGI
+
 	virtual int32 LightVector() override
 	{
 		if (ShaderFrequency != SF_Pixel && ShaderFrequency != SF_Compute)
@@ -2100,6 +2138,33 @@ protected:
 		}
 		bNeedsParticleSize = true;
 		return AddInlinedCodeChunk(MCT_Float2,TEXT("Parameters.Particle.Size"));
+	}
+
+	virtual int32 FlexFluidSurfaceThickness(int32 Offset, int32 UV, bool bUseOffset) override
+	{
+		if (Offset == INDEX_NONE && bUseOffset)
+		{
+			return INDEX_NONE;
+		}
+
+		if (ShaderFrequency != SF_Pixel)
+		{
+			return NonPixelShaderExpressionError();
+		}
+
+		if (ErrorUnlessFeatureLevelSupported(ERHIFeatureLevel::SM4) == INDEX_NONE)
+		{
+			return INDEX_NONE;
+		}
+
+		MaterialCompilationOutput.bRequiresSceneColorCopy = true;
+
+		int32 ScreenUVCode = GetScreenAlignedUV(Offset, UV, bUseOffset);
+		return AddCodeChunk(
+			MCT_Float,
+			TEXT("CalcFlexFluidSurfaceThicknessForMaterialNode(%s)"),
+			*GetParameterCode(ScreenUVCode)
+			);
 	}
 
 	virtual int32 WorldPosition(EWorldPositionIncludedOffsets WorldPositionIncludedOffsets) override
@@ -2359,6 +2424,9 @@ protected:
 			? TEXT("TextureCubeSample")
 			: TEXT("Texture2DSample");
 		
+		if (SamplerType == SAMPLERTYPE_UV)
+			SampleCode += TEXT("UV");
+
 		EMaterialValueType UVsType = (TextureType == MCT_TextureCube) ? MCT_Float3 : MCT_Float2;
 	
 		if(MipValueMode == TMVM_None)
@@ -3989,6 +4057,31 @@ protected:
 		MaterialCompilationOutput.bUsesEyeAdaptation = true;
 
 		return AddInlinedCodeChunk(MCT_Float, TEXT("EyeAdaptationLookup()"));
+	}
+
+	virtual int32 WaveWorks(UWaveWorks* WaveWorks, int32 UVs, float DistanceScale, FString OutputName) override
+	{
+		if (Material->GetTessellationMode() != MTM_NoTessellation && GetFeatureLevel() >= ERHIFeatureLevel::SM5)
+		{
+			if (ShaderFrequency != SF_Domain && ShaderFrequency != SF_Pixel)
+				return Errorf(TEXT("Invalid node used in pixel/hull shader input!"));
+		}
+		else
+		{
+			if (ShaderFrequency != SF_Vertex && ShaderFrequency != SF_Pixel)
+				return Errorf(TEXT("Invalid node used in vertex/pixel shader input!"));
+		}
+
+		if (!WaveWorksId.IsValid())
+		{
+			WaveWorksId = WaveWorks->Id;
+		}
+
+		if (WaveWorksId != WaveWorks->Id)
+		{
+			return Errorf(TEXT("At most one WaveWorks reference allowed per material!"));
+		}
+		return AddCodeChunk(MCT_Float3, TEXT("WaveWorks%s(Parameters);"), *OutputName);
 	}
 };
 

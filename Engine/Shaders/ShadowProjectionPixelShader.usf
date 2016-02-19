@@ -32,6 +32,9 @@ float4x4 ScreenToShadowMatrix;
 // .x:DepthBias, y: MaxSubjectZ - MinSubjectZ
 float2 ProjectionDepthBiasParameters;
 
+bool bHairReceiver = false;
+Texture2D HairMaskTexture;
+
 #if USE_FADE_PLANE
 	float FadePlaneOffset;
 	float InvFadePlaneLength;
@@ -60,6 +63,13 @@ void Main(
 	)
 {
 	float2 ScreenUV = float2( SVPos.xy * View.BufferSizeAndInvSize.zw );
+
+	if (bHairReceiver)
+	{
+		float HairMask = HairMaskTexture.SampleLevel(SceneDepthTextureSampler, ScreenUV.xy, 0).r;
+		clip(HairMask <= 0 ? -1 : 1);
+	}
+
 	float SceneW = CalcSceneDepth( ScreenUV );
 	float2 ScreenPosition = ( ScreenUV.xy - View.ScreenPositionScaleBias.wz ) / View.ScreenPositionScaleBias.xy;
 	float4 ShadowPosition = mul(float4(ScreenPosition.xy * SceneW,SceneW,1), ScreenToShadowMatrix);

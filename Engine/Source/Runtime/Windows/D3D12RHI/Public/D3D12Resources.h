@@ -511,6 +511,11 @@ private:
 	bool bRequiresResourceStateTracking;
 	D3D12_HEAP_TYPE HeapType;
 
+	// NVCHANGE_BEGIN: Add VXGI
+	bool bEnableUAVBarriers;
+	bool bFirstUAVBarrierPlaced;
+	// NVCHANGE_END: Add VXGI
+
 #if UE_BUILD_DEBUG
 	static int64 TotalResourceCount;
 	static int64 NoStateTrackingResourceCount;
@@ -538,6 +543,11 @@ public:
 		, DefaultResourceState(D3D12_RESOURCE_STATE_TBD)
 		, bRequiresResourceStateTracking(true)
 		, HeapType(InHeapType)
+
+		// NVCHANGE_BEGIN: Add VXGI
+		, bEnableUAVBarriers(true)
+		, bFirstUAVBarrierPlaced(false)
+		// NVCHANGE_END: Add VXGI
 	{
 #if UE_BUILD_DEBUG
 		FPlatformAtomics::_InterlockedIncrement(&TotalResourceCount);
@@ -576,6 +586,28 @@ public:
 	}
 	D3D12_RESOURCE_STATES GetDefaultResourceState() const { check(!bRequiresResourceStateTracking); return DefaultResourceState; }
 	bool RequiresResourceStateTracking() const { return bRequiresResourceStateTracking; }
+
+	// NVCHANGE_BEGIN: Add VXGI
+	void SetEnableUAVBarriers(bool Enable)
+	{
+		bEnableUAVBarriers = Enable;
+		bFirstUAVBarrierPlaced = false;
+	}
+
+	bool RequestUAVBarrier()
+	{
+		if (bEnableUAVBarriers)
+			return true;
+
+		if (!bFirstUAVBarrierPlaced)
+		{
+			bFirstUAVBarrierPlaced = true;
+			return true;
+		}
+
+		return false;
+	}
+	// NVCHANGE_END: Add VXGI
 
 private:
 	void InitalizeResourceState()

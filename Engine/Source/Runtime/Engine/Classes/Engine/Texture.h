@@ -21,6 +21,7 @@ enum TextureCompressionSettings
 	TC_HDR						UMETA(DisplayName="HDR (RGB, no sRGB)"),
 	TC_EditorIcon				UMETA(DisplayName="UserInterface2D (RGBA)"),
 	TC_Alpha					UMETA(DisplayName="Alpha (no sRGB, BC4 on DX11)"),
+	TC_UV						UMETA(DisplayName = "WaveWorks"),
 	TC_DistanceFieldFont		UMETA(DisplayName="DistanceFieldFont (R8)"),
 	TC_HDR_Compressed			UMETA(DisplayName="HDRCompressed (RGB, BC6H, DX11)"),
 	TC_BC7						UMETA(DisplayName="BC7 (DX11, optional A)"),

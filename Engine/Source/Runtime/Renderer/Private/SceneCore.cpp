@@ -291,6 +291,15 @@ void FStaticMesh::AddToDrawLists(FRHICommandListImmediate& RHICmdList, FScene* S
 		FShadowDepthDrawingPolicyFactory::AddStaticMesh(Scene, this);
 	}
 
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	if (FeatureLevel >= ERHIFeatureLevel::SM5 && !bShadowOnly)
+	{
+		TVXGIVoxelizationDrawingPolicyFactory::AddStaticMesh(RHICmdList, Scene, this);
+	}
+#endif
+	// NVCHANGE_END: Add VXGI
+
 	if (!bShadowOnly && PrimitiveSceneInfo->Proxy->ShouldRenderInMainPass())
 	{
 		const bool bRequiresHitProxies = Scene->RequiresHitProxies();

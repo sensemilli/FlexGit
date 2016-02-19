@@ -187,3 +187,27 @@ IRHICommandContextContainer* FEmptyDynamicRHI::RHIGetCommandContextContainer()
 	return nullptr;
 }
 
+namespace
+{
+	TArray<WaveWorksShaderInput> ShaderInput;
+	TArray<WaveWorksShaderInput> QuadTreeShaderInput;
+}
+
+const TArray<WaveWorksShaderInput>& FEmptyDynamicRHI::RHIGetWaveWorksShaderInput()
+{
+	return ShaderInput;
+}
+
+const TArray<WaveWorksShaderInput>& FEmptyDynamicRHI::RHIGetWaveWorksQuadTreeShaderInput()
+{
+	return QuadTreeShaderInput;
+}
+
+FWaveWorksRHIRef FEmptyDynamicRHI::RHICreateWaveWorks(const struct GFSDK_WaveWorks_Simulation_Settings& Settings, const struct GFSDK_WaveWorks_Simulation_Params& Params)
+{
+	return nullptr;
+}
+
+void FEmptyDynamicRHI::RHISetWaveWorksState(FWaveWorksRHIParamRef State, const FMatrix& ViewMatrix, const TArray<uint32>& ShaderInputMappings)
+{
+}

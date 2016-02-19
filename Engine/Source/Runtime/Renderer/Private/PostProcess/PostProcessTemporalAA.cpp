@@ -81,7 +81,12 @@ public:
 	FShaderParameter LowpassWeights;
 	FShaderParameter PlusWeights;
 	FShaderParameter RandomOffset;
+<<<<<<< HEAD
 	FShaderParameter DitherScale;
+=======
+	FShaderResourceParameter HairMaskTexture;
+	FShaderParameter HasHair;
+>>>>>>> remotes/MyGit/4.9.2_NVIDIA_Techs
 
 	/** Initialization constructor. */
 	FPostProcessTemporalAAPS(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
@@ -93,14 +98,23 @@ public:
 		LowpassWeights.Bind(Initializer.ParameterMap, TEXT("LowpassWeights"));
 		PlusWeights.Bind(Initializer.ParameterMap, TEXT("PlusWeights"));
 		RandomOffset.Bind(Initializer.ParameterMap, TEXT("RandomOffset"));
+<<<<<<< HEAD
 		DitherScale.Bind(Initializer.ParameterMap, TEXT("DitherScale"));
+=======
+		HairMaskTexture.Bind(Initializer.ParameterMap, TEXT("HairMaskTexture"));
+		HasHair.Bind(Initializer.ParameterMap, TEXT("bHasHair"));
+>>>>>>> remotes/MyGit/4.9.2_NVIDIA_Techs
 	}
 
 	// FShader interface.
 	virtual bool Serialize(FArchive& Ar) override
 	{
 		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
+<<<<<<< HEAD
 		Ar << PostprocessParameter << DeferredParameters << SampleWeights << LowpassWeights << PlusWeights << RandomOffset << DitherScale;
+=======
+		Ar << PostprocessParameter << DeferredParameters << SampleWeights << LowpassWeights << PlusWeights << RandomOffset << HairMaskTexture << HasHair;
+>>>>>>> remotes/MyGit/4.9.2_NVIDIA_Techs
 		return bShaderHasOutdatedParameters;
 	}
 
@@ -206,6 +220,11 @@ public:
 		SetShaderValue(Context.RHICmdList, ShaderRHI, DitherScale, bUseDither ? 1.0f : 0.0f);
 
 		SetUniformBufferParameter(Context.RHICmdList, ShaderRHI, GetUniformBufferParameter<FCameraMotionParameters>(), CreateCameraMotionParametersUniformBuffer(Context.View));
+
+		FSceneRenderTargets& SceneContext = FSceneRenderTargets::Get(Context.RHICmdList);
+		static const auto* CVarHairTemporalAa = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Hair.TemporalAa"));
+		SetShaderValue(Context.RHICmdList, ShaderRHI, HasHair, Context.View.bHasHair && !CVarHairTemporalAa->GetInt());
+		SetTextureParameter(Context.RHICmdList, ShaderRHI, HairMaskTexture, SceneContext.HairMask->GetRenderTargetItem().ShaderResourceTexture);
 	}
 };
 

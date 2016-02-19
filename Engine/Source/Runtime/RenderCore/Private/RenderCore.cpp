@@ -121,6 +121,26 @@ DEFINE_STAT(STAT_TranslucentInjectTime);
 DEFINE_STAT(STAT_DirectLightRenderingTime);
 DEFINE_STAT(STAT_LightRendering);
 
+// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+
+DEFINE_STAT(STAT_VxgiVoxelizeOpacity);
+DEFINE_STAT(STAT_VxgiVoxelizeEmissiveAndIndirectIrradiance);
+DEFINE_STAT(STAT_VxgiVoxelizeEmittanceFromDiffuseMaterials);
+DEFINE_STAT(STAT_VxgiVoxelizeEmittanceFromDiffuseMaterialsShadowed);
+DEFINE_STAT(STAT_VxgiVoxelizationVisibility);
+DEFINE_STAT(STAT_VxgiVoxelizationStaticGeometry);
+DEFINE_STAT(STAT_VxgiVoxelizationDynamicGeometry);
+DEFINE_STAT(STAT_VxgiVoxelizationSetMeshRenderState);
+DEFINE_STAT(STAT_VxgiVoxelizationSetSharedState);
+DEFINE_STAT(STAT_VxgiVoxelizationApplyNonShaderState);
+DEFINE_STAT(STAT_VxgiVoxelizationSaveUserState);
+DEFINE_STAT(STAT_VxgiVoxelizationRestoreUserState);
+DEFINE_STAT(STAT_VxgiApplyVoxelizationMaterialInfo);
+
+#endif
+// NVCHANGE_END: Add VXGI
+
 DEFINE_STAT(STAT_NumShadowedLights);
 DEFINE_STAT(STAT_NumLightFunctionOnlyLights);
 DEFINE_STAT(STAT_NumUnshadowedLights);

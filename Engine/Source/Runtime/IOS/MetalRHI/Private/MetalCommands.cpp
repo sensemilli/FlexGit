@@ -466,7 +466,7 @@ void FMetalDynamicRHI::RHISetShaderUniformBuffer(FComputeShaderRHIParamRef Compu
 }
 
 
-void FMetalDynamicRHI::RHISetDepthStencilState(FDepthStencilStateRHIParamRef NewStateRHI, uint32 StencilRef)
+void FMetalDynamicRHI::RHISetDepthStencilState(FDepthStencilStateRHIParamRef NewStateRHI, uint32 StencilRef, bool bBypassValidation)
 {
 	FMetalDepthStencilState* NewState = ResourceCast(NewStateRHI);
 

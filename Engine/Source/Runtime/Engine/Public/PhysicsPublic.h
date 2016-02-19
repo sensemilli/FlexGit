@@ -11,6 +11,9 @@
 #include "DynamicMeshBuilder.h"
 #include "LocalVertexFactory.h"
 #include "PhysicsEngine/PhysicsAsset.h"
+
+#define	USE_MULTIPLE_GPU_DISPATCHER_FOR_EACH_SCENE	0
+
 /**
  * Physics stats
  */
@@ -73,6 +76,10 @@ namespace physx
 	class PxActor;
 	class PxRigidActor;
 	
+	// NVCHANGE_BEGIN: JCAO - Create CudaContextManager to support D3D11 interop with APEX
+	class PxCudaContextManager;
+	// NVCHANGE_END: JCAO - Create CudaContextManager to support D3D11 interop with APEX
+
 #if WITH_APEX
 	namespace apex
 	{
@@ -87,6 +94,13 @@ namespace physx
 		class NxClothingActor;
 		class NxClothingAsset;
 		class NxApexInterface;
+
+		// NVCHANGE_BEGIN : JCAO - Add Turbulence Module
+		class NxModuleTurbulenceFS;
+		class NxModuleParticles;
+		class NxModuleBasicFS;
+		class NxModuleFieldSampler;
+		// NVCHANGE_END : JCAO - Add Turbulence Module
 	}
 #endif // WITH_APEX
 }
@@ -106,6 +120,14 @@ extern ENGINE_API class FPhysXAllocator* GPhysXAllocator;
 /** Pointer to PhysX Command Handler */
 extern ENGINE_API class FPhysCommandHandler* GPhysCommandHandler;
 
+// NVCHANGE_BEGIN: JCAO - Create a global cuda context used for all the physx scene
+#if WITH_CUDA_CONTEXT
+#if !USE_MULTIPLE_GPU_DISPATCHER_FOR_EACH_SCENE
+extern ENGINE_API PxCudaContextManager*	GCudaContextManager;
+#endif
+#endif //WITH_CUDA_CONTEXT
+// NVCHANGE_END: JCAO - Create a global cuda context used for all the physx scene
+
 #if WITH_APEX
 
 namespace NxParameterized
@@ -124,6 +146,15 @@ extern ENGINE_API NxModule* 			GApexModuleLegacy;
 extern ENGINE_API NxModuleClothing*		GApexModuleClothing;
 #endif //WITH_APEX_CLOTHING
 
+// NVCHANGE_BEGIN : JCAO - Add Turbulence Module
+#if WITH_APEX_TURBULENCE
+extern ENGINE_API NxModuleTurbulenceFS*	GApexModuleTurbulenceFS;
+extern ENGINE_API NxModuleParticles*	GApexModuleParticles;
+extern ENGINE_API NxModuleBasicFS*		GApexModuleBasicFS;
+extern ENGINE_API NxModuleFieldSampler* GApexModuleFieldSampler;
+#endif //WITH_APEX_TURBULENCE
+// NVCHANGE_END : JCAO - Add Turbulence Module
+
 #else
 
 namespace NxParameterized
@@ -134,6 +165,12 @@ namespace NxParameterized
 #endif // #if WITH_APEX
 
 #endif // WITH_PHYSX
+
+#if WITH_FLEX
+class UFlexContainer;
+struct FFlexContainerInstance;
+extern ENGINE_API bool GFlexIsInitialized;
+#endif
 
 /** Information about a specific object involved in a rigid body collision */
 struct ENGINE_API FRigidBodyCollisionInfo
@@ -196,6 +233,9 @@ namespace PhysCommand
 		ReleasePScene,
 		DeleteCPUDispatcher,
 		DeleteSimEventCallback,
+#if WITH_CUDA_CONTEXT
+		DeleteCudaContextManager,
+#endif
 		Max
 	};
 }
@@ -221,6 +261,9 @@ public:
 	void ENGINE_API DeferredRelease(physx::PxScene * PScene);
 	void ENGINE_API DeferredDeleteSimEventCallback(physx::PxSimulationEventCallback * SimEventCallback);
 	void ENGINE_API DeferredDeleteCPUDispathcer(physx::PxCpuDispatcher * CPUDispatcher);
+#if WITH_CUDA_CONTEXT
+	void ENGINE_API DeferredDeleteCudaContextManager(physx::PxCudaContextManager * CudaContextManager);
+#endif
 #endif
 
 private:
@@ -237,6 +280,9 @@ private:
 #if WITH_PHYSX
 			physx::PxScene * PScene;
 			physx::PxCpuDispatcher * CPUDispatcher;
+#if WITH_CUDA_CONTEXT
+			physx::PxCudaContextManager* CudaContextManager;
+#endif
 			physx::PxSimulationEventCallback * SimEventCallback;
 #endif
 		} Pointer;
@@ -304,6 +350,10 @@ public:
 	 */
 	float							FrameTimeSmoothingFactor[PST_MAX];
 
+#if WITH_APEX_TURBULENCE
+	TSparseArray<class FApexFieldSamplerActor*>		ApexFieldSamplerActorsList[PST_MAX];
+#endif
+
 #if WITH_PHYSX
 	/** Flush the deferred actor and instance arrays, either adding or removing from the scene */
 	void FlushDeferredActors();
@@ -343,6 +393,10 @@ private:
 	float										MaxPhysicsDeltaTime;
 	/** DeltaSeconds used by the last synchronous scene tick.  This may be used for the async scene tick. */
 	float										SyncDeltaSeconds;
+	// NVCHANGE_BEGIN: JCAO - Fix DE9040
+	/** If we're doing a static load? */
+	bool										bIsStaticLoading;
+	// NVCHANGE_END: JCAO - Fix DE9040
 	/** LineBatcher from UWorld. */
 	ULineBatchComponent*						LineBatcher;
 
@@ -388,6 +442,11 @@ private:
 	class FPhysXVehicleManager*			VehicleManager;
 #endif
 #endif	//
+#if WITH_CUDA_CONTEXT
+#if USE_MULTIPLE_GPU_DISPATCHER_FOR_EACH_SCENE
+	PxCudaContextManager*			CudaContextManager[PST_MAX];
+#endif
+#endif
 
 	struct FPendingCollisionData
 	{
@@ -396,6 +455,12 @@ private:
 	};
 
 	FPendingCollisionData PendingCollisionData[PST_MAX];
+
+#if WITH_FLEX
+	/** Map from Flex container template to instances belonging to this physscene */
+	TMap<UFlexContainer*, FFlexContainerInstance*>    FlexContainerMap;
+#endif
+
 
 public:
 
@@ -413,11 +478,29 @@ public:
 	/** Utility for looking up the NxApexScene of the given EPhysicsSceneType associated with this FPhysScene.  SceneType must be in the range [0,PST_MAX). */
 	physx::apex::NxApexScene*				GetApexScene(uint32 SceneType);
 #endif
+
+#if WITH_FLEX
+	/** Retrive the container instance for a template, will create the instance if it doesn't already exist */
+	FFlexContainerInstance*	GetFlexContainer(UFlexContainer* Template);
+	void StartFlexRecord();
+	void StopFlexRecord();
+
+	/** Adds a radial force to all flex container instances */
+	void AddRadialForceToFlex(FVector Origin, float Radius, float Strength, ERadialImpulseFalloff Falloff);
+
+	/** Adds a radial force to all flex container instances */
+	void AddRadialImpulseToFlex(FVector Origin, float Radius, float Strength, ERadialImpulseFalloff Falloff, bool bVelChange);
+#endif
+
 	ENGINE_API FPhysScene();
 	ENGINE_API ~FPhysScene();
 
 	/** Start simulation on the physics scene of the given type */
 	ENGINE_API void TickPhysScene(uint32 SceneType, FGraphEventRef& InOutCompletionEvent);
+
+#if WITH_FLEX
+	ENGINE_API void TickFlexScenes(ENamedThreads::Type CurrentThread, const FGraphEventRef& MyCompletionGraphEvent, float dt);
+#endif
 
 	/** Set the gravity and timing of all physics scenes */
 	ENGINE_API void SetUpForFrame(const FVector* NewGrav, float InDeltaSeconds = 0.0f, float InMaxPhysicsDeltaTime = 0.0f);
@@ -430,6 +513,10 @@ public:
 
 	/** Starts cloth Simulation*/
 	ENGINE_API void StartCloth();
+
+	// NVCHANGE_BEGIN: JCAO - Apex Vis for the cascade
+	ENGINE_API bool IsApexVisSet(uint32 SceneType, const TCHAR* Cmd);
+	// NVCHANGE_END: JCAO - Apex Vis for the cascade
 
 	/** returns the completion event for a frame */
 	FGraphEventRef GetCompletionEvent()
@@ -580,6 +667,12 @@ public:
 	void AddPendingDamageEvent(class UDestructibleComponent* DestructibleComponent, const NxApexDamageEventReportData& DamageEvent);
 #endif
 
+	// NVCHANGE_BEGIN: JCAO - Add the flag bBlockTurbulence to make RB interact with Turbulence.
+#if WITH_APEX_TURBULENCE
+	void SyncMirroredBodies();
+#endif
+	// NVCHANGE_END: JCAO - Add the flag bBlockTurbulence to make RB interact with Turbulence.
+
 private:
 	/** Initialize a scene of the given type.  Must only be called once for each scene type. */
 	void InitPhysScene(uint32 SceneType);
@@ -596,6 +689,11 @@ private:
 #if WITH_SUBSTEPPING
 	/** Task created from TickPhysScene so we can substep without blocking */
 	bool SubstepSimulation(uint32 SceneType, FGraphEventRef& InOutCompletionEvent);
+#endif
+
+#if WITH_CUDA_CONTEXT && USE_MULTIPLE_GPU_DISPATCHER_FOR_EACH_SCENE
+	bool CreateCudaContextManager(uint32 SceneType);
+	void TerminateCudaContextManager(uint32 SceneType);
 #endif
 
 #if WITH_PHYSX
@@ -638,6 +736,10 @@ private:
 #if WITH_PHYSX
 	TMap<PxActor*, SleepEvent::Type> PendingSleepEvents[PST_MAX];
 #endif
+
+	// NVCHANGE_BEGIN: JCAO - Fix DE9040
+	void PrepareRenderResources(uint32 SceneType);
+	// NVCHANGE_END: JCAO - Fix DE9040
 };
 
 /**
@@ -781,6 +883,9 @@ void UnloadPhysXModules();
 ENGINE_API void	InitGamePhys();
 ENGINE_API void	TermGamePhys();
 
+// NVCHANGE_BEGIN: JCAO - Add PhysXLevel and blueprint node
+ENGINE_API bool NvIsPhysXHighSupported();
+// NVCHANGE_END: JCAO - Add PhysXLevel and blueprint node
 
 bool	ExecPhysCommands(const TCHAR* Cmd, FOutputDevice* Ar, UWorld* InWorld);
 
@@ -791,3 +896,9 @@ void	ListAwakeRigidBodies(bool bIncludeKinematic, UWorld* world);
 FTransform FindBodyTransform(AActor* Actor, FName BoneName);
 FBox	FindBodyBox(AActor* Actor, FName BoneName);
 
+#if WITH_CUDA_CONTEXT
+#if !USE_MULTIPLE_GPU_DISPATCHER_FOR_EACH_SCENE
+ENGINE_API PxCudaContextManager* GetCudaContextManager();
+ENGINE_API void TerminateCudaContextManager();
+#endif
+#endif

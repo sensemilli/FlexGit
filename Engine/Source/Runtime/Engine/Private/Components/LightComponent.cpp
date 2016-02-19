@@ -226,6 +226,12 @@ FLightSceneProxy::FLightSceneProxy(const ULightComponent* InLightComponent)
 	, bHasReflectiveShadowMap(InLightComponent->bAffectDynamicIndirectLighting && InLightComponent->GetLightType() == LightType_Directional)
 	, bUseRayTracedDistanceFieldShadows(InLightComponent->bUseRayTracedDistanceFieldShadows)
 	, RayStartOffsetDepthScale(InLightComponent->RayStartOffsetDepthScale)
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	// Disable VXGI for Static and Stationary lights because Lightmass is already baking their indirect lighting
+	, bCastVxgiIndirectLighting(InLightComponent->bCastVxgiIndirectLighting && !InLightComponent->HasStaticShadowing())
+#endif
+	// NVCHANGE_END: Add VXGI
 	, LightType(InLightComponent->GetLightType())	
 	, ComponentName(InLightComponent->GetOwner() ? InLightComponent->GetOwner()->GetFName() : InLightComponent->GetFName())
 	, LevelName(InLightComponent->GetOutermost()->GetFName())
@@ -555,6 +561,13 @@ void ULightComponent::PostEditChangeProperty(FPropertyChangedEvent& PropertyChan
 		PropertyName != GET_MEMBER_NAME_STRING_CHECKED(ULightComponent, bUseRayTracedDistanceFieldShadows) &&
 		PropertyName != GET_MEMBER_NAME_STRING_CHECKED(ULightComponent, RayStartOffsetDepthScale) &&
 		PropertyName != GET_MEMBER_NAME_STRING_CHECKED(ULightComponent, bVisible) &&
+
+		// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+		PropertyName != GET_MEMBER_NAME_STRING_CHECKED(ULightComponent, bCastVxgiIndirectLighting) &&
+#endif
+		// NVCHANGE_END: Add VXGI
+
 		// Point light properties that shouldn't unbuild lighting
 		PropertyName != GET_MEMBER_NAME_STRING_CHECKED(UPointLightComponent, SourceRadius) &&
 		PropertyName != GET_MEMBER_NAME_STRING_CHECKED(UPointLightComponent, SourceLength) &&

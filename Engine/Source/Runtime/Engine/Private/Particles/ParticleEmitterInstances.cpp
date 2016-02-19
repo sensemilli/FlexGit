@@ -9,6 +9,7 @@
 #include "ParticleDefinitions.h"
 #include "LevelUtils.h"
 #include "FXSystem.h"
+#include "PhysicsPublic.h"
 
 #include "Particles/Camera/ParticleModuleCameraOffset.h"
 #include "Particles/Collision/ParticleModuleCollisionGPU.h"
@@ -27,6 +28,12 @@
 #include "Particles/ParticleModuleRequired.h"
 #include "Particles/ParticleSpriteEmitter.h"
 #include "Particles/ParticleSystemComponent.h"
+
+#if WITH_FLEX
+#include "PhysicsEngine/FlexContainer.h"
+#include "PhysicsEngine/FlexContainerInstance.h"
+#include "PhysicsEngine/FlexFluidSurfaceComponent.h"
+#endif
 
 /*-----------------------------------------------------------------------------
 FParticlesStatGroup
@@ -82,6 +89,9 @@ DEFINE_STAT(STAT_GPUSpriteRenderingTime);
 DEFINE_STAT(STAT_GPUSpritePreRenderTime);
 DEFINE_STAT(STAT_GPUSpriteSpawnTime);
 DEFINE_STAT(STAT_GPUSpriteTickTime);
+// NVCHANGE_BEGIN: JCAO - Add density time in the GPU particle stat
+DEFINE_STAT(STAT_GPUParticleDensityTime);
+// NVCHANGE_END: JCAO - Add density time in the GPU particle stat
 
 /** Particle memory stats */
 
@@ -169,6 +179,10 @@ FParticleEmitterBuildInfo::FParticleEmitterBuildInfo()
 	, bLocalVectorFieldTileX(false)
 	, bLocalVectorFieldTileY(false)
 	, bLocalVectorFieldTileZ(false)
+	// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+	, bColorOverDensity(false)
+	, bSizeOverDensity(false)
+	// NVCHANGE_END: JCAO - Grid Density with GPU particles
 {
 	DragScale.InitializeWithConstant(1.0f);
 	VectorFieldScale.InitializeWithConstant(1.0f);
@@ -178,6 +192,46 @@ FParticleEmitterBuildInfo::FParticleEmitterBuildInfo()
 	DynamicAlphaScale.Initialize();
 #endif
 }
+
+#if WITH_FLEX
+/*-----------------------------------------------------------------------------
+FFlexParticleEmitterInstance
+-----------------------------------------------------------------------------*/
+
+struct FFlexParticleEmitterInstance : public IFlexContainerClient
+{
+	FFlexParticleEmitterInstance(FParticleEmitterInstance* Instance)
+	{
+		Emitter = Instance;
+
+		if (Emitter->SpriteTemplate->FlexContainerTemplate)
+		{
+			FPhysScene* Scene = Emitter->Component->GetWorld()->GetPhysicsScene();
+
+			Container = Scene->GetFlexContainer(Emitter->SpriteTemplate->FlexContainerTemplate);
+			if (Container)
+			{
+				Container->Register(this);
+				Phase = Container->GetPhase(Emitter->SpriteTemplate->Phase);
+			}
+		}
+	}
+
+	virtual ~FFlexParticleEmitterInstance()
+	{
+		if (Container)
+			Container->Unregister(this);
+	}
+
+	virtual bool IsEnabled() { return Container != NULL; }
+	virtual FBoxSphereBounds GetBounds() { return FBoxSphereBounds(Emitter->GetBoundingBox()); }
+	virtual void Synchronize() {}
+
+	FParticleEmitterInstance* Emitter;
+	FFlexContainerInstance* Container;
+	int32 Phase;
+};
+#endif
 
 /*-----------------------------------------------------------------------------
 	FParticleEmitterInstance
@@ -222,6 +276,12 @@ FParticleEmitterInstance::FParticleEmitterInstance() :
 	, IsRenderDataDirty(0)
     , Module_AxisLock(NULL)
     , EmitterDuration(0.0f)
+#if WITH_FLEX
+	, FlexDataOffset(0)
+	, bFlexAnisotropyData(0)
+	, FlexEmitterInstance(NULL)
+	, FlexFluidSurfaceComponent(NULL)
+#endif
 	, TrianglesToRender(0)
 	, MaxVertexIndex(0)
 	, CurrentMaterial(NULL)
@@ -237,6 +297,35 @@ FParticleEmitterInstance::FParticleEmitterInstance() :
 /** Destructor	*/
 FParticleEmitterInstance::~FParticleEmitterInstance()
 {
+#if WITH_FLEX
+	if (FlexEmitterInstance)
+	{
+		if (!GIsEditor || GIsPlayInEditorWorld)
+		{
+			FFlexContainerInstance* Container = FlexEmitterInstance->Container;
+
+			if (Container)
+			{
+				for (int32 i = 0; i < ActiveParticles; i++)
+				{
+					DECLARE_PARTICLE(Particle, ParticleData + ParticleStride * ParticleIndices[i]);
+					verify(FlexDataOffset > 0);
+					int32 CurrentOffset = FlexDataOffset;
+					const uint8* ParticleBase = (const uint8*)&Particle;
+					PARTICLE_ELEMENT(int32, FlexParticleIndex);
+					Container->DestroyParticle(FlexParticleIndex);
+				}
+			}
+		}
+		delete FlexEmitterInstance;
+	}
+
+	if (FlexFluidSurfaceComponent)
+	{
+		FlexFluidSurfaceComponent->UnregisterEmitterInstance(this);
+	}
+#endif
+
 	FMemory::Free(ParticleData);
 	FMemory::Free(ParticleIndices);
 	FMemory::Free(InstanceData);
@@ -490,6 +579,39 @@ void FParticleEmitterInstance::Init()
 
 	// Tag it as dirty w.r.t. the renderer
 	IsRenderDataDirty	= 1;
+
+#if WITH_FLEX
+	if (FlexEmitterInstance)
+	{
+		delete FlexEmitterInstance;
+		FlexEmitterInstance = NULL;
+	}
+
+	if (SpriteTemplate->FlexContainerTemplate && (!GIsEditor || GIsPlayInEditorWorld))
+	{
+		FPhysScene* scene = Component->GetWorld()->GetPhysicsScene();
+
+		if (scene)
+		{
+			FlexEmitterInstance = new FFlexParticleEmitterInstance(this);
+
+			// need to ensure tick happens after GPU update
+			Component->SetTickGroup(TG_PostPhysics);
+		}
+	}
+
+	if (FlexFluidSurfaceComponent)
+	{
+		FlexFluidSurfaceComponent->UnregisterEmitterInstance(this);
+		FlexFluidSurfaceComponent = NULL;
+	}
+
+	if (SpriteTemplate->FlexFluidSurfaceTemplate)
+	{
+		FlexFluidSurfaceComponent = GetWorld()->AddFlexFluidSurface(SpriteTemplate->FlexFluidSurfaceTemplate);
+		FlexFluidSurfaceComponent->RegisterEmitterInstance(this);
+	}
+#endif
 }
 
 UWorld* FParticleEmitterInstance::GetWorld() const
@@ -509,7 +631,14 @@ void FParticleEmitterInstance::UpdateTransforms()
 		LODLevel->RequiredModule->EmitterOrigin
 		);
 
-	if (LODLevel->RequiredModule->bUseLocalSpace)
+#if WITH_FLEX // Suppress use local space when simulating with flex
+	const bool bUseLocalSpace = LODLevel->RequiredModule->bUseLocalSpace &&
+		(FlexEmitterInstance == NULL || (GIsEditor && !GIsPlayInEditorWorld));
+#else
+	const bool bUseLocalSpace = LODLevel->RequiredModule->bUseLocalSpace;
+#endif
+
+	if (bUseLocalSpace)
 	{
 		EmitterToSimulation = EmitterToComponent;
 		SimulationToWorld = ComponentToWorld;
@@ -641,6 +770,52 @@ void FParticleEmitterInstance::Tick(float DeltaTime, bool bSuppressSpawning)
 	SCOPE_CYCLE_COUNTER(STAT_SpriteUpdateTime);
 	CurrentMaterial = LODLevel->RequiredModule->Material;
 	Tick_ModuleUpdate(DeltaTime, LODLevel);
+
+#if WITH_FLEX
+	if (FlexEmitterInstance && FlexEmitterInstance->Container && (!GIsEditor || GIsPlayInEditorWorld))
+	{
+		FFlexContainerInstance* Container = FlexEmitterInstance->Container;
+
+		bFlexAnisotropyData = (SpriteTemplate->FlexContainerTemplate->AnisotropyScale > 0.0f);
+		verify(!bFlexAnisotropyData || Container->Anisotropy1.Num() > 0);
+
+		for (int32 i = 0; i < ActiveParticles; i++)
+		{
+			DECLARE_PARTICLE(Particle, ParticleData + ParticleStride * ParticleIndices[i]);
+
+			verify(FlexDataOffset > 0);
+
+			int32 CurrentOffset = FlexDataOffset;
+			const uint8* ParticleBase = (const uint8*)&Particle;
+			PARTICLE_ELEMENT(int32, FlexParticleIndex);
+
+			// sync UE4 particle with FLEX
+			if (Container->SmoothPositions.Num() > 0)
+			{
+				Particle.Location = Container->SmoothPositions[FlexParticleIndex];
+			}
+			else
+			{
+				Particle.Location = Container->Particles[FlexParticleIndex];
+			}
+
+			Particle.Velocity = Container->Velocities[FlexParticleIndex];
+
+			if (bFlexAnisotropyData)
+			{
+				PARTICLE_ELEMENT(FVector, Alignment16);
+
+				PARTICLE_ELEMENT(FVector4, FlexAnisotropy1);
+				PARTICLE_ELEMENT(FVector4, FlexAnisotropy2);
+				PARTICLE_ELEMENT(FVector4, FlexAnisotropy3);
+
+				FlexAnisotropy1 = Container->Anisotropy1[FlexParticleIndex];
+				FlexAnisotropy2 = Container->Anisotropy2[FlexParticleIndex];
+				FlexAnisotropy3 = Container->Anisotropy3[FlexParticleIndex];
+			}
+		}
+	}
+#endif
 
 	// Spawn new particles.
 	SpawnFraction = Tick_SpawnParticles(DeltaTime, LODLevel, bSuppressSpawning, bFirstTime);
@@ -1068,8 +1243,13 @@ void FParticleEmitterInstance::UpdateBoundingBox(float DeltaTime)
 		// For each particle, offset the box appropriately 
 		FVector MinVal(HALF_WORLD_MAX);
 		FVector MaxVal(-HALF_WORLD_MAX);
-		
+
+#if WITH_FLEX // Suppress use local space when simulating with flex
+		const bool bUseLocalSpace = LODLevel->RequiredModule->bUseLocalSpace &&
+			(FlexEmitterInstance == NULL || (GIsEditor && !GIsPlayInEditorWorld));
+#else
 		const bool bUseLocalSpace = LODLevel->RequiredModule->bUseLocalSpace;
+#endif
 
 		const FMatrix ComponentToWorld = bUseLocalSpace 
 			? Component->GetComponentToWorld().ToMatrixWithScale() 
@@ -1179,7 +1359,12 @@ void FParticleEmitterInstance::ForceUpdateBoundingBox()
 		// Store off the orbit offset, if there is one
 		int32 OrbitOffsetValue = GetOrbitPayloadOffset();
 
+#if WITH_FLEX // Suppress use local space when simulating with flex
+		const bool bUseLocalSpace = LODLevel->RequiredModule->bUseLocalSpace &&
+			(FlexEmitterInstance == NULL || (GIsEditor && !GIsPlayInEditorWorld));
+#else
 		const bool bUseLocalSpace = LODLevel->RequiredModule->bUseLocalSpace;
+#endif
 
 		const FMatrix ComponentToWorld = bUseLocalSpace 
 			? Component->GetComponentToWorld().ToMatrixWithScale() 
@@ -1282,6 +1467,25 @@ uint32 FParticleEmitterInstance::RequiredBytes()
 		SubUVDataOffset = PayloadOffset;
 		uiBytes	= sizeof(FFullSubUVPayload);
 	}
+
+#if WITH_FLEX
+	if (SpriteTemplate->FlexContainerTemplate)
+	{
+		FlexDataOffset = PayloadOffset + uiBytes;
+
+		// flex particle index
+		uiBytes += sizeof(int32);
+
+		if (SpriteTemplate->FlexContainerTemplate->AnisotropyScale > 0.0f)
+		{
+			// 16 byte align for inheriting emitter instance types
+			uiBytes += sizeof(FVector);
+
+			// flex anisotropy 
+			uiBytes += 3 * sizeof(FVector4);
+		}
+	}
+#endif	
 
 	return uiBytes;
 }
@@ -1873,6 +2077,10 @@ void FParticleEmitterInstance::SpawnParticles( int32 Count, float StartTime, flo
 		LODLevel->EventGenerator->HandleParticleBurst(this, EventPayload, Count);
 	}
 
+#if WITH_FLEX
+	float FlexInvMass = (SpriteTemplate->Mass > 0.0f) ? (1.0f / SpriteTemplate->Mass) : 0.0f;
+#endif
+
 	UParticleLODLevel* HighestLODLevel = SpriteTemplate->LODLevels[0];
 	float SpawnTime = StartTime;
 	float Interp = 1.0f;
@@ -1906,6 +2114,28 @@ void FParticleEmitterInstance::SpawnParticles( int32 Count, float StartTime, flo
 			// Process next particle
 			continue;
 		}
+
+#if WITH_FLEX
+		if (FlexEmitterInstance && FlexEmitterInstance->Container && (!GIsEditor || GIsPlayInEditorWorld))
+		{
+			verify(FlexDataOffset > 0);
+
+			int32 CurrentOffset = FlexDataOffset;
+			const uint8* ParticleBase = (const uint8*)Particle;
+			PARTICLE_ELEMENT(int32, FlexParticleIndex);
+
+			// allocate a new particle in the flex solver and store a
+			// reference to it in this particle's payload
+			FlexParticleIndex = FlexEmitterInstance->Container->CreateParticle(FVector4(Particle->Location, FlexInvMass), Particle->Velocity, FlexEmitterInstance->Phase);
+
+			if (FlexParticleIndex == -1)
+			{
+				// could not allocate a flex particle so kill immediately
+				KillParticle(CurrentParticleIndex);
+				continue;
+			}
+		}
+#endif
 
 		if (EventPayload)
 		{
@@ -1983,7 +2213,13 @@ void FParticleEmitterInstance::ForceSpawn(float DeltaTime, int32 InSpawnCount, i
 			// This logic matches the existing behavior. However, I think the
 			// interface for ForceSpawn should treat these values as being in
 			// world space and transform them to emitter local space if necessary.
+
+#if WITH_FLEX // Suppress use local space when simulating with flex
+			const bool bUseLocalSpace = LODLevel->RequiredModule->bUseLocalSpace &&
+				(FlexEmitterInstance == NULL || (GIsEditor && !GIsPlayInEditorWorld));
+#else
 			const bool bUseLocalSpace = LODLevel->RequiredModule->bUseLocalSpace;
+#endif
 			FVector SpawnLocation = bUseLocalSpace ? FVector::ZeroVector : InLocation;
 			FVector SpawnVelocity = bUseLocalSpace ? FVector::ZeroVector : InVelocity;
 
@@ -2063,7 +2299,15 @@ void FParticleEmitterInstance::PostSpawn(FBaseParticle* Particle, float Interpol
 {
 	// Interpolate position if using world space.
 	UParticleLODLevel* LODLevel = GetCurrentLODLevelChecked();
-	if (LODLevel->RequiredModule->bUseLocalSpace == false)
+
+#if WITH_FLEX // Suppress use local space when simulating with flex
+	const bool bUseLocalSpace = LODLevel->RequiredModule->bUseLocalSpace &&
+		(FlexEmitterInstance == NULL || (GIsEditor && !GIsPlayInEditorWorld));
+#else
+	const bool bUseLocalSpace = LODLevel->RequiredModule->bUseLocalSpace;
+#endif
+
+	if (bUseLocalSpace == false)
 	{
 		if (FVector::DistSquared(OldLocation, Location) > 1.f)
 		{
@@ -2115,6 +2359,19 @@ void FParticleEmitterInstance::KillParticles()
 				ParticleIndices[ActiveParticles-1]	= CurrentIndex;
 				ActiveParticles--;
 
+#if WITH_FLEX
+				if (FlexEmitterInstance && FlexEmitterInstance->Container && (!GIsEditor || GIsPlayInEditorWorld))
+				{
+					verify(FlexDataOffset > 0);
+
+					int32 CurrentOffset = FlexDataOffset;
+					PARTICLE_ELEMENT(int32, FlexParticleIndex);
+
+					if (FlexParticleIndex >= 0)
+						FlexEmitterInstance->Container->DestroyParticle(FlexParticleIndex);
+				}
+#endif
+
 				INC_DWORD_STAT(STAT_SpriteParticlesKilled);
 			}
 		}
@@ -2159,6 +2416,20 @@ void FParticleEmitterInstance::KillParticle(int32 Index)
 		ParticleIndices[ActiveParticles-1] = KillIndex;
 		ActiveParticles--;
 
+#if WITH_FLEX
+		if (FlexEmitterInstance && FlexEmitterInstance->Container && (!GIsEditor || GIsPlayInEditorWorld))
+		{
+			verify(FlexDataOffset > 0);
+
+			const uint8* ParticleBase = ParticleData + KillIndex * ParticleStride;
+			int32 CurrentOffset = FlexDataOffset;
+			PARTICLE_ELEMENT(int32, FlexParticleIndex);
+
+			if (FlexParticleIndex >= 0)
+				FlexEmitterInstance->Container->DestroyParticle(FlexParticleIndex);
+		}
+#endif
+
 		INC_DWORD_STAT(STAT_SpriteParticlesKilled);
 	}
 }
@@ -2199,6 +2470,20 @@ void FParticleEmitterInstance::KillParticlesForced(bool bFireEvents)
 		ParticleIndices[KillIdx] = ParticleIndices[ActiveParticles - 1];
 		ParticleIndices[ActiveParticles - 1] = CurrentIndex;
 		ActiveParticles--;
+
+#if WITH_FLEX
+		if (FlexEmitterInstance && FlexEmitterInstance->Container && (!GIsEditor || GIsPlayInEditorWorld))
+		{
+			verify(FlexDataOffset > 0);
+
+			const uint8* ParticleBase = ParticleData + CurrentIndex * ParticleStride;
+			int32 CurrentOffset = FlexDataOffset;
+			PARTICLE_ELEMENT(int32, FlexParticleIndex);
+
+			if (FlexParticleIndex >= 0)
+				FlexEmitterInstance->Container->DestroyParticle(FlexParticleIndex);
+		}
+#endif
 
 		INC_DWORD_STAT(STAT_SpriteParticlesKilled);
 	}
@@ -2444,6 +2729,13 @@ bool FParticleEmitterInstance::FillReplayData( FDynamicEmitterReplayDataBase& Ou
 	OutData.ParticleIndices.AddUninitialized(MaxActiveParticles);
 	FMemory::BigBlockMemcpy(OutData.ParticleIndices.GetData(), ParticleIndices, IndexMemSize);
 
+#if WITH_FLEX // Suppress use local space when simulating with flex
+	const bool bUseLocalSpace = LODLevel->RequiredModule->bUseLocalSpace &&
+		(FlexEmitterInstance == NULL || (GIsEditor && !GIsPlayInEditorWorld));
+#else
+	const bool bUseLocalSpace = LODLevel->RequiredModule->bUseLocalSpace;
+#endif
+
 	// All particle emitter types derived from sprite emitters, so we can fill that data in here too!
 	{
 		FDynamicSpriteEmitterReplayDataBase* NewReplayData =
@@ -2455,7 +2747,7 @@ bool FParticleEmitterInstance::FillReplayData( FDynamicEmitterReplayDataBase& Ou
 		NewReplayData->MaxDrawCount =
 			(LODLevel->RequiredModule->bUseMaxDrawCount == true) ? LODLevel->RequiredModule->MaxDrawCount : -1;
 		NewReplayData->ScreenAlignment	= LODLevel->RequiredModule->ScreenAlignment;
-		NewReplayData->bUseLocalSpace = LODLevel->RequiredModule->bUseLocalSpace;
+		NewReplayData->bUseLocalSpace = bUseLocalSpace;
 		NewReplayData->EmitterRenderMode = SpriteTemplate->EmitterRenderMode;
 		NewReplayData->DynamicParameterDataOffset = DynamicParameterDataOffset;
 		NewReplayData->LightDataOffset = LightDataOffset;
@@ -2495,6 +2787,9 @@ bool FParticleEmitterInstance::FillReplayData( FDynamicEmitterReplayDataBase& Ou
 		NewReplayData->NormalsCylinderDirection = LODLevel->RequiredModule->NormalsCylinderDirection;
 
 		NewReplayData->PivotOffset = PivotOffset;
+
+		NewReplayData->FlexDataOffset = FlexDataOffset;
+		NewReplayData->bFlexAnisotropyData = bFlexAnisotropyData;
 	}
 
 
@@ -2535,7 +2830,15 @@ void FParticleEmitterInstance::ApplyWorldOffset(FVector InOffset, bool bWorldShi
 	OldLocation+= InOffset;
 
 	UParticleLODLevel* LODLevel = GetCurrentLODLevelChecked();
-	if (!LODLevel->RequiredModule->bUseLocalSpace)
+
+#if WITH_FLEX // Suppress use local space when simulating with flex
+	const bool bUseLocalSpace = LODLevel->RequiredModule->bUseLocalSpace &&
+		(FlexEmitterInstance == NULL || (GIsEditor && !GIsPlayInEditorWorld));
+#else
+	const bool bUseLocalSpace = LODLevel->RequiredModule->bUseLocalSpace;
+#endif
+
+	if (!bUseLocalSpace)
 	{
 		PositionOffsetThisTick = InOffset;
 	}
@@ -3048,7 +3351,12 @@ void FParticleMeshEmitterInstance::UpdateBoundingBox(float DeltaTime)
 
 		UParticleLODLevel* LODLevel = GetCurrentLODLevelChecked();
 
+#if WITH_FLEX // Suppress use local space when simulating with flex
+		const bool bUseLocalSpace = LODLevel->RequiredModule->bUseLocalSpace &&
+			(FlexEmitterInstance == NULL || (GIsEditor && !GIsPlayInEditorWorld));
+#else
 		const bool bUseLocalSpace = LODLevel->RequiredModule->bUseLocalSpace;
+#endif
 
 		const FMatrix ComponentToWorld = bUseLocalSpace 
 			? Component->GetComponentToWorld().ToMatrixWithScale() 
@@ -3483,8 +3791,16 @@ bool FParticleMeshEmitterInstance::FillReplayData( FDynamicEmitterReplayDataBase
 		UParticleLODLevel* LODLevel2 = SpriteTemplate->GetCurrentLODLevel(this);
 		check(LODLevel2);
 		check(LODLevel2->RequiredModule);
+		
+#if WITH_FLEX // Suppress use local space when simulating with flex
+		const bool bUseLocalSpace = LODLevel2->RequiredModule->bUseLocalSpace &&
+			(FlexEmitterInstance == NULL || (GIsEditor && !GIsPlayInEditorWorld));
+#else
+		const bool bUseLocalSpace = LODLevel2->RequiredModule->bUseLocalSpace;
+#endif
+
 		// Take scale into account
-		if (LODLevel2->RequiredModule->bUseLocalSpace == false)
+		if (bUseLocalSpace == false)
 		{
 			if (!bIgnoreComponentScale)
 			{

@@ -1304,6 +1304,19 @@ void FLevelEditorModule::BindGlobalLevelEditorCommands()
 		FCanExecuteAction::CreateStatic( &FLevelEditorActionCallbacks::CanExecuteKeepSimulationChanges )
 		);
 
+#if WITH_FLEX
+
+	ActionList.MapAction(
+		Commands.KeepFlexSimulationChanges,
+		FExecuteAction::CreateStatic(&FLevelEditorActionCallbacks::OnKeepFlexSimulationChanges)
+		);
+
+	ActionList.MapAction(
+		Commands.ClearFlexSimulationChanges,
+		FExecuteAction::CreateStatic(&FLevelEditorActionCallbacks::OnClearFlexSimulationChanges)
+		);
+
+#endif
 
 	ActionList.MapAction( 
 		Commands.MakeActorLevelCurrent,

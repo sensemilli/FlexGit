@@ -9,6 +9,7 @@
 #include "TextureLayout.h"
 #include "LightPropagationVolume.h"
 #include "SceneUtils.h"
+#include "HairSceneProxy.h"
 
 static TAutoConsoleVariable<float> CVarCSMShadowDepthBias(
 	TEXT("r.Shadow.CSMDepthBias"),
@@ -1373,8 +1374,29 @@ void FProjectedShadowInfo::RenderDepthDynamic(FRHICommandList& RHICmdList, FScen
 	for (int32 MeshBatchIndex = 0; MeshBatchIndex < DynamicSubjectMeshElements.Num(); MeshBatchIndex++)
 	{
 		const FMeshBatchAndRelevance& MeshBatchAndRelevance = DynamicSubjectMeshElements[MeshBatchIndex];
+
+#if WITH_FLEX
+		if (MeshBatchAndRelevance.PrimitiveSceneProxy->IsFlexFluidSurface() || MeshBatchAndRelevance.Mesh->bFlexFluidParticles)
+			continue;
+#endif
+
 		const FMeshBatch& MeshBatch = *MeshBatchAndRelevance.Mesh;
 		FShadowDepthDrawingPolicyFactory::DrawDynamicMesh(RHICmdList, *FoundView, Context, MeshBatch, false, true, MeshBatchAndRelevance.PrimitiveSceneProxy, MeshBatch.BatchHitProxyId);
+	}
+
+	// Draw hairs.
+	for (auto PrimitiveIdx = 0; PrimitiveIdx < SubjectPrimitives.Num(); ++PrimitiveIdx)
+	{
+		auto* PrimitiveInfo = SubjectPrimitives[PrimitiveIdx];
+		auto& ViewRelavence = FoundView->PrimitiveViewRelevanceMap[PrimitiveInfo->GetIndex()];
+		if (!ViewRelavence.bHair)
+			continue;
+
+		FViewMatrices ViewMatrices;
+		ViewMatrices.ViewMatrix = FTranslationMatrix(PreShadowTranslation) * SubjectAndReceiverMatrix;
+
+		auto& HairProxy = static_cast<FHairSceneProxy&>(*PrimitiveInfo->Proxy);
+		HairProxy.DrawShadow(ViewMatrices, GetShaderDepthBias(), InvMaxSubjectDepth);
 	}
 }
 
@@ -2076,6 +2098,20 @@ void FProjectedShadowInfo::RenderProjection(FRHICommandListImmediate& RHICmdList
 	{
 		SCOPED_DRAW_EVENTF(RHICmdList, EventMaskSubjects, TEXT("Stencil Mask Subjects"));
 
+		if (View->bHasHair)
+		{
+			for (auto PrimitiveSceneInfo : ReceiverPrimitives)
+			{
+				auto& ViewRelevance = View->PrimitiveViewRelevanceMap[PrimitiveSceneInfo->GetIndex()];
+				if (ViewRelevance.bHair)
+				{
+					checkSlow(!bHairReceiver);
+					bHairReceiver = true;
+					break;
+				}
+			}
+		}
+
 		// Set stencil to one.
 		RHICmdList.SetDepthStencilState(TStaticDepthStencilState<
 			false,CF_DepthNearOrEqual,
@@ -2090,11 +2126,20 @@ void FProjectedShadowInfo::RenderProjection(FRHICommandListImmediate& RHICmdList
 
 		FDepthDrawingPolicyFactory::ContextType Context(DDM_AllOccluders);
 
-		for (int32 MeshBatchIndex = 0; MeshBatchIndex < DynamicMeshElements.Num(); MeshBatchIndex++)
+		bool bFlexDepthMasking = GFlexFluidSurfaceRenderer.IsDepthMaskingRequired(ParentSceneInfo->Proxy);
+
+		if (!bFlexDepthMasking)
 		{
-			const FMeshBatchAndRelevance& MeshBatchAndRelevance = DynamicMeshElements[MeshBatchIndex];
-			const FMeshBatch& MeshBatch = *MeshBatchAndRelevance.Mesh;
-			FDepthDrawingPolicyFactory::DrawDynamicMesh(RHICmdList, *View, Context, MeshBatch, false, true, MeshBatchAndRelevance.PrimitiveSceneProxy, MeshBatch.BatchHitProxyId);
+			for (int32 MeshBatchIndex = 0; MeshBatchIndex < DynamicMeshElements.Num(); MeshBatchIndex++)
+			{
+				const FMeshBatchAndRelevance& MeshBatchAndRelevance = DynamicMeshElements[MeshBatchIndex];
+				const FMeshBatch& MeshBatch = *MeshBatchAndRelevance.Mesh;
+				FDepthDrawingPolicyFactory::DrawDynamicMesh(RHICmdList, *View, Context, MeshBatch, false, true, MeshBatchAndRelevance.PrimitiveSceneProxy, MeshBatch.BatchHitProxyId);
+			}
+		}
+		else
+		{
+			GFlexFluidSurfaceRenderer.RenderDepth(RHICmdList, ParentSceneInfo->Proxy, *View);
 		}
 
 		// Pre-shadows mask by receiver elements, self-shadow mask by subject elements.
@@ -2366,6 +2411,19 @@ void FProjectedShadowInfo::RenderProjection(FRHICommandListImmediate& RHICmdList
 		}
 	}
 
+	if (bHairReceiver)
+	{
+		FSceneRenderTargets& SceneContext = FSceneRenderTargets::Get(RHICmdList);
+		RHICmdList.SetDepthStencilState(TStaticDepthStencilState<false, CF_LessEqual>::GetRHI());
+
+		// Swap to replace render targets as well as shader resources.
+		SceneContext.LightAttenuation.Swap(SceneContext.HairLightAttenuation);
+		SceneContext.SceneDepthZ.Swap(SceneContext.HairDepthZ);
+		SceneContext.BeginRenderingLightAttenuation(RHICmdList);
+
+		RHICmdList.SetViewport(View->ViewRect.Min.X, View->ViewRect.Min.Y, 0.0f, View->ViewRect.Max.X, View->ViewRect.Max.Y, 1.0f);
+	}
+
 	{
 		uint32 LocalQuality = GetShadowQuality();
 
@@ -2437,6 +2495,18 @@ void FProjectedShadowInfo::RenderProjection(FRHICommandListImmediate& RHICmdList
 	{
 		// Clear the stencil buffer to 0.
 		RHICmdList.Clear(false, FColor(0, 0, 0), false, 0, true, 0, FIntRect());
+	}
+
+	if (bHairReceiver)
+	{
+		FSceneRenderTargets& SceneContext = FSceneRenderTargets::Get(RHICmdList);
+		bHairReceiver = false;
+
+		SceneContext.LightAttenuation.Swap(SceneContext.HairLightAttenuation);
+		SceneContext.SceneDepthZ.Swap(SceneContext.HairDepthZ);
+		SceneContext.BeginRenderingLightAttenuation(RHICmdList);
+
+		RHICmdList.SetViewport(View->ViewRect.Min.X, View->ViewRect.Min.Y, 0.0f, View->ViewRect.Max.X, View->ViewRect.Max.Y, 1.0f);
 	}
 }
 
@@ -2648,7 +2718,15 @@ FIntPoint FProjectedShadowInfo::GetShadowBufferResolution() const
 		return SceneContext_ConstantsOnly.GetTranslucentShadowDepthTextureResolution();
 	}
 
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	const FTexture2DRHIRef& ShadowTexture = SceneContext_ConstantsOnly.GetShadowDepthZTexture(0, bAllocatedInPreshadowCache);
+#else
+	// NVCHANGE_END: Add VXGI
 	const FTexture2DRHIRef& ShadowTexture = SceneContext_ConstantsOnly.GetShadowDepthZTexture(bAllocatedInPreshadowCache);
+	// NVCHANGE_BEGIN: Add VXGI
+#endif
+	// NVCHANGE_END: Add VXGI
 
 	//prefer to return the actual size of the allocated texture if possible.  It may be larger than the size of a single shadowmap due to atlasing (see forward renderer CSM handling in InitDynamicShadows).
 	if (ShadowTexture)
@@ -2909,6 +2987,21 @@ bool FDeferredShadingSceneRenderer::RenderOnePassPointLightShadows(FRHICommandLi
 					else
 					{
 						ProjectedShadowInfo->RenderOnePassPointLightProjection(RHICmdList, ViewIndex, View);
+
+						// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+						if (bVxgiPerformEmittanceVoxelization && bVxgiUseDiffuseMaterials)
+						{
+							SCOPE_CYCLE_COUNTER(STAT_VxgiVoxelizeEmittanceFromDiffuseMaterialsShadowed);
+							SCOPED_DRAW_EVENT(RHICmdList, VXGIVoxelizeEmittanceFromDiffuseMaterialsShadowed);
+
+							VXGI::EmittanceVoxelizationArgs Args;
+							Args.LightSceneInfo = LightSceneInfo;
+							Args.Shadows.Add(ProjectedShadowInfo);
+							RenderForVxgiVoxelization(RHICmdList, VXGI::VoxelizationPass::LIGHT0 + LightSceneInfo->Id, Args);
+						}
+#endif
+						// NVCHANGE_END: Add VXGI
 					}
 				}
 			}
@@ -2972,6 +3065,25 @@ void FSceneRenderer::RenderProjections(
 				if (ProjectedShadowInfo->FadeAlphas[ViewIndex] > 1.0f / 256.0f)
 				{
 					ProjectedShadowInfo->RenderProjection(RHICmdList, ViewIndex, &View, bForwardShading);
+
+					if (View.bHasHair && !ProjectedShadowInfo->bPreShadow && !ProjectedShadowInfo->bSelfShadowOnly)
+					{
+						SceneContext.SceneDepthZ.Swap(SceneContext.HairDepthZ);
+						SceneContext.LightAttenuation.Swap(SceneContext.HairLightAttenuation);
+						SceneContext.BeginRenderingLightAttenuation(RHICmdList);
+						RHICmdList.SetViewport(View.ViewRect.Min.X, View.ViewRect.Min.Y, 0.0f, View.ViewRect.Max.X, View.ViewRect.Max.Y, 1.0f);
+
+						checkSlow(!ProjectedShadowInfo->bHairRenderProjection);
+						ProjectedShadowInfo->bHairRenderProjection = true;
+						ProjectedShadowInfo->RenderProjection(RHICmdList, ViewIndex, &View, bForwardShading);
+						ProjectedShadowInfo->bHairRenderProjection = false;
+
+						SceneContext.SceneDepthZ.Swap(SceneContext.HairDepthZ);
+						SceneContext.LightAttenuation.Swap(SceneContext.HairLightAttenuation);
+						SceneContext.BeginRenderingLightAttenuation(RHICmdList);
+						RHICmdList.SetViewport(View.ViewRect.Min.X, View.ViewRect.Min.Y, 0.0f, View.ViewRect.Max.X, View.ViewRect.Max.Y, 1.0f);
+					}
+
 					if (!bForwardShading)
 					{
 						GRenderTargetPool.VisualizeTexture.SetCheckPoint(RHICmdList, SceneContext.GetLightAttenuation());
@@ -3368,6 +3480,16 @@ bool FDeferredShadingSceneRenderer::RenderReflectiveShadowMaps(FRHICommandListIm
 	return true;
 }
 
+// NVCHANGE_BEGIN: Add VXGI
+struct FCompareFProjectedShadowInfoBySplitNear
+{
+	inline bool operator()(const FProjectedShadowInfo& A, const FProjectedShadowInfo& B) const
+	{
+		return A.CascadeSettings.SplitNear < B.CascadeSettings.SplitNear;
+	}
+};
+// NVCHANGE_END: Add VXGI
+
 /**
  * Used by RenderLights to render shadows to the attenuation buffer.
  *
@@ -3449,6 +3571,17 @@ bool FDeferredShadingSceneRenderer::RenderProjectedShadows(FRHICommandListImmedi
 	FSceneRenderTargets& SceneContext = FSceneRenderTargets::Get(RHICmdList);
 	while (NumShadowsRendered < Shadows.Num())
 	{
+		// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+		int32 CascadeIndex = NumShadowsRendered;
+
+		if (!SceneContext.IsValidCascadeIndex(CascadeIndex))
+		{
+			break;
+		}
+#endif
+		// NVCHANGE_END: Add VXGI
+
 		int32 NumAllocatedShadows = 0;
 
 		// Allocate shadow texture space to the shadows.
@@ -3468,6 +3601,11 @@ bool FDeferredShadingSceneRenderer::RenderProjectedShadows(FRHICommandListImmedi
 					)
 				{
 					ProjectedShadowInfo->bAllocated = true;
+					// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+					ProjectedShadowInfo->CascadeSurfaceIndex = CascadeIndex;
+#endif
+					// NVCHANGE_END: Add VXGI
 					NumAllocatedShadows++;
 				}
 			}
@@ -3484,10 +3622,21 @@ bool FDeferredShadingSceneRenderer::RenderProjectedShadows(FRHICommandListImmedi
 			SCOPED_DRAW_EVENT(RHICmdList, ShadowDepthsFromOpaqueProjected);
 
 			bool bPerformClear = true;
+			// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+			auto SetShadowRenderTargets = [&bPerformClear, &SceneContext, CascadeIndex](FRHICommandList& RHICmdList)
+			{
+				SceneContext.BeginRenderingCascadedShadowDepth(RHICmdList, bPerformClear, CascadeIndex);
+			};
+#else
+			// NVCHANGE_END: Add VXGI
 			auto SetShadowRenderTargets = [&bPerformClear, &SceneContext](FRHICommandList& InRHICmdList)
 			{
 				SceneContext.BeginRenderingShadowDepth(InRHICmdList, bPerformClear);
 			};
+			// NVCHANGE_BEGIN: Add VXGI
+#endif
+			// NVCHANGE_END: Add VXGI
 
 			SetShadowRenderTargets(RHICmdList);  // run it now, maybe run it later for parallel command lists
 			bPerformClear = false;
@@ -3496,13 +3645,29 @@ bool FDeferredShadingSceneRenderer::RenderProjectedShadows(FRHICommandListImmedi
 			for (int32 ShadowIndex = 0; ShadowIndex < Shadows.Num(); ShadowIndex++)
 			{
 				FProjectedShadowInfo* ProjectedShadowInfo = Shadows[ShadowIndex];
+				// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+				if (ProjectedShadowInfo->bAllocated && !ProjectedShadowInfo->bTranslucentShadow && (!ProjectedShadowInfo->CascadeSettings.bRayTracedDistanceField || LightSceneInfo->Proxy->CastVxgiIndirectLighting()))
+#else
+				// NVCHANGE_END: Add VXGI
 				if (ProjectedShadowInfo->bAllocated && !ProjectedShadowInfo->bTranslucentShadow && !ProjectedShadowInfo->CascadeSettings.bRayTracedDistanceField)
+				// NVCHANGE_BEGIN: Add VXGI
+#endif
+				// NVCHANGE_END: Add VXGI
 				{
 					ProjectedShadowInfo->RenderDepth(RHICmdList, this, SetShadowRenderTargets);
 				}
 			}
 
+			// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+			SceneContext.FinishRenderingCascadedShadowDepth(RHICmdList, CascadeIndex);
+#else
+			// NVCHANGE_END: Add VXGI
 			SceneContext.FinishRenderingShadowDepth(RHICmdList);
+			// NVCHANGE_BEGIN: Add VXGI
+#endif
+			// NVCHANGE_END: Add VXGI
 		}
 
 		// Render the shadow projections.
@@ -3565,6 +3730,22 @@ bool FDeferredShadingSceneRenderer::RenderProjectedShadows(FRHICommandListImmedi
 			bAttenuationBufferDirty = true;
 		}
 	}
+
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	if (bVxgiPerformEmittanceVoxelization && bVxgiUseDiffuseMaterials && Shadows.Num() != 0)
+	{
+		SCOPE_CYCLE_COUNTER(STAT_VxgiVoxelizeEmittanceFromDiffuseMaterialsShadowed);
+		SCOPED_DRAW_EVENT(RHICmdList, VXGIVoxelizeEmittanceFromDiffuseMaterialsShadowed);
+
+		VXGI::EmittanceVoxelizationArgs Args;
+		Args.LightSceneInfo = LightSceneInfo;
+		Args.Shadows = Shadows;
+		Args.Shadows.Sort(FCompareFProjectedShadowInfoBySplitNear());
+		RenderForVxgiVoxelization(RHICmdList, VXGI::VoxelizationPass::LIGHT0 + LightSceneInfo->Id, Args);
+	}
+#endif
+	// NVCHANGE_END: Add VXGI
 
 	bAttenuationBufferDirty |= RenderCachedPreshadows(RHICmdList, LightSceneInfo);
 

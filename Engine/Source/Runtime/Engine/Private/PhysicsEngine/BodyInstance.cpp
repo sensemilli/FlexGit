@@ -1054,6 +1054,11 @@ struct FInitBodiesHelper
 	physx::PxRigidActor* CreateActor_PhysX_AssumesLocked(FBodyInstance* Instance, const PxTransform& PTransform) const
 	{
 		physx::PxRigidDynamic* PNewDynamic = nullptr;
+		// NVCHANGE_BEGIN: JCAO - Add the flag bBlockTurbulence to make RB interact with Turbulence.
+#if WITH_APEX_TURBULENCE
+		physx::PxRigidDynamic* PNewDynamicAsync = nullptr;
+#endif
+		// NVCHANGE_END: JCAO - Add the flag bBlockTurbulence to make RB interact with Turbulence.
 
 		if (bCompileStatic || bStatic)
 		{
@@ -1073,6 +1078,19 @@ struct FInitBodiesHelper
 			else
 			{
 				Instance->RigidActorSync = PNewDynamic;
+				// NVCHANGE_BEGIN: JCAO - Add the flag bBlockTurbulence to make RB interact with Turbulence.
+#if WITH_APEX_TURBULENCE
+				if (GEngine->GetPhysXLevel() == 2 && Instance->bBlockTurbulence)
+				{
+					PNewDynamicAsync = GPhysXSDK->createRigidDynamic(PTransform);
+					Instance->RigidActorAsync = PNewDynamicAsync;
+					if (PNewDynamicAsync)
+					{
+						PNewDynamicAsync->setRigidBodyFlag(PxRigidDynamicFlag::eKINEMATIC, true);
+					}
+				}
+#endif
+				// NVCHANGE_END: JCAO - Add the flag bBlockTurbulence to make RB interact with Turbulence.
 			}
 
 			if(!Instance->ShouldInstanceSimulatingPhysics())

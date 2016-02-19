@@ -2418,6 +2418,52 @@ void FCascade::BindCommands()
 	ToolkitCommands->MapAction(
 		Commands.RemoveDuplicateModules,
 		FExecuteAction::CreateSP(this, &FCascade::OnRemoveDuplicateModules));
+
+	// Turbulence FS
+#if WITH_APEX_TURBULENCE
+	ToolkitCommands->MapAction(
+		Commands.ToggleVelocityField,
+		FExecuteAction::CreateSP(this, &FCascade::OnViewTurbulence, ETurbulenceViewMode::ETVM_VelocityField),
+		FCanExecuteAction(),
+		FIsActionChecked::CreateSP(this, &FCascade::IsViewTurbulence, ETurbulenceViewMode::ETVM_VelocityField));
+
+	ToolkitCommands->MapAction(
+		Commands.ToggleStreamLines,
+		FExecuteAction::CreateSP(this, &FCascade::OnViewTurbulence, ETurbulenceViewMode::ETVM_Streamlines),
+		FCanExecuteAction(),
+		FIsActionChecked::CreateSP(this, &FCascade::IsViewTurbulence, ETurbulenceViewMode::ETVM_Streamlines));
+
+	ToolkitCommands->MapAction(
+		Commands.ToggleBBox,
+		FExecuteAction::CreateSP(this, &FCascade::OnViewTurbulence, ETurbulenceViewMode::ETVM_BBox),
+		FCanExecuteAction(),
+		FIsActionChecked::CreateSP(this, &FCascade::IsViewTurbulence, ETurbulenceViewMode::ETVM_BBox));
+
+	ToolkitCommands->MapAction(
+		Commands.ToggleJetActor,
+		FExecuteAction::CreateSP(this, &FCascade::OnViewTurbulence, ETurbulenceViewMode::ETVM_Jet),
+		FCanExecuteAction(),
+		FIsActionChecked::CreateSP(this, &FCascade::IsViewTurbulence, ETurbulenceViewMode::ETVM_Jet));
+
+	ToolkitCommands->MapAction(
+		Commands.ToggleNoiseActor,
+		FExecuteAction::CreateSP(this, &FCascade::OnViewTurbulence, ETurbulenceViewMode::ETVM_Noise),
+		FCanExecuteAction(),
+		FIsActionChecked::CreateSP(this, &FCascade::IsViewTurbulence, ETurbulenceViewMode::ETVM_Noise));
+
+	ToolkitCommands->MapAction(
+		Commands.ToggleVortexActor,
+		FExecuteAction::CreateSP(this, &FCascade::OnViewTurbulence, ETurbulenceViewMode::ETVM_Vortex),
+		FCanExecuteAction(),
+		FIsActionChecked::CreateSP(this, &FCascade::IsViewTurbulence, ETurbulenceViewMode::ETVM_Vortex));
+
+	TurbulenceDebugRenderNames.Insert(TEXT("TurbulenceFS/VISUALIZE_TURBULENCE_FS_VELOCITY_FIELD"), ETVM_VelocityField);
+	TurbulenceDebugRenderNames.Insert(TEXT("TurbulenceFS/VISUALIZE_TURBULENCE_FS_STREAMLINES"), ETVM_Streamlines);
+	TurbulenceDebugRenderNames.Insert(TEXT("TurbulenceFS/VISUALIZE_TURBULENCE_FS_BBOX"), ETVM_BBox);
+	TurbulenceDebugRenderNames.Insert(TEXT("BasicFS/VISUALIZE_JET_FS_ACTOR"), ETVM_Jet);
+	TurbulenceDebugRenderNames.Insert(TEXT("BasicFS/VISUALIZE_NOISE_FS_ACTOR"), ETVM_Noise);
+	TurbulenceDebugRenderNames.Insert(TEXT("BasicFS/VISUALIZE_VORTEX_FS_ACTOR"), ETVM_Vortex);
+#endif
 }
 
 void FCascade::InitParticleModuleClasses()
@@ -5055,6 +5101,23 @@ void FCascade::CloseEntryPopup()
 		EntryMenu.Pin()->Dismiss();
 	}
 }
+
+#if WITH_APEX_TURBULENCE
+void FCascade::OnViewTurbulence(ETurbulenceViewMode ViewMode)
+{
+	UWorld* World = PreviewViewport->GetViewportClient()->GetPreviewScene().GetWorld();
+	check(ViewMode < TurbulenceDebugRenderNames.Num());
+	GEditor->Exec(World, *FString::Printf(TEXT("%s %s"), TEXT("apexvis"), *TurbulenceDebugRenderNames[ViewMode]));
+}
+
+bool FCascade::IsViewTurbulence(ETurbulenceViewMode ViewMode)
+{
+	UWorld* World = PreviewViewport->GetViewportClient()->GetPreviewScene().GetWorld();
+	FPhysScene* PhysScene = World->GetPhysicsScene();
+
+	return PhysScene->IsApexVisSet(PST_Sync, *TurbulenceDebugRenderNames[ViewMode]);
+}
+#endif
 
 /*-----------------------------------------------------------------------------
 	UCascadeParticleSystemComponent

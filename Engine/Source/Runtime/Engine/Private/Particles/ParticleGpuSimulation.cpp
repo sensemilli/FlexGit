@@ -31,6 +31,10 @@
 #include "SceneUtils.h"
 #include "MeshBatch.h"
 #include "GlobalDistanceFieldParameters.h"
+// NVCHANGE_BEGIN: JCAO - Replace vector fields with APEX turbulence velocity fields
+#include "../PhysicsEngine/PhysXRender.h"
+// NVCHANGE_END: JCAO - Replace vector fields with APEX turbulence velocity fields
+#include "../FieldSampler/ApexFieldSamplerActor.h"
 
 /*------------------------------------------------------------------------------
 	Constants to tune memory and performance for GPU particle simulation.
@@ -172,6 +176,11 @@ public:
 	/** Contains the velocity of all simulating particles. */
 	FTexture2DRHIRef VelocityTextureTargetRHI;
 	FTexture2DRHIRef VelocityTextureRHI;
+	// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+	/** Contains the density of all simulating particles. */
+	FTexture2DRHIRef DensityTextureRHI;
+	FUnorderedAccessViewRHIRef DensityTextureUAV;
+	// NVCHANGE_END: JCAO - Grid Density with GPU particles
 
 	bool bTexturesCleared;
 
@@ -219,6 +228,24 @@ public:
 			);
 
 		bTexturesCleared = false;
+
+		// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+		if (GetFeatureLevel() >= ERHIFeatureLevel::SM5)
+		{
+			check(!IsValidRef(DensityTextureRHI));
+			check(!IsValidRef(DensityTextureUAV));
+
+			DensityTextureRHI = RHICreateTexture2D(
+				SizeX, SizeY, PF_R32_FLOAT,
+				/*NumMips=*/ 1,
+				/*NumSamples=*/ 1,
+				/*Flags=*/ TexCreate_ShaderResource | TexCreate_UAV,
+				CreateInfo);
+
+			// create UAV for compute shader
+			DensityTextureUAV = RHICreateUnorderedAccessView(DensityTextureRHI);
+		}
+		// NVCHANGE_END: JCAO - Grid Density with GPU particles
 	}
 
 	/**
@@ -231,6 +258,11 @@ public:
 		PositionTextureRHI.SafeRelease();
 		VelocityTextureTargetRHI.SafeRelease();
 		VelocityTextureRHI.SafeRelease();
+
+		// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+		DensityTextureUAV.SafeRelease();
+		DensityTextureRHI.SafeRelease();
+		// NVCHANGE_END: JCAO - Grid Density with GPU particles
 	}
 };
 
@@ -444,6 +476,17 @@ BEGIN_UNIFORM_BUFFER_STRUCT(FGPUSpriteEmitterUniformParameters,)
 	DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(float, RotationBias)
 	DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(float, CameraMotionBlurAmount)
 	DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(FVector2D, PivotOffset)
+	// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+	DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(FVector4, DensityColorCurve)
+	DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(FVector4, DensityColorScale)
+	DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(FVector4, DensityColorBias)
+	DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(FVector4, DensitySizeCurve)
+	DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(FVector2D, DensitySizeScale)
+	DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(FVector2D, DensitySizeBias)
+	DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(uint32, GridDensityEnabled)
+	DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(uint32, ColorOverDensityEnabled)
+	DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(uint32, SizeOverDensityEnabled)
+	// NVCHANGE_END: JCAO - Grid Density with GPU particles
 END_UNIFORM_BUFFER_STRUCT(FGPUSpriteEmitterUniformParameters)
 
 IMPLEMENT_UNIFORM_BUFFER_STRUCT(FGPUSpriteEmitterUniformParameters,TEXT("EmitterUniforms"));
@@ -482,6 +525,10 @@ public:
 		AttributesTextureSampler.Bind(ParameterMap, TEXT("AttributesTextureSampler"));
 		CurveTexture.Bind(ParameterMap, TEXT("CurveTexture"));
 		CurveTextureSampler.Bind(ParameterMap, TEXT("CurveTextureSampler"));
+		// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+		DensityTexture.Bind(ParameterMap, TEXT("DensityTexture"));
+		DensityTextureSampler.Bind(ParameterMap, TEXT("DensityTextureSampler"));
+		// NVCHANGE_END: JCAO - Grid Density with GPU particles
 	}
 
 	virtual void Serialize(FArchive& Ar) override
@@ -496,6 +543,10 @@ public:
 		Ar << AttributesTextureSampler;
 		Ar << CurveTexture;
 		Ar << CurveTextureSampler;
+		// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+		Ar << DensityTexture;
+		Ar << DensityTextureSampler;
+		// NVCHANGE_END: JCAO - Grid Density with GPU particles
 	}
 
 	virtual void SetMesh(FRHICommandList& RHICmdList, FShader* Shader,const FVertexFactory* VertexFactory,const FSceneView& View,const FMeshBatchElement& BatchElement,uint32 DataFlags) const override;
@@ -520,6 +571,11 @@ private:
 	/** Texture containing curves from which attributes are sampled. */
 	FShaderResourceParameter CurveTexture;
 	FShaderResourceParameter CurveTextureSampler;
+	// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+	/** Texture containing density for all particles. */
+	FShaderResourceParameter DensityTexture;
+	FShaderResourceParameter DensityTextureSampler;
+	// NVCHANGE_END: JCAO - Grid Density with GPU particles
 };
 
 /**
@@ -580,6 +636,10 @@ public:
 	FTexture2DRHIParamRef VelocityTextureRHI;
 	/** Texture containint attributes for all particles. */
 	FTexture2DRHIParamRef AttributesTextureRHI;
+	// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+	/** Texture containing densities for all particles. */
+	FTexture2DRHIParamRef DensityTextureRHI;
+	// NVCHANGE_END JCAO - Grid Density with GPU particles
 
 	/**
 	 * Constructs render resources for this vertex factory.
@@ -659,6 +719,9 @@ void FGPUSpriteVertexFactoryShaderParameters::SetMesh(FRHICommandList& RHICmdLis
 	SetTextureParameter(RHICmdList, VertexShader, VelocityTexture, VelocityTextureSampler, SamplerStatePoint, GPUVF->VelocityTextureRHI );
 	SetTextureParameter(RHICmdList, VertexShader, AttributesTexture, AttributesTextureSampler, SamplerStatePoint, GPUVF->AttributesTextureRHI );
 	SetTextureParameter(RHICmdList, VertexShader, CurveTexture, CurveTextureSampler, SamplerStateLinear, GParticleCurveTexture.GetCurveTexture() );
+	// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+	SetTextureParameter(RHICmdList, VertexShader, DensityTexture, DensityTextureSampler, SamplerStatePoint, GPUVF->DensityTextureRHI);
+	// NVCHANGE_END: JCAO - Grid Density with GPU particles
 }
 
 IMPLEMENT_VERTEX_FACTORY_TYPE(FGPUSpriteVertexFactory,"ParticleGPUSpriteVertexFactory",true,false,true,false,false);
@@ -709,12 +772,18 @@ struct FParticlePerFrameSimulationParameters
 	FVector2D LocalToWorldScale;
 	/** Amount of time by which to simulate particles. */
 	float DeltaSeconds;
+	// NVCHANGE_BEGIN: JCAO - Support Force Type Noise
+	float TotalSeconds;
+	// NVCHANGE_END: JCAO - Support Force Type Noise
 
 	FParticlePerFrameSimulationParameters()
 		: PointAttractor(FVector::ZeroVector,0.0f)
 		, PositionOffsetAndAttractorStrength(FVector::ZeroVector,0.0f)
 		, LocalToWorldScale(1.0f, 1.0f)
 		, DeltaSeconds(0.0f)
+		// NVCHANGE_BEGIN: JCAO - Support Force Type Noise
+		, TotalSeconds(0.0f)
+		// NVCHANGE_END: JCAO - Support Force Type Noise
 	{
 	}
 };
@@ -728,6 +797,9 @@ struct FParticlePerFrameSimulationShaderParameters
 	FShaderParameter PositionOffsetAndAttractorStrength;
 	FShaderParameter LocalToWorldScale;
 	FShaderParameter DeltaSeconds;
+	// NVCHANGE_BEGIN: JCAO - Support Force Type Noise
+	FShaderParameter TotalSeconds;
+	// NVCHANGE_END: JCAO - Support Force Type Noise
 
 	void Bind(const FShaderParameterMap& ParameterMap)
 	{
@@ -735,6 +807,9 @@ struct FParticlePerFrameSimulationShaderParameters
 		PositionOffsetAndAttractorStrength.Bind(ParameterMap,TEXT("PositionOffsetAndAttractorStrength"));
 		LocalToWorldScale.Bind(ParameterMap,TEXT("LocalToWorldScale"));
 		DeltaSeconds.Bind(ParameterMap,TEXT("DeltaSeconds"));
+		// NVCHANGE_BEGIN: JCAO - Support Force Type Noise
+		TotalSeconds.Bind(ParameterMap, TEXT("TotalSeconds"));
+		// NVCHANGE_END: JCAO - Support Force Type Noise
 	}
 
 	template <typename ShaderRHIParamRef>
@@ -744,6 +819,9 @@ struct FParticlePerFrameSimulationShaderParameters
 		SetShaderValue(RHICmdList,ShaderRHI,PositionOffsetAndAttractorStrength,Parameters.PositionOffsetAndAttractorStrength);
 		SetShaderValue(RHICmdList,ShaderRHI,LocalToWorldScale,Parameters.LocalToWorldScale);
 		SetShaderValue(RHICmdList,ShaderRHI,DeltaSeconds,Parameters.DeltaSeconds);
+		// NVCHANGE_BEGIN: JCAO - Support Force Type Noise
+		SetShaderValue(RHICmdList, ShaderRHI, TotalSeconds, Parameters.TotalSeconds);
+		// NVCHANGE_END: JCAO - Support Force Type Noise
 	}
 };
 
@@ -753,6 +831,9 @@ FArchive& operator<<(FArchive& Ar, FParticlePerFrameSimulationShaderParameters& 
 	Ar << PerFrameParameters.PositionOffsetAndAttractorStrength;
 	Ar << PerFrameParameters.LocalToWorldScale;
 	Ar << PerFrameParameters.DeltaSeconds;
+	// NVCHANGE_BEGIN: JCAO - Support Force Type Noise
+	Ar << PerFrameParameters.TotalSeconds;
+	// NVCHANGE_END: JCAO - Support Force Type Noise
 	return Ar;
 }
 
@@ -767,12 +848,48 @@ BEGIN_UNIFORM_BUFFER_STRUCT( FVectorFieldUniformParameters,)
 	DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER_ARRAY( FVector2D, IntensityAndTightness, [MAX_VECTOR_FIELDS] )
 	DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER( int32, Count )
 	DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER_ARRAY( FVector, TilingAxes, [MAX_VECTOR_FIELDS] )
+	// NVCHANGE_BEGIN: JCAO - Replace vector fields with APEX turbulence velocity fields
+	DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(int32, VectorFieldCount)
+	DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(int32, VelocityFieldCount)
+	// NVCHANGE_END: JCAO - Replace vector fields with APEX turbulence velocity fields
 END_UNIFORM_BUFFER_STRUCT( FVectorFieldUniformParameters )
 
 IMPLEMENT_UNIFORM_BUFFER_STRUCT(FVectorFieldUniformParameters,TEXT("VectorFields"));
 
 typedef TUniformBufferRef<FVectorFieldUniformParameters> FVectorFieldUniformBufferRef;
 
+// NVCHANGE_BEGIN: JCAO - Add Attractor working with GPU particles
+#if WITH_APEX_TURBULENCE
+/**
+ * Uniform buffer to hold parameters for attractor field sampler. 
+ */
+BEGIN_UNIFORM_BUFFER_STRUCT(FAttractorFSUniformParameters, )
+DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(FVector, Origin)
+DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(FVector, RadiusAndStrength)
+DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(int32, Count)
+END_UNIFORM_BUFFER_STRUCT(FAttractorFSUniformParameters)
+
+IMPLEMENT_UNIFORM_BUFFER_STRUCT(FAttractorFSUniformParameters, TEXT("AttractorFieldSamplers"));
+
+typedef TUniformBufferRef<FAttractorFSUniformParameters> FAttractorFSUniformBufferRef;
+
+// NVCHANGE_BEGIN: JCAO - Support Force Type Noise
+BEGIN_UNIFORM_BUFFER_STRUCT(FNoiseFSUniformParameters, )
+DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(FVector, NoiseSpaceFreq)
+DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(FVector, NoiseSpaceFreqOctaveMultiplier)
+DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(FVector4, NoiseStrengthAndTimeFreq) // NoiseStrength NoiseTimeFreq*TotalTime NoiseStrengthOctaveMultiplier NoiseTimeFreqOctaveMultiplier
+DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(int32, NoiseOctaves)
+DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(int32, NoiseType)
+DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(int32, NoiseSeed)
+DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(int32, Count)
+END_UNIFORM_BUFFER_STRUCT(FNoiseFSUniformParameters)
+
+IMPLEMENT_UNIFORM_BUFFER_STRUCT(FNoiseFSUniformParameters, TEXT("NoiseFieldSamplers"));
+
+typedef TUniformBufferRef<FNoiseFSUniformParameters> FNoiseFSUniformBufferRef;
+// NVCHANGE_END: JCAO - Support Force Type Noise
+#endif // WITH_APEX_TURBULENCE
+// NVCHANGE_END: JCAO - Add Attractor working with GPU particles
 /**
  * Vertex shader for drawing particle tiles on the GPU.
  */
@@ -873,6 +990,11 @@ public:
 		OutEnvironment.SetDefine(TEXT("DEPTH_BUFFER_COLLISION"), (uint32)(CollisionMode == PCM_DepthBuffer ? 1 : 0));
 		OutEnvironment.SetDefine(TEXT("DISTANCE_FIELD_COLLISION"), (uint32)(CollisionMode == PCM_DistanceField ? 1 : 0));
 		OutEnvironment.SetRenderTargetOutputFormat(0, PF_A32B32G32R32F);
+		// NVCHANGE_BEGIN: JCAO - Replace vector fields with APEX turbulence velocity fields
+#if WITH_APEX_TURBULENCE
+		OutEnvironment.SetDefine(TEXT("WITH_APEX_TURBULENCE"), 1);
+#endif
+		// NVCHANGE_END: JCAO - Replace vector fields with APEX turbulence velocity fields
 	}
 
 	/** Default constructor. */
@@ -1024,6 +1146,23 @@ public:
 		SetTextureParameter(RHICmdList, PixelShaderRHI, VectorFieldTextures2, VectorFieldTexturesSampler2, SamplerStateLinear, VolumeTexturesRHI[2], 0);
 		SetTextureParameter(RHICmdList, PixelShaderRHI, VectorFieldTextures3, VectorFieldTexturesSampler3, SamplerStateLinear, VolumeTexturesRHI[3], 0);
 	}
+
+	// NVCHANGE_BEGIN: JCAO - Add Attractor working with GPU particles
+#if WITH_APEX_TURBULENCE
+	void SetAttractorFSParameters(FRHICommandList& RHICmdList, const FAttractorFSUniformBufferRef& UniformBuffer)
+	{
+		FPixelShaderRHIParamRef PixelShaderRHI = GetPixelShader();
+		SetUniformBufferParameter(RHICmdList, PixelShaderRHI, GetUniformBufferParameter<FAttractorFSUniformParameters>(), UniformBuffer);
+	}
+	// NVCHANGE_BEGIN: JCAO - Support Force Type Noise
+	void SetNoiseFSParameters(FRHICommandList& RHICmdList, const FNoiseFSUniformBufferRef& UniformBuffer)
+	{
+		FPixelShaderRHIParamRef PixelShaderRHI = GetPixelShader();
+		SetUniformBufferParameter(RHICmdList, PixelShaderRHI, GetUniformBufferParameter<FNoiseFSUniformParameters>(), UniformBuffer);
+	}
+	// NVCHANGE_END: JCAO - Support Force Type Noise
+#endif // WITH_APEX_TURBULENCE
+	// NVCHANGE_END: JCAO - Add Attractor working with GPU particles
 
 	/**
 	 * Set per-instance parameters for this shader.
@@ -1257,18 +1396,32 @@ struct FSimulationCommandGPU
 	FParticlePerFrameSimulationParameters PerFrameParameters;
 	/** Parameters to sample the local vector field for this simulation. */
 	FVectorFieldUniformBufferRef VectorFieldsUniformBuffer;
+	// NVCHANGE_BEGIN: JCAO - Add Attractor working with GPU particles
+#if WITH_APEX_TURBULENCE
+	FAttractorFSUniformBufferRef AttractorFSUniformBuffer;
+	FNoiseFSUniformBufferRef NoiseFSUniformBuffer;
+#endif // WITH_APEX_TURBULENCE
+	// NVCHANGE_END: JCAO - Add Attractor working with GPU particles
 	/** Vector field volume textures for this simulation. */
 	FTexture3DRHIParamRef VectorFieldTexturesRHI[MAX_VECTOR_FIELDS];
 	/** The number of tiles to simulate. */
 	int32 TileCount;
 
 	/** Initialization constructor. */
+#if WITH_APEX_TURBULENCE
+	FSimulationCommandGPU(FParticleShaderParamRef InTileOffsetsRef, FUniformBufferRHIParamRef InUniformBuffer, const FParticlePerFrameSimulationParameters& InPerFrameParameters, FVectorFieldUniformBufferRef& InVectorFieldsUniformBuffer, FAttractorFSUniformBufferRef& InAttractorFSUniformBuffer, FNoiseFSUniformBufferRef& InNoiseFSUniformBuffer, int32 InTileCount)
+#else
 	FSimulationCommandGPU(FParticleShaderParamRef InTileOffsetsRef, FUniformBufferRHIParamRef InUniformBuffer, const FParticlePerFrameSimulationParameters& InPerFrameParameters, FVectorFieldUniformBufferRef& InVectorFieldsUniformBuffer, int32 InTileCount)
+#endif
 		: TileOffsetsRef(InTileOffsetsRef)
 		, UniformBuffer(InUniformBuffer)
 		, PerFrameParameters(InPerFrameParameters)
 		, VectorFieldsUniformBuffer(InVectorFieldsUniformBuffer)
 		, TileCount(InTileCount)
+#if WITH_APEX_TURBULENCE
+		, AttractorFSUniformBuffer(InAttractorFSUniformBuffer)
+		, NoiseFSUniformBuffer(InNoiseFSUniformBuffer)
+#endif
 	{
 		FTexture3DRHIParamRef BlackVolumeTextureRHI = (FTexture3DRHIParamRef)(FTextureRHIParamRef)GBlackVolumeTexture->TextureRHI;
 		for (int32 i = 0; i < MAX_VECTOR_FIELDS; ++i)
@@ -1332,6 +1485,14 @@ void ExecuteSimulationCommands(
 			Command.VectorFieldsUniformBuffer,
 			Command.VectorFieldTexturesRHI
 			);
+		// NVCHANGE_BEGIN: JCAO - Add Attractor working with GPU particles
+#if WITH_APEX_TURBULENCE
+		PixelShader->SetAttractorFSParameters(RHICmdList, Command.AttractorFSUniformBuffer);
+		// NVCHANGE_BEGIN: JCAO - Support Force Type Noise
+		PixelShader->SetNoiseFSParameters(RHICmdList, Command.NoiseFSUniformBuffer);
+		// NVCHANGE_END: JCAO - Support Force Type Noise
+#endif // WITH_APEX_TURBULENCE
+		// NVCHANGE_END: JCAO - Add Attractor working with GPU particles
 		DrawAlignedParticleTiles(RHICmdList, Command.TileCount);
 	}
 
@@ -2158,6 +2319,603 @@ static FBox ComputeParticleBounds(
 	return BoundingBox;
 }
 
+// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+/*-----------------------------------------------------------------------------
+Calculate the density in the grid for GPU particles.
+-----------------------------------------------------------------------------*/
+#define SCALE_FACTOR	(0.02f)
+
+BEGIN_UNIFORM_BUFFER_STRUCT(FGridDensityFrustumUniformParameters, )
+DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(FMatrix, DimMatrix)
+DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(FVector2D, NearDim)
+DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(FVector2D, FarDim)
+DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(float, DimZ)
+END_UNIFORM_BUFFER_STRUCT(FGridDensityFrustumUniformParameters)
+
+IMPLEMENT_UNIFORM_BUFFER_STRUCT(FGridDensityFrustumUniformParameters, TEXT("GridDensityFrustum"));
+
+typedef TUniformBufferRef<FGridDensityFrustumUniformParameters> FGridDensityFrustumUniformBufferRef;
+
+
+BEGIN_UNIFORM_BUFFER_STRUCT(FGridDensityUniformParameters, )
+DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(int32, GridMaxCellCount)
+DECLARE_UNIFORM_BUFFER_STRUCT_MEMBER(int32, GridResolution)
+END_UNIFORM_BUFFER_STRUCT(FGridDensityUniformParameters)
+
+IMPLEMENT_UNIFORM_BUFFER_STRUCT(FGridDensityUniformParameters, TEXT("GridDensity"));
+
+typedef TUniformBufferRef<FGridDensityUniformParameters> FGridDensityUniformBufferRef;
+
+
+class FParticleGridDensityResource : public FRenderResource
+{
+public:
+	FStructuredBufferRHIRef		GridDensityBuffer;
+	FShaderResourceViewRHIRef	GridDensityBufferSRV;
+	FUnorderedAccessViewRHIRef	GridDensityBufferUAV;
+
+	FStructuredBufferRHIRef		GridDensityLowPassBuffer;
+	FShaderResourceViewRHIRef	GridDensityLowPassBufferSRV;
+	FUnorderedAccessViewRHIRef	GridDensityLowPassBufferUAV;
+
+	FGridDensityUniformBufferRef GridDensityUniformBuffer;
+
+	int32						GridResolution;
+	int32						GridMaxCellCount;
+	float						GridDepth;
+
+	FParticleGridDensityResource()
+		: GridResolution(0)
+		, GridMaxCellCount(0)
+		, GridDepth(0)
+	{
+	}
+
+	/**
+	* Initialize RHI resources used for particle simulation.
+	*/
+	virtual void InitRHI() override
+	{
+		if (GMaxRHIFeatureLevel == ERHIFeatureLevel::SM5)
+		{
+			check(GridResolution);
+
+			FRHIResourceCreateInfo CreateInfo;
+			GridDensityBuffer = RHICreateStructuredBuffer(sizeof(uint32), GridResolution * GridResolution * GridResolution * sizeof(uint32), BUF_ShaderResource | BUF_UnorderedAccess, CreateInfo);
+			GridDensityBufferSRV = RHICreateShaderResourceView(GridDensityBuffer);
+			GridDensityBufferUAV = RHICreateUnorderedAccessView(GridDensityBuffer, false, false);
+
+			GridDensityLowPassBuffer = RHICreateStructuredBuffer(sizeof(float), GridResolution * GridResolution * GridResolution * sizeof(float), BUF_ShaderResource | BUF_UnorderedAccess, CreateInfo);
+			GridDensityLowPassBufferSRV = RHICreateShaderResourceView(GridDensityLowPassBuffer);
+			GridDensityLowPassBufferUAV = RHICreateUnorderedAccessView(GridDensityLowPassBuffer, false, false);
+
+			FGridDensityUniformParameters		GridDensityParameters;
+			GridDensityParameters.GridResolution = GridResolution;
+			GridDensityParameters.GridMaxCellCount = GridMaxCellCount;
+			GridDensityUniformBuffer = FGridDensityUniformBufferRef::CreateUniformBufferImmediate(GridDensityParameters, UniformBuffer_MultiFrame);
+		}
+	}
+
+	bool IsValid() const
+	{
+		return IsValidRef(GridDensityLowPassBufferUAV) && IsValidRef(GridDensityBufferUAV);
+	}
+
+	/**
+	* Releases RHI resources used for particle simulation.
+	*/
+	virtual void ReleaseRHI() override
+	{
+		GridDensityLowPassBufferUAV.SafeRelease();
+		GridDensityLowPassBufferSRV.SafeRelease();
+		GridDensityLowPassBuffer.SafeRelease();
+
+		GridDensityBufferUAV.SafeRelease();
+		GridDensityBufferSRV.SafeRelease();
+		GridDensityBuffer.SafeRelease();
+
+		GridDensityUniformBuffer.SafeRelease();
+	}
+};
+
+/** compute shader for clear density */
+class FParticleGridDensityClearCS : public FGlobalShader
+{
+	DECLARE_SHADER_TYPE(FParticleGridDensityClearCS, Global);
+public:
+
+	static bool ShouldCache(EShaderPlatform Platform)
+	{
+		return IsFeatureLevelSupported(Platform, ERHIFeatureLevel::SM5);
+	}
+
+	static void ModifyCompilationEnvironment(EShaderPlatform Platform, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		FGlobalShader::ModifyCompilationEnvironment(Platform, OutEnvironment);
+		OutEnvironment.SetDefine(TEXT("THREADS_NUM"), PARTICLE_BOUNDS_THREADS);
+	}
+
+	/** Default constructor. */
+	FParticleGridDensityClearCS()
+	{
+	}
+
+	/** Initialization constructor. */
+	explicit FParticleGridDensityClearCS(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+		: FGlobalShader(Initializer)
+	{
+		OutGridDensity.Bind(Initializer.ParameterMap, TEXT("OutGridDensity"));
+	}
+
+	/** Serialization. */
+	virtual bool Serialize(FArchive& Ar) override
+	{
+		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
+		Ar << OutGridDensity;
+		return bShaderHasOutdatedParameters;
+	}
+
+	/**
+	* Set output buffer for this shader.
+	*/
+	void SetOutput(FRHICommandList& RHICmdList, FUnorderedAccessViewRHIParamRef GridDensityUAV)
+	{
+		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
+		if (OutGridDensity.IsBound())
+		{
+			RHICmdList.SetUAVParameter(ComputeShaderRHI, OutGridDensity.GetBaseIndex(), GridDensityUAV);
+		}
+	}
+
+	/**
+	* Unbinds any buffers that have been bound.
+	*/
+	void UnbindBuffers(FRHICommandList& RHICmdList)
+	{
+		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
+		if (OutGridDensity.IsBound())
+		{
+			RHICmdList.SetUAVParameter(ComputeShaderRHI, OutGridDensity.GetBaseIndex(), FUnorderedAccessViewRHIParamRef());
+		}
+	}
+
+private:
+
+	FShaderResourceParameter OutGridDensity;
+};
+IMPLEMENT_SHADER_TYPE(, FParticleGridDensityClearCS, TEXT("ParticleGridDensityShaders"), TEXT("GridDensityClear"), SF_Compute);
+
+/** compute shader for fill the grid density buffer */
+class FParticleGridDensityFillFrustumCS : public FGlobalShader
+{
+	DECLARE_SHADER_TYPE(FParticleGridDensityFillFrustumCS, Global);
+public:
+
+	static bool ShouldCache(EShaderPlatform Platform)
+	{
+		return IsFeatureLevelSupported(Platform, ERHIFeatureLevel::SM5);
+	}
+
+	static void ModifyCompilationEnvironment(EShaderPlatform Platform, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		FGlobalShader::ModifyCompilationEnvironment(Platform, OutEnvironment);
+		OutEnvironment.SetDefine(TEXT("THREAD_COUNT"), PARTICLE_BOUNDS_THREADS);
+		OutEnvironment.SetDefine(TEXT("TEXTURE_SIZE_X"), GParticleSimulationTextureSizeX);
+		OutEnvironment.SetDefine(TEXT("TEXTURE_SIZE_Y"), GParticleSimulationTextureSizeY);
+		OutEnvironment.CompilerFlags.Add(CFLAG_StandardOptimization);
+	}
+
+	/** Default constructor. */
+	FParticleGridDensityFillFrustumCS()
+	{
+	}
+
+	/** Initialization constructor. */
+	explicit FParticleGridDensityFillFrustumCS(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+		: FGlobalShader(Initializer)
+	{
+		InParticleIndices.Bind(Initializer.ParameterMap, TEXT("InParticleIndices"));
+		PositionTexture.Bind(Initializer.ParameterMap, TEXT("PositionTexture"));
+		PositionTextureSampler.Bind(Initializer.ParameterMap, TEXT("PositionTextureSampler"));
+		OutGridDensity.Bind(Initializer.ParameterMap, TEXT("OutGridDensity"));
+	}
+
+	/** Serialization. */
+	virtual bool Serialize(FArchive& Ar) override
+	{
+		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
+		Ar << InParticleIndices;
+		Ar << PositionTexture;
+		Ar << PositionTextureSampler;
+		Ar << OutGridDensity;
+		return bShaderHasOutdatedParameters;
+	}
+
+	void SetParameters(
+		FRHICommandList& RHICmdList,
+		const FGridDensityFrustumUniformBufferRef& GridDensityFrustumUniformBuffer,
+		const FGridDensityUniformBufferRef& GridDensityUniformBuffer,
+		FParticleBoundsUniformBufferRef& UniformBuffer,
+		FShaderResourceViewRHIParamRef InIndicesSRV,
+		FTexture2DRHIParamRef PositionTextureRHI
+		)
+	{
+		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
+
+		SetUniformBufferParameter(RHICmdList, ComputeShaderRHI, GetUniformBufferParameter<FGridDensityFrustumUniformParameters>(), GridDensityFrustumUniformBuffer);
+		SetUniformBufferParameter(RHICmdList, ComputeShaderRHI, GetUniformBufferParameter<FGridDensityUniformParameters>(), GridDensityUniformBuffer);
+		SetUniformBufferParameter(RHICmdList, ComputeShaderRHI, GetUniformBufferParameter<FParticleBoundsParameters>(), UniformBuffer);
+
+		if (InParticleIndices.IsBound())
+		{
+			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, InParticleIndices.GetBaseIndex(), InIndicesSRV);
+		}
+		if (PositionTexture.IsBound())
+		{
+			RHICmdList.SetShaderTexture(ComputeShaderRHI, PositionTexture.GetBaseIndex(), PositionTextureRHI);
+		}
+	}
+
+
+	/**
+	* Set output buffer for this shader.
+	*/
+	void SetOutput(FRHICommandList& RHICmdList, FUnorderedAccessViewRHIParamRef GridDensityUAV)
+	{
+		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
+		if (OutGridDensity.IsBound())
+		{
+			RHICmdList.SetUAVParameter(ComputeShaderRHI, OutGridDensity.GetBaseIndex(), GridDensityUAV);
+		}
+	}
+
+	/**
+	* Unbinds any buffers that have been bound.
+	*/
+	void UnbindBuffers(FRHICommandList& RHICmdList)
+	{
+		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
+
+		if (InParticleIndices.IsBound())
+		{
+			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, InParticleIndices.GetBaseIndex(), FShaderResourceViewRHIParamRef());
+		}
+		if (OutGridDensity.IsBound())
+		{
+			RHICmdList.SetUAVParameter(ComputeShaderRHI, OutGridDensity.GetBaseIndex(), FUnorderedAccessViewRHIParamRef());
+		}
+	}
+
+private:
+
+	/** Input buffer containing particle indices. */
+	FShaderResourceParameter InParticleIndices;
+	/** Texture containing particle positions. */
+	FShaderResourceParameter PositionTexture;
+	FShaderResourceParameter PositionTextureSampler;
+	FShaderResourceParameter OutGridDensity;
+};
+IMPLEMENT_SHADER_TYPE(, FParticleGridDensityFillFrustumCS, TEXT("ParticleGridDensityFrustumShaders"), TEXT("GridDensityFillFrustum"), SF_Compute);
+
+static void ComputeGridDensityFillFrustum(
+	FRHICommandList& RHICmdList,
+	ERHIFeatureLevel::Type FeatureLevel,
+	const FGridDensityFrustumUniformBufferRef& GridDensityFrustumUniformBuffer,
+	const FGridDensityUniformBufferRef& GridDensityUniformBuffer,
+	FShaderResourceViewRHIParamRef VertexBufferSRV,
+	FTexture2DRHIParamRef PositionTextureRHI,
+	FUnorderedAccessViewRHIParamRef GridDensityUAV,
+	int32 ParticleCount)
+{
+	FParticleBoundsParameters Parameters;
+	FParticleBoundsUniformBufferRef UniformBuffer;
+
+	if (ParticleCount > 0 && GMaxRHIFeatureLevel == ERHIFeatureLevel::SM5)
+	{
+		// Determine how to break the work up over individual work groups.
+		const uint32 MaxGroupCount = 128;
+		const uint32 AlignedParticleCount = ((ParticleCount + PARTICLE_BOUNDS_THREADS - 1) & (~(PARTICLE_BOUNDS_THREADS - 1)));
+		const uint32 ChunkCount = AlignedParticleCount / PARTICLE_BOUNDS_THREADS;
+		const uint32 GroupCount = FMath::Clamp<uint32>(ChunkCount, 1, MaxGroupCount);
+
+		// Create the uniform buffer.
+		Parameters.ChunksPerGroup = ChunkCount / GroupCount;
+		Parameters.ExtraChunkCount = ChunkCount % GroupCount;
+		Parameters.ParticleCount = ParticleCount;
+		UniformBuffer = FParticleBoundsUniformBufferRef::CreateUniformBufferImmediate(Parameters, UniformBuffer_SingleFrame);
+
+		// Grab the shader.
+		TShaderMapRef<FParticleGridDensityFillFrustumCS> GridDensityFillFrustumCS(GetGlobalShaderMap(FeatureLevel));
+		RHICmdList.SetComputeShader(GridDensityFillFrustumCS->GetComputeShader());
+		// Dispatch shader to compute bounds.
+		GridDensityFillFrustumCS->SetParameters(RHICmdList,
+			GridDensityFrustumUniformBuffer,
+			GridDensityUniformBuffer,
+			UniformBuffer,
+			VertexBufferSRV,
+			PositionTextureRHI);
+		GridDensityFillFrustumCS->SetOutput(RHICmdList, GridDensityUAV);
+		DispatchComputeShader(
+			RHICmdList,
+			*GridDensityFillFrustumCS,
+			GroupCount,
+			1,
+			1);
+		GridDensityFillFrustumCS->UnbindBuffers(RHICmdList);
+	}
+}
+
+class FParticleGridDensityLowPassCS : public FGlobalShader
+{
+	DECLARE_SHADER_TYPE(FParticleGridDensityLowPassCS, Global);
+public:
+
+	static bool ShouldCache(EShaderPlatform Platform)
+	{
+		return IsFeatureLevelSupported(Platform, ERHIFeatureLevel::SM5);
+	}
+
+	static void ModifyCompilationEnvironment(EShaderPlatform Platform, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		FGlobalShader::ModifyCompilationEnvironment(Platform, OutEnvironment);
+		OutEnvironment.SetDefine(TEXT("THREADS_NUM"), PARTICLE_BOUNDS_THREADS);
+	}
+
+	/** Default constructor. */
+	FParticleGridDensityLowPassCS()
+	{
+	}
+
+	/** Initialization constructor. */
+	explicit FParticleGridDensityLowPassCS(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+		: FGlobalShader(Initializer)
+	{
+		InGridDensity.Bind(Initializer.ParameterMap, TEXT("InGridDensity"));
+		OutGridDensityLowPass.Bind(Initializer.ParameterMap, TEXT("OutGridDensityLowPass"));
+	}
+
+	/** Serialization. */
+	virtual bool Serialize(FArchive& Ar) override
+	{
+		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
+		Ar << InGridDensity;
+		Ar << OutGridDensityLowPass;
+		return bShaderHasOutdatedParameters;
+	}
+
+	/**
+	* Set parameters for this shader.
+	*/
+	void SetParameters(
+		FRHICommandList& RHICmdList,
+		const FGridDensityUniformBufferRef& UniformBuffer,
+		FShaderResourceViewRHIParamRef InGridDensitySRV)
+	{
+		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
+
+		SetUniformBufferParameter(RHICmdList, ComputeShaderRHI, GetUniformBufferParameter<FGridDensityUniformParameters>(), UniformBuffer);
+
+		if (InGridDensity.IsBound())
+		{
+			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, InGridDensity.GetBaseIndex(), InGridDensitySRV);
+		}
+	}
+
+	/**
+	* Set output buffer for this shader.
+	*/
+	void SetOutput(FRHICommandList& RHICmdList, FUnorderedAccessViewRHIParamRef GridDensityLowPassUAV)
+	{
+		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
+		if (OutGridDensityLowPass.IsBound())
+		{
+			RHICmdList.SetUAVParameter(ComputeShaderRHI, OutGridDensityLowPass.GetBaseIndex(), GridDensityLowPassUAV);
+		}
+	}
+
+	/**
+	* Unbinds any buffers that have been bound.
+	*/
+	void UnbindBuffers(FRHICommandList& RHICmdList)
+	{
+		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
+
+		if (InGridDensity.IsBound())
+		{
+			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, InGridDensity.GetBaseIndex(), FShaderResourceViewRHIParamRef());
+		}
+		if (OutGridDensityLowPass.IsBound())
+		{
+			RHICmdList.SetUAVParameter(ComputeShaderRHI, OutGridDensityLowPass.GetBaseIndex(), FUnorderedAccessViewRHIParamRef());
+		}
+	}
+
+private:
+
+	/** Texture containing particle positions. */
+	FShaderResourceParameter InGridDensity;
+
+	FShaderResourceParameter OutGridDensityLowPass;
+};
+IMPLEMENT_SHADER_TYPE(, FParticleGridDensityLowPassCS, TEXT("ParticleGridDensityShaders"), TEXT("GridDensityLowPass"), SF_Compute);
+
+class FParticleGridDensityApplyFrustumCS : public FGlobalShader
+{
+	DECLARE_SHADER_TYPE(FParticleGridDensityApplyFrustumCS, Global);
+public:
+
+	static bool ShouldCache(EShaderPlatform Platform)
+	{
+		return IsFeatureLevelSupported(Platform, ERHIFeatureLevel::SM5);
+	}
+
+	static void ModifyCompilationEnvironment(EShaderPlatform Platform, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		FGlobalShader::ModifyCompilationEnvironment(Platform, OutEnvironment);
+		OutEnvironment.SetDefine(TEXT("THREAD_COUNT"), PARTICLE_BOUNDS_THREADS);
+		OutEnvironment.SetDefine(TEXT("TEXTURE_SIZE_X"), GParticleSimulationTextureSizeX);
+		OutEnvironment.SetDefine(TEXT("TEXTURE_SIZE_Y"), GParticleSimulationTextureSizeY);
+		OutEnvironment.CompilerFlags.Add(CFLAG_StandardOptimization);
+	}
+
+	/** Default constructor. */
+	FParticleGridDensityApplyFrustumCS()
+	{
+	}
+
+	/** Initialization constructor. */
+	explicit FParticleGridDensityApplyFrustumCS(const ShaderMetaType::CompiledShaderInitializerType& Initializer)
+		: FGlobalShader(Initializer)
+	{
+		InParticleIndices.Bind(Initializer.ParameterMap, TEXT("InParticleIndices"));
+		PositionTexture.Bind(Initializer.ParameterMap, TEXT("PositionTexture"));
+		PositionTextureSampler.Bind(Initializer.ParameterMap, TEXT("PositionTextureSampler"));
+		InGridDensity.Bind(Initializer.ParameterMap, TEXT("InGridDensity"));
+		OutDensityTexture.Bind(Initializer.ParameterMap, TEXT("OutDensityTexture"));
+	}
+
+	/** Serialization. */
+	virtual bool Serialize(FArchive& Ar) override
+	{
+		bool bShaderHasOutdatedParameters = FGlobalShader::Serialize(Ar);
+		Ar << InParticleIndices;
+		Ar << PositionTexture;
+		Ar << PositionTextureSampler;
+		Ar << InGridDensity;
+		Ar << OutDensityTexture;
+		return bShaderHasOutdatedParameters;
+	}
+
+	void SetParameters(
+		FRHICommandList& RHICmdList,
+		const FGridDensityFrustumUniformBufferRef& GridDensityFrustumUniformBuffer,
+		const FGridDensityUniformBufferRef& GridDensityUniformBuffer,
+		FParticleBoundsUniformBufferRef& UniformBuffer,
+		FShaderResourceViewRHIParamRef InIndicesSRV,
+		FTexture2DRHIParamRef PositionTextureRHI,
+		FShaderResourceViewRHIParamRef InGridDensitySRV
+		)
+	{
+		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
+
+		SetUniformBufferParameter(RHICmdList, ComputeShaderRHI, GetUniformBufferParameter<FGridDensityFrustumUniformParameters>(), GridDensityFrustumUniformBuffer);
+		SetUniformBufferParameter(RHICmdList, ComputeShaderRHI, GetUniformBufferParameter<FGridDensityUniformParameters>(), GridDensityUniformBuffer);
+		SetUniformBufferParameter(RHICmdList, ComputeShaderRHI, GetUniformBufferParameter<FParticleBoundsParameters>(), UniformBuffer);
+
+		if (InParticleIndices.IsBound())
+		{
+			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, InParticleIndices.GetBaseIndex(), InIndicesSRV);
+		}
+		if (PositionTexture.IsBound())
+		{
+			RHICmdList.SetShaderTexture(ComputeShaderRHI, PositionTexture.GetBaseIndex(), PositionTextureRHI);
+		}
+		if (InGridDensity.IsBound())
+		{
+			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, InGridDensity.GetBaseIndex(), InGridDensitySRV);
+		}
+	}
+
+
+	/**
+	* Set output buffer for this shader.
+	*/
+	void SetOutput(FRHICommandList& RHICmdList, FUnorderedAccessViewRHIParamRef DensityTextureUAV)
+	{
+		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
+		if (OutDensityTexture.IsBound())
+		{
+			RHICmdList.SetUAVParameter(ComputeShaderRHI, OutDensityTexture.GetBaseIndex(), DensityTextureUAV);
+		}
+	}
+
+	/**
+	* Unbinds any buffers that have been bound.
+	*/
+	void UnbindBuffers(FRHICommandList& RHICmdList)
+	{
+		FComputeShaderRHIParamRef ComputeShaderRHI = GetComputeShader();
+
+		if (InParticleIndices.IsBound())
+		{
+			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, InParticleIndices.GetBaseIndex(), FShaderResourceViewRHIParamRef());
+		}
+
+		if (InGridDensity.IsBound())
+		{
+			RHICmdList.SetShaderResourceViewParameter(ComputeShaderRHI, InGridDensity.GetBaseIndex(), FShaderResourceViewRHIParamRef());
+		}
+
+		if (OutDensityTexture.IsBound())
+		{
+			RHICmdList.SetUAVParameter(ComputeShaderRHI, OutDensityTexture.GetBaseIndex(), FUnorderedAccessViewRHIParamRef());
+		}
+	}
+
+private:
+
+	/** Input buffer containing particle indices. */
+	FShaderResourceParameter InParticleIndices;
+	/** Texture containing particle positions. */
+	FShaderResourceParameter PositionTexture;
+	FShaderResourceParameter PositionTextureSampler;
+	FShaderResourceParameter InGridDensity;
+
+	FShaderResourceParameter OutDensityTexture;
+};
+IMPLEMENT_SHADER_TYPE(, FParticleGridDensityApplyFrustumCS, TEXT("ParticleGridDensityFrustumShaders"), TEXT("GridDensityApplyFrustum"), SF_Compute);
+
+static void ComputeGridDensityApplyFrustum(
+	FRHICommandList& RHICmdList,
+	ERHIFeatureLevel::Type FeatureLevel,
+	const FGridDensityFrustumUniformBufferRef& GridDensityFrustumUniformBuffer,
+	const FGridDensityUniformBufferRef& GridDensityUniformBuffer,
+	FShaderResourceViewRHIParamRef VertexBufferSRV,
+	FTexture2DRHIParamRef PositionTextureRHI,
+	FShaderResourceViewRHIParamRef GridDensitySRV,
+	FUnorderedAccessViewRHIParamRef DensityTextureUAV,
+	int32 ParticleCount)
+{
+	FParticleBoundsParameters Parameters;
+	FParticleBoundsUniformBufferRef UniformBuffer;
+
+	if (ParticleCount > 0 && GMaxRHIFeatureLevel == ERHIFeatureLevel::SM5)
+	{
+		// Determine how to break the work up over individual work groups.
+		const uint32 MaxGroupCount = 128;
+		const uint32 AlignedParticleCount = ((ParticleCount + PARTICLE_BOUNDS_THREADS - 1) & (~(PARTICLE_BOUNDS_THREADS - 1)));
+		const uint32 ChunkCount = AlignedParticleCount / PARTICLE_BOUNDS_THREADS;
+		const uint32 GroupCount = FMath::Clamp<uint32>(ChunkCount, 1, MaxGroupCount);
+
+		// Create the uniform buffer.
+		Parameters.ChunksPerGroup = ChunkCount / GroupCount;
+		Parameters.ExtraChunkCount = ChunkCount % GroupCount;
+		Parameters.ParticleCount = ParticleCount;
+		UniformBuffer = FParticleBoundsUniformBufferRef::CreateUniformBufferImmediate(Parameters, UniformBuffer_SingleFrame);
+
+		// Grab the shader.
+		TShaderMapRef<FParticleGridDensityApplyFrustumCS> GridDensityApplyFrustumCS(GetGlobalShaderMap(FeatureLevel));
+		RHICmdList.SetComputeShader(GridDensityApplyFrustumCS->GetComputeShader());
+		// Dispatch shader to compute bounds.
+		GridDensityApplyFrustumCS->SetParameters(RHICmdList,
+			GridDensityFrustumUniformBuffer,
+			GridDensityUniformBuffer,
+			UniformBuffer,
+			VertexBufferSRV,
+			PositionTextureRHI,
+			GridDensitySRV);
+		GridDensityApplyFrustumCS->SetOutput(RHICmdList, DensityTextureUAV);
+		DispatchComputeShader(
+			RHICmdList,
+			*GridDensityApplyFrustumCS,
+			GroupCount,
+			1,
+			1);
+		GridDensityApplyFrustumCS->UnbindBuffers(RHICmdList);
+	}
+}
+// NVCHANGE_END: JCAO - Grid Density with GPU particles
+
 /*-----------------------------------------------------------------------------
 	Per-emitter GPU particle simulation.
 -----------------------------------------------------------------------------*/
@@ -2285,6 +3043,22 @@ public:
 	}
 };
 
+// NVCHANGE_BEGIN: JCAO - Field Sampler Module for GPU particle
+#if WITH_APEX_TURBULENCE
+struct FFieldSamplerResources
+{
+	FApexFieldSamplerActor* Actor;
+	FFieldSamplerInstance*	Instance;
+
+	FFieldSamplerResources()
+		: Actor(NULL)
+		, Instance(NULL)
+	{
+	}
+};
+#endif
+// NVCHANGE_END: JCAO - Field Sampler Module for GPU particle
+
 /**
  * Resources for simulating a set of particles on the GPU.
  */
@@ -2296,6 +3070,16 @@ public:
 	FParticleTileVertexBuffer TileVertexBuffer;
 	/** The per-emitter simulation resources. */
 	const FParticleEmitterSimulationResources* EmitterSimulationResources;
+
+	// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+	/** the per-emitter grid density resources. */
+	const FParticleGridDensityResource* GridDensityResource;
+	/** if the view updated? */
+	bool bViewMatricesUpdated;
+	/** view matrices for the per-emitter. */
+	FViewMatrices ViewMatrices;
+	// NVCHANGE_END: JCAO - Grid Density with GPU particles
+
 	/** The per-frame simulation uniform buffer. */
 	FParticlePerFrameSimulationParameters PerFrameSimulationParameters;
 	/** Bounds for particles in the simulation. */
@@ -2332,6 +3116,12 @@ public:
 	bool bReleased_GameThread;
 	bool bDestroyed_GameThread;
 
+	// NVCHANGE_BEGIN: JCAO - Field Sampler Module for GPU particle
+#if WITH_APEX_TURBULENCE
+	TArray<FFieldSamplerResources>	LocalFieldSamplers;
+#endif // WITH_APEX_TURBULENCE
+	// NVCHANGE_END: JCAO - Field Sampler Module for GPU particle
+
 	/** Default constructor. */
 	FParticleSimulationGPU()
 		: EmitterSimulationResources(NULL)
@@ -2343,6 +3133,10 @@ public:
 		, bDirty_GameThread(true)
 		, bReleased_GameThread(true)
 		, bDestroyed_GameThread(false)
+		// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+		, GridDensityResource(NULL)
+		, bViewMatricesUpdated(false)
+		// NVCHANGE_END: JCAO - Grid Density with GPU particles
 	{
 	}
 
@@ -2358,15 +3152,26 @@ public:
 	 * @param Tiles							The list of tiles to include in the simulation.
 	 * @param InEmitterSimulationResources	The emitter resources used by this simulation.
 	 */
-	void InitResources(const TArray<uint32>& Tiles, const FParticleEmitterSimulationResources* InEmitterSimulationResources)
+	// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+	void InitResources(const TArray<uint32>& Tiles, const FParticleEmitterSimulationResources* InEmitterSimulationResources, const FParticleGridDensityResource* InGridDensityResource)
 	{
 		check(InEmitterSimulationResources);
+
+		struct FInitResources
+		{
+			const FParticleEmitterSimulationResources* InEmitterSimulationResources;
+			const FParticleGridDensityResource* InGridDensityResource;
+		};
+
+		FInitResources InitResources;
+		InitResources.InEmitterSimulationResources = InEmitterSimulationResources;
+		InitResources.InGridDensityResource = InGridDensityResource;
 
 		ENQUEUE_UNIQUE_RENDER_COMMAND_THREEPARAMETER(
 			FInitParticleSimulationGPUCommand,
 			FParticleSimulationGPU*, Simulation, this,
 			TArray<uint32>, Tiles, Tiles,
-			const FParticleEmitterSimulationResources*, InEmitterSimulationResources, InEmitterSimulationResources,
+			FInitResources, InitResources, InitResources,
 		{
 			// Release vertex buffers.
 			Simulation->VertexBuffer.ReleaseResource();
@@ -2377,7 +3182,10 @@ public:
 			Simulation->TileVertexBuffer.Init(Tiles);
 
 			// Store simulation resources for this emitter.
-			Simulation->EmitterSimulationResources = InEmitterSimulationResources;
+			Simulation->EmitterSimulationResources = InitResources.InEmitterSimulationResources;
+
+			// store grid density resource
+			Simulation->GridDensityResource = InitResources.InGridDensityResource;
 
 			// If a visualization vertex factory has been created, initialize it.
 			if (Simulation->VectorFieldVisualizationVertexFactory)
@@ -2388,6 +3196,7 @@ public:
 		bDirty_GameThread = false;
 		bReleased_GameThread = false;
 	}
+	// NVCHANGE_END: JCAO - Grid Density with GPU particles
 
 	/**
 	 * Create and initializes a visualization vertex factory if needed.
@@ -2441,6 +3250,158 @@ public:
 		});
 	}
 
+	// NVCHANGE_BEGIN: JCAO - Field Sampler Module for GPU particle
+#if WITH_APEX_TURBULENCE
+	void InitLocalFieldSamplers(FPhysScene* InPhysScene, uint32 SceneType, UParticleSystemComponent* InComponent, FFXSystem* FXSystem, TArray<FGPUSpriteLocalFieldSamplerInfo>& LocalFieldSamplerInfo)
+	{
+		if (LocalFieldSamplers.Num() > 0)
+		{
+			// Only create once.
+			return;
+		}
+
+		for (int32 FieldSamplerIndex = 0; FieldSamplerIndex < LocalFieldSamplerInfo.Num(); ++FieldSamplerIndex)
+		{
+			FGPUSpriteLocalFieldSamplerInfo& FieldSamplerInfo = LocalFieldSamplerInfo[FieldSamplerIndex];
+
+			FFieldSamplerResources Resource;
+
+			if (FieldSamplerInfo.FieldSamplerAsset)
+			{
+				FMatrix LocalToWorld = FieldSamplerInfo.Transform.ToMatrixWithScale() * InComponent->ComponentToWorld.ToMatrixWithScale();
+
+				switch (FieldSamplerInfo.FieldSamplerAsset->GetType())
+				{
+				case EFieldSamplerAssetType::EFSAT_ATTRACTOR:
+				{
+					UAttractorAsset* AttractorAsset = Cast<UAttractorAsset>(FieldSamplerInfo.FieldSamplerAsset);
+					FAttractorFSInstance* Instance = new FAttractorFSInstance();
+
+					Instance->FSType = EFieldSamplerAssetType::EFSAT_ATTRACTOR;
+					Instance->WorldBounds = FBox::BuildAABB(LocalToWorld.GetOrigin(), FVector(AttractorAsset->Radius));
+					Instance->Origin = LocalToWorld.GetOrigin();
+					Instance->Radius = AttractorAsset->Radius;
+					Instance->ConstFieldStrength = AttractorAsset->ConstFieldStrength;
+					Instance->VariableFieldStrength = AttractorAsset->VariableFieldStrength;
+					Instance->bEnabled = true;
+
+					Resource.Instance = Instance;
+				}
+				break;
+				case EFieldSamplerAssetType::EFSAT_JET:
+				{
+					FApexJetActor* JetActor = new FApexJetActor(NULL, InPhysScene, SceneType, FieldSamplerInfo.FieldSamplerAsset);
+					UJetAsset* JetAsset = Cast<UJetAsset>(FieldSamplerInfo.FieldSamplerAsset);
+					JetActor->bEnabled = true;
+					JetActor->FieldStrength = JetAsset->FieldStrength;
+					JetActor->UpdateApexActor();
+					JetActor->UpdatePosition(LocalToWorld);
+
+					Resource.Actor = JetActor;
+				}
+				break;
+				case EFieldSamplerAssetType::EFSAT_GRID:
+				{
+					FApexTurbulenceActor* TurbActor = new FApexTurbulenceActor(NULL, InPhysScene, SceneType, FieldSamplerInfo.FieldSamplerAsset);
+					UGridAsset* GridAsset = Cast<UGridAsset>(FieldSamplerInfo.FieldSamplerAsset);
+
+					TurbActor->bEnabled = true;
+					TurbActor->UpdateApexActor();
+					TurbActor->UpdatePosition(LocalToWorld);
+
+					FTurbulenceFSInstance* Instance = new FTurbulenceFSInstance();
+					Instance->TurbulenceFSActor = static_cast<FApexTurbulenceActor*>(TurbActor);
+					Instance->FSType = EFieldSamplerAssetType::EFSAT_GRID;
+					Instance->WorldBounds = FBox::BuildAABB(LocalToWorld.GetOrigin(), GridAsset->GridSize3D * (GridAsset->GridScale * 0.5f));
+					Instance->LocalBounds = FBox::BuildAABB(FVector::ZeroVector, GridAsset->GridSize3D * (GridAsset->GridScale * 0.5f));
+					Instance->VelocityMultiplier = GridAsset->FieldVelocityMultiplier;
+					Instance->VelocityWeight = GridAsset->FieldVelocityWeight;
+					Instance->bEnabled = true;
+
+					Resource.Actor = TurbActor;
+					Resource.Instance = Instance;
+				}
+				break;
+				case EFieldSamplerAssetType::EFSAT_NOISE:
+				{
+					UNoiseAsset* NoiseAsset = Cast<UNoiseAsset>(FieldSamplerInfo.FieldSamplerAsset);
+					if (NoiseAsset->FieldType == EFieldType::FORCE)
+					{
+						FNoiseFSInstance* Instance = new FNoiseFSInstance();
+						Instance->FSType = EFieldSamplerAssetType::EFSAT_NOISE;
+						Instance->WorldBounds = FBox::BuildAABB(LocalToWorld.GetOrigin(), NoiseAsset->BoundarySize * (NoiseAsset->BoundaryScale * 0.5f));
+
+						Instance->NoiseSpaceFreq = FVector(1.0f / NoiseAsset->NoiseSpacePeriod.X, 1.0f / NoiseAsset->NoiseSpacePeriod.Y, 1.0f / NoiseAsset->NoiseSpacePeriod.Z);
+						Instance->NoiseSpaceFreqOctaveMultiplier = FVector(1.0f / NoiseAsset->NoiseSpacePeriodOctaveMultiplier.X, 1.0f / NoiseAsset->NoiseSpacePeriodOctaveMultiplier.Y, 1.0f / NoiseAsset->NoiseSpacePeriodOctaveMultiplier.Z);
+						Instance->NoiseStrength = NoiseAsset->NoiseStrength;
+						Instance->NoiseTimeFreq = 1.0f / NoiseAsset->NoiseTimePeriod;
+						Instance->NoiseStrengthOctaveMultiplier = NoiseAsset->NoiseStrengthOctaveMultiplier;
+						Instance->NoiseTimeFreqOctaveMultiplier = 1.0f / NoiseAsset->NoiseTimePeriodOctaveMultiplier;
+						Instance->NoiseOctaves = NoiseAsset->NoiseOctaves;
+						Instance->NoiseType = NoiseAsset->NoiseType;
+						Instance->NoiseSeed = NoiseAsset->NoiseSeed;
+						Instance->bEnabled = true;
+
+						Resource.Instance = Instance;
+					}
+					else
+					{
+						FApexNoiseActor* NoiseActor = new FApexNoiseActor(NULL, InPhysScene, SceneType, FieldSamplerInfo.FieldSamplerAsset);
+						NoiseActor->bEnabled = true;
+						NoiseActor->NoiseStrength = NoiseAsset->NoiseStrength;
+						NoiseActor->UpdateApexActor();
+						NoiseActor->UpdatePosition(LocalToWorld);
+
+						Resource.Actor = NoiseActor;
+					}
+				}
+				break;
+				case EFieldSamplerAssetType::EFSAT_VORTEX:
+				{
+					FApexVortexActor* VortexActor = new FApexVortexActor(NULL, InPhysScene, SceneType, FieldSamplerInfo.FieldSamplerAsset);
+					UVortexAsset* VortexAsset = Cast<UVortexAsset>(FieldSamplerInfo.FieldSamplerAsset);
+					VortexActor->bEnabled = true;
+					VortexActor->RotationalFieldStrength = VortexAsset->RotationalFieldStrength;
+					VortexActor->RadialFieldStrength = VortexAsset->RadialFieldStrength;
+					VortexActor->LiftFieldStrength = VortexAsset->LiftFieldStrength;
+					VortexActor->UpdateApexActor();
+					VortexActor->UpdatePosition(LocalToWorld);
+
+					Resource.Actor = VortexActor;
+				}
+				break;
+				}
+
+				if (FXSystem && Resource.Instance)
+				{
+					FXSystem->AddFieldSampler(Resource.Instance, LocalToWorld);
+				}
+			}
+			LocalFieldSamplers.Add(Resource);
+		}
+	}
+
+	void DestroyLocalFieldSampler(FFXSystem* FXSystem)
+	{
+		for (int32 FieldSamplerIndex = 0; FieldSamplerIndex < LocalFieldSamplers.Num(); ++FieldSamplerIndex)
+		{
+			if (FXSystem && LocalFieldSamplers[FieldSamplerIndex].Instance)
+			{
+				FXSystem->RemoveFieldSampler(LocalFieldSamplers[FieldSamplerIndex].Instance);
+				LocalFieldSamplers[FieldSamplerIndex].Instance = NULL;
+			}
+
+			if (LocalFieldSamplers[FieldSamplerIndex].Actor)
+			{
+				LocalFieldSamplers[FieldSamplerIndex].Actor->DeferredRelease();
+				LocalFieldSamplers[FieldSamplerIndex].Actor = NULL;
+			}
+		}
+		LocalFieldSamplers.Empty();
+	}
+#endif
+	// NVCHANGE_END: JCAO - Field Sampler Module for GPU particle
+
 private:
 
 	/**
@@ -2483,6 +3444,14 @@ public:
 	FGPUSpriteEmitterUniformParameters UniformParameters;
 	/** Emitter uniform parameters used for simulation. */
 	FParticleSimulationParameters SimulationParameters;
+	// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+	/** Grid Density Resource */
+	FParticleGridDensityResource		GridDensityResource;
+	/** Texel allocation for the color curve. */
+	FTexelAllocation DensityColorTexelAllocation;
+	/** Texel allocation for the size curve. */
+	FTexelAllocation DensitySizeTexelAllocation;
+	// NVCHANGE_END: JCAO - Grid Density with GPU particles
 
 	/**
 	 * Initialize RHI resources.
@@ -2492,6 +3461,14 @@ public:
 		UniformBuffer = FGPUSpriteEmitterUniformBufferRef::CreateUniformBufferImmediate( UniformParameters, UniformBuffer_MultiFrame );
 		EmitterSimulationResources.SimulationUniformBuffer =
 			FParticleSimulationBufferRef::CreateUniformBufferImmediate( SimulationParameters, UniformBuffer_MultiFrame );
+
+		// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+		// only init the resource when grid resolution is not zero.
+		if (GridDensityResource.GridResolution > 0)
+		{
+			GridDensityResource.InitRHI();
+		}
+		// NVCHANGE_END: JCAO - Grid Density with GPU particles
 	}
 
 	/**
@@ -2499,6 +3476,10 @@ public:
 	 */
 	virtual void ReleaseRHI() override
 	{
+		// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+		GridDensityResource.ReleaseRHI();
+		// NVCHANGE_END: JCAO - Grid Density with GPU particles
+
 		UniformBuffer.SafeRelease();
 		EmitterSimulationResources.SimulationUniformBuffer.SafeRelease();
 	}
@@ -2555,6 +3536,12 @@ struct FGPUSpriteDynamicEmitterData : FDynamicEmitterDataBase
 	/** Tile vector field in z axis? */
 	uint32 bLocalVectorFieldTileZ : 1;
 
+	// NVCHANGE_BEGIN: JCAO - Field Sampler Module for GPU particle
+#if WITH_APEX_TURBULENCE
+	TArray<FMatrix> LocalFieldSamplersToWorld;
+#endif
+	// NVCHANGE_END: JCAO - Field Sampler Module for GPU particle
+
 
 	/** Constructor. */
 	explicit FGPUSpriteDynamicEmitterData( const UParticleModuleRequired* InRequiredModule )
@@ -2596,6 +3583,21 @@ struct FGPUSpriteDynamicEmitterData : FDynamicEmitterDataBase
 		{
 			Simulation->LocalVectorField.UpdateTransforms(LocalVectorFieldToWorld);
 		}
+
+		// NVCHANGE_BEGIN: JCAO - Field Sampler Module for GPU particle
+#if WITH_APEX_TURBULENCE
+		// Update local field sampler world bound and transform.
+		for (int32 FieldSamplerIndex = 0; FieldSamplerIndex < Simulation->LocalFieldSamplers.Num(); ++FieldSamplerIndex)
+		{
+			if (Simulation->LocalFieldSamplers[FieldSamplerIndex].Instance)
+			{
+				FVector Extent = Simulation->LocalFieldSamplers[FieldSamplerIndex].Instance->WorldBounds.GetExtent();
+				Simulation->LocalFieldSamplers[FieldSamplerIndex].Instance->WorldBounds = FBox::BuildAABB(LocalFieldSamplersToWorld[FieldSamplerIndex].GetOrigin(), Extent);
+				Simulation->LocalFieldSamplers[FieldSamplerIndex].Instance->UpdateTransforms(LocalFieldSamplersToWorld[FieldSamplerIndex]);
+			}
+		}
+#endif
+		// NVCHANGE_END: JCAO - Field Sampler Module for GPU particle	
 
 		// Update world bounds.
 		Simulation->Bounds = SimulationBounds;
@@ -2714,6 +3716,20 @@ struct FGPUSpriteDynamicEmitterData : FDynamicEmitterDataBase
 					VertexFactory.VelocityTextureRHI = StateTextures.VelocityTextureRHI;
 					VertexFactory.AttributesTextureRHI = ParticleSimulationResources->RenderAttributesTexture.TextureRHI;
 
+					// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+					if (GMaxRHIFeatureLevel == ERHIFeatureLevel::SM5 && Simulation->GridDensityResource->IsValid())
+					{
+						Simulation->ViewMatrices = View->ViewMatrices;
+						Simulation->bViewMatricesUpdated = true;
+						VertexFactory.DensityTextureRHI = StateTextures.DensityTextureRHI;
+					}
+					else
+					{
+						// if grid density isn't enabled, do not pass the density texture to sprite shader.
+						VertexFactory.DensityTextureRHI = FTexture2DRHIParamRef();
+					}
+					// NVCHANGE_END: JCAO - Grid Density with GPU particles
+
 					FMeshBatch& Mesh = Collector.AllocateMesh();
 					FMeshBatchElement& BatchElement = Mesh.Elements[0];
 					BatchElement.IndexBuffer = &GParticleIndexBuffer;
@@ -2824,6 +3840,10 @@ class FGPUSpriteParticleEmitterInstance : public FParticleEmitterInstance
 	/** The number of times this emitter should loop. */
 	int32 AllowedLoopCount;
 
+	// NVCHANGE_BEGIN: JCAO - Support Force Type Noise
+	float PendingTotalSeconds;
+	// NVCHANGE_END: JCAO - Support Force Type Noise
+
 	/**
 	 * Information used to spawn particles.
 	 */
@@ -2857,6 +3877,9 @@ public:
 		, TileToAllocateFrom(INDEX_NONE)
 		, FreeParticlesInTile(0)
 		, AllowedLoopCount(0)
+		// NVCHANGE_BEGIN: JCAO - Support Force Type Noise
+		, PendingTotalSeconds(0.0f)
+		// NVCHANGE_END: JCAO - Support Force Type Noise
 	{
 		Simulation = new FParticleSimulationGPU();
 		if (EmitterInfo.LocalVectorField.Field)
@@ -2880,6 +3903,12 @@ public:
 	virtual ~FGPUSpriteParticleEmitterInstance()
 	{
 		ReleaseSimulationResources();
+		// NVCHANGE_BEGIN: JCAO - Field Sampler Module for GPU particle
+#if WITH_APEX_TURBULENCE
+		// Destroy Field Sampler after Simulation was remove from Render thread.
+		Simulation->DestroyLocalFieldSampler(FXSystem);
+#endif
+		// NVCHANGE_END: JCAO - Field Sampler Module for GPU particle
 		Simulation->Destroy();
 		Simulation = NULL;
 
@@ -2951,6 +3980,22 @@ public:
 		DynamicData->bSelected = bSelected;
 		DynamicData->bUseLocalSpace = EmitterInfo.RequiredModule->bUseLocalSpace;
 
+		// NVCHANGE_BEGIN: JCAO - Field Sampler Module for GPU particle
+#if WITH_APEX_TURBULENCE
+		// Update world matrix for local field sampler
+		for (int32 FieldSamplerIndex = 0; FieldSamplerIndex < EmitterInfo.LocalFieldSamplers.Num(); ++FieldSamplerIndex)
+		{
+			const FMatrix LocalToWorld = EmitterInfo.LocalFieldSamplers[FieldSamplerIndex].Transform.ToMatrixWithScale() * Component->ComponentToWorld.ToMatrixWithScale();
+			DynamicData->LocalFieldSamplersToWorld.Add(LocalToWorld);
+
+			if (Simulation->LocalFieldSamplers[FieldSamplerIndex].Actor)
+			{
+				Simulation->LocalFieldSamplers[FieldSamplerIndex].Actor->UpdatePosition(LocalToWorld);
+			}
+		}
+#endif
+		// NVCHANGE_END: JCAO - Field Sampler Module for GPU particle
+
 		// Account for LocalToWorld scaling
 		FVector ComponentScale = Component->ComponentToWorld.GetScale3D();
 		// Figure out if we need to replicate the X channel of size to Y.
@@ -3014,6 +4059,9 @@ public:
 			DynamicData->PerFrameSimulationParameters.PositionOffsetAndAttractorStrength = FVector4(PositionOffsetThisTick, PointAttractorStrength);
 			DynamicData->PerFrameSimulationParameters.LocalToWorldScale = DynamicData->EmitterDynamicParameters.LocalToWorldScale;
 			DynamicData->PerFrameSimulationParameters.DeltaSeconds = PendingDeltaSeconds;
+			// NVCHANGE_BEGIN: JCAO - Support Force Type Noise
+			DynamicData->PerFrameSimulationParameters.TotalSeconds = PendingTotalSeconds;
+			// NVCHANGE_END: JCAO - Support Force Type Noise
 			Exchange(DynamicData->TilesToClear, TilesToClear);
 			Exchange(DynamicData->NewParticles, NewParticles);
 		}
@@ -3024,7 +4072,9 @@ public:
 
 		if (Simulation->bDirty_GameThread)
 		{
-			Simulation->InitResources(AllocatedTiles, &EmitterInfo.Resources->EmitterSimulationResources);
+			// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+			Simulation->InitResources(AllocatedTiles, &EmitterInfo.Resources->EmitterSimulationResources, &EmitterInfo.Resources->GridDensityResource);
+			// NVCHANGE_END: JCAO - Grid Density with GPU particles
 		}
 		check(!Simulation->bReleased_GameThread);
 		check(!Simulation->bDestroyed_GameThread);
@@ -3039,6 +4089,14 @@ public:
 	{
 		FParticleEmitterInstance::InitParameters( InTemplate, InComponent, bClearResources );
 		SetupEmitterDuration();
+
+		// NVCHANGE_BEGIN: JCAO - Field Sampler Module for GPU particle
+#if WITH_APEX_TURBULENCE
+		FPhysScene* PhysScene = InComponent->GetWorld()->GetPhysicsScene();
+		bool bIsCascade = (Component->GetClass()->GetName() == TEXT("CascadeParticleSystemComponent"));
+		Simulation->InitLocalFieldSamplers(PhysScene, bIsCascade ? PST_Sync : PST_Async, Component, FXSystem, EmitterInfo.LocalFieldSamplers);
+#endif
+		// NVCHANGE_END: JCAO - Field Sampler Module for GPU particle
 	}
 
 	/**
@@ -3148,6 +4206,12 @@ public:
 		// Update modules
 		Tick_ModuleUpdate(DeltaSeconds, LODLevel);
 
+		// NVCHANGE_BEGIN: JCAO - Field Sampler Module for GPU particle
+#if WITH_APEX_TURBULENCE
+		Tick_LocalFieldSampler(DeltaSeconds);
+#endif
+		// NVCHANGE_END: JCAO - Field Sampler Module for GPU particle
+
 		// Spawn particles.
 		bool bRefreshTiles = false;
 		const bool bPreventSpawning = bHaltSpawning || bSuppressSpawning;
@@ -3242,6 +4306,9 @@ public:
 
 		// Store the amount of time by which the GPU needs to update the simulation.
 		PendingDeltaSeconds = DeltaSeconds;
+		// NVCHANGE_BEGIN: JCAO - Support Force Type Noise
+		PendingTotalSeconds += DeltaSeconds;
+		// NVCHANGE_END: JCAO - Support Force Type Noise
 
 		// Store the number of active particles.
 		ActiveParticles = ActiveTileCount * GParticlesPerTile;
@@ -3259,7 +4326,9 @@ public:
 		// Queue an update to the GPU simulation if needed.
 		if (Simulation->bDirty_GameThread)
 		{
-			Simulation->InitResources(AllocatedTiles, &EmitterInfo.Resources->EmitterSimulationResources);
+			// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+			Simulation->InitResources(AllocatedTiles, &EmitterInfo.Resources->EmitterSimulationResources, &EmitterInfo.Resources->GridDensityResource);
+			// NVCHANGE_END: JCAO - Grid Density with GPU particles
 		}
 
 		check(AllocatedTiles.Num() == TileTimeOfDeath.Num());
@@ -3771,6 +4840,23 @@ private:
 		}
 	}
 
+	// NVCHANGE_BEGIN: JCAO - Field Sampler Module for GPU particle
+#if WITH_APEX_TURBULENCE
+	void Tick_LocalFieldSampler(float DeltaTime)
+	{
+		if (EmitterInfo.LocalFieldSamplers.Num() != Simulation->LocalFieldSamplers.Num())
+		{
+			Simulation->DestroyLocalFieldSampler(FXSystem);
+
+			FPhysScene* PhysScene = Component->GetWorld()->GetPhysicsScene();
+			check(PhysScene);
+			bool bIsCascade = (Component->GetClass()->GetName() == TEXT("CascadeParticleSystemComponent"));
+			Simulation->InitLocalFieldSamplers(PhysScene, bIsCascade ? PST_Sync : PST_Async, Component, FXSystem, EmitterInfo.LocalFieldSamplers);
+		}
+	}
+#endif
+	// NVCHANGE_END: JCAO - Field Sampler Module for GPU particle
+
 	virtual void SetCurrentLODIndex(int32 InLODIndex, bool bInFullyProcess) override
 	{
 		bool bDifferent = (InLODIndex != CurrentLODLevelIndex);
@@ -4039,6 +5125,47 @@ void FFXSystem::SortGPUParticles(FRHICommandListImmediate& RHICmdList)
 	}
 }
 
+// NVCHANGE_BEGIN: JCAO - Replace vector fields with APEX turbulence velocity fields
+#if WITH_APEX_TURBULENCE
+// NVCHANGE_BEGIN: JCAO - Add Attractor working with GPU particles
+static void SetParametersForAttractorFS(FAttractorFSUniformParameters& OutParameters, FAttractorFSInstance* AttractorFSInstance)
+{
+	check(AttractorFSInstance);
+
+	OutParameters.Origin = AttractorFSInstance->Origin;
+	OutParameters.RadiusAndStrength = FVector(AttractorFSInstance->Radius, AttractorFSInstance->ConstFieldStrength, AttractorFSInstance->VariableFieldStrength);
+}
+// NVCHANGE_BEGIN: JCAO - Support Force Type Noise
+static void SetParametersForNoiseFS(FNoiseFSUniformParameters& OutParameters, FNoiseFSInstance* NoiseFSInstance)
+{
+	check(NoiseFSInstance);
+
+	OutParameters.NoiseSpaceFreq = NoiseFSInstance->NoiseSpaceFreq;
+	OutParameters.NoiseSpaceFreqOctaveMultiplier = NoiseFSInstance->NoiseSpaceFreqOctaveMultiplier;
+	OutParameters.NoiseStrengthAndTimeFreq = FVector4(NoiseFSInstance->NoiseStrength, NoiseFSInstance->NoiseTimeFreq, NoiseFSInstance->NoiseStrengthOctaveMultiplier, NoiseFSInstance->NoiseTimeFreqOctaveMultiplier);
+	OutParameters.NoiseOctaves = NoiseFSInstance->NoiseOctaves;
+	OutParameters.NoiseType = NoiseFSInstance->NoiseType;
+	OutParameters.NoiseSeed = NoiseFSInstance->NoiseSeed;
+}
+// NVCHANGE_END: JCAO - Support Force Type Noise
+// NVCHANGE_END: JCAO - Add Attractor working with GPU particles
+
+static void SetParametersForVelocityField(FVectorFieldUniformParameters& OutParameters, FTurbulenceFSInstance* TurbulenceFSInstance, FApexRenderSurfaceBuffer* SurfaceBuffer, int32 Index)
+{
+	check(TurbulenceFSInstance && SurfaceBuffer);
+	check(Index < MAX_VECTOR_FIELDS);
+
+	OutParameters.WorldToVolume[Index] = TurbulenceFSInstance->WorldToVolume;
+	OutParameters.VolumeToWorld[Index] = TurbulenceFSInstance->VolumeToWorldNoScale;
+	OutParameters.VolumeSize[Index] = FVector(SurfaceBuffer->SizeX, SurfaceBuffer->SizeY, SurfaceBuffer->SizeZ);
+	OutParameters.IntensityAndTightness[Index] = FVector2D(TurbulenceFSInstance->VelocityMultiplier, TurbulenceFSInstance->VelocityWeight);
+	OutParameters.TilingAxes[Index].X = 0.0f;
+	OutParameters.TilingAxes[Index].Y = 0.0f;
+	OutParameters.TilingAxes[Index].Z = 0.0f;
+}
+#endif
+// NVCHANGE_END: JCAO - Replace vector fields with APEX turbulence velocity fields
+
 /**
  * Sets parameters for the vector field instance.
  * @param OutParameters - The uniform parameters structure.
@@ -4086,6 +5213,133 @@ bool FFXSystem::UsesGlobalDistanceFieldInternal() const
 
 	return false;
 }
+
+// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+static float Distance(const FVector4& V1, const FVector4& V2)
+{
+	FVector VA(V1.X / V1.W, V1.Y / V1.W, V1.Z / V1.W);
+	FVector VB(V2.X / V2.W, V2.Y / V2.W, V2.Z / V2.W);
+	return (VB - VA).Size();
+}
+
+
+static void SetGridDensityFrustumUniformParameters(FGridDensityFrustumUniformParameters& OutParameters, const FParticleGridDensityResource* GridDensityResource, const FViewMatrices& ViewMatrices)
+{
+	FMatrix ViewMatrix = ViewMatrices.ViewMatrix;
+
+	ViewMatrix.M[3][0] *= SCALE_FACTOR;
+	ViewMatrix.M[3][1] *= SCALE_FACTOR;
+	ViewMatrix.M[3][2] *= SCALE_FACTOR;
+
+	FMatrix ProjMatrix = ViewMatrices.ProjMatrix;
+
+	ProjMatrix.M[2][0] = 0.0f;
+	ProjMatrix.M[2][1] = 0.0f;
+	ProjMatrix.M[2][2] = 1.0f - 0.001f;
+	ProjMatrix.M[3][2] = -ProjMatrix.M[3][2] * ProjMatrix.M[2][2] * SCALE_FACTOR;
+
+	FMatrix MatInverse = (ViewMatrix * ProjMatrix).Inverse();
+
+	const float TargetDepth = GridDensityResource->GridDepth;
+
+	//// to calculate w transform
+	float NearDimX = Distance(MatInverse.TransformFVector4(FVector4(-1.f, 0.f, 0.f, 1.f)), MatInverse.TransformFVector4(FVector4(1.f, 0.f, 0.f, 1.f)));
+	float NearDimY = Distance(MatInverse.TransformFVector4(FVector4(0.f, -1.f, 0.f, 1.f)), MatInverse.TransformFVector4(FVector4(0.f, 1.f, 0.f, 1.f)));
+
+	float FarDimX = Distance(MatInverse.TransformFVector4(FVector4(-1.f, 0.f, 1.f, 1.f)), MatInverse.TransformFVector4(FVector4(1.f, 0.f, 1.f, 1.f)));
+	float FarDimY = Distance(MatInverse.TransformFVector4(FVector4(0.f, -1.f, 1.f, 1.f)), MatInverse.TransformFVector4(FVector4(0.f, 1.f, 1.f, 1.f)));
+	float DimZ = Distance(MatInverse.TransformFVector4(FVector4(0.f, 0.f, 0.f, 1.f)), MatInverse.TransformFVector4(FVector4(0.f, 0.f, 1.f, 1.f)));
+
+	float MyFarDimX = NearDimX*(1.f - TargetDepth / DimZ) + FarDimX*(TargetDepth / DimZ);
+	float MyFarDimY = NearDimY*(1.f - TargetDepth / DimZ) + FarDimY*(TargetDepth / DimZ);
+
+	//// grab necessary frustum coordinates
+	FVector4 Origin4 = MatInverse.TransformFVector4(FVector4(-1.f, 1.f, 0.f, 1.f));
+	FVector4 BasisX4 = MatInverse.TransformFVector4(FVector4(1.f, 1.f, 0.f, 1.f));
+	FVector4 BasisY4 = MatInverse.TransformFVector4(FVector4(-1.f, -1.f, 0.f, 1.f));
+	FVector4 ZDepth4 = MatInverse.TransformFVector4(FVector4(-1.f, 1.f, 1.f, 1.f));
+
+	// create vec3 versions
+	FVector Origin3(Origin4.X / Origin4.W, Origin4.Y / Origin4.W, Origin4.Z / Origin4.W);
+	FVector BasisX3(BasisX4.X / BasisX4.W, BasisX4.Y / BasisX4.W, BasisX4.Z / BasisX4.W);
+	FVector BasisY3(BasisY4.X / BasisY4.W, BasisY4.Y / BasisY4.W, BasisY4.Z / BasisY4.W);
+	FVector ZDepth3(ZDepth4.X / ZDepth4.W, ZDepth4.Y / ZDepth4.W, ZDepth4.Z / ZDepth4.W);
+
+	// make everthing relative to origin
+	BasisX3 -= Origin3;
+	BasisY3 -= Origin3;
+	ZDepth3 -= Origin3;
+	// find third basis
+	FVector BasisZ3 = (BasisX3^BasisY3).GetSafeNormal();
+	BasisZ3 *= TargetDepth;
+	// see how skewed the eye point is
+	FVector Eye;
+	{
+		// find the eye point
+		FVector4 A4 = MatInverse.TransformFVector4(FVector4(1.f, 1.f, 0.00f, 1.f));
+		FVector4 B4 = MatInverse.TransformFVector4(FVector4(1.f, 1.f, 0.01f, 1.f));
+		FVector4 C4 = MatInverse.TransformFVector4(FVector4(-1.f, -1.f, 0.00f, 1.f));
+		FVector4 D4 = MatInverse.TransformFVector4(FVector4(-1.f, -1.f, 0.01f, 1.f));
+
+		FVector A3 = FVector(A4.X / A4.W, A4.Y / A4.W, A4.Z / A4.W);
+		FVector B3 = FVector(B4.X / B4.W, B4.Y / B4.W, B4.Z / B4.W);
+		FVector C3 = FVector(C4.X / C4.W, C4.Y / C4.W, C4.Z / C4.W);
+		FVector D3 = FVector(D4.X / D4.W, D4.Y / D4.W, D4.Z / D4.W);
+
+		FVector A = B3 - A3;
+		FVector	B = D3 - C3;
+		FVector C = A ^ B;
+		FVector D = A3 - C3;
+
+		FMatrix InvEyeMatrix = FMatrix(A, B, C, FVector4(0)).Inverse();
+		FVector4 Coord = InvEyeMatrix.TransformFVector4(FVector4(D, 1.0f));
+		Eye = C3 + B * Coord.Y;
+	}
+
+	// build scale,rotation,translation matrix
+	FMatrix Mat1 = FMatrix(BasisX3, BasisY3, BasisZ3, Origin3).Inverse();
+	FVector4 EyeOffset = Mat1.TransformFVector4(FVector4(Eye, 1.0f));
+
+	// do perspective transform
+	FMatrix Mat2 = FMatrix::Identity;
+	{
+		float XShift = -2.f*(EyeOffset.X - 0.5f);
+		float YShift = -2.f*(EyeOffset.Y - 0.5f);
+		float Left = -3.0f + XShift;
+		float Right = 1.0f + XShift;
+		float Top = 1.0f + YShift;
+		float Bottom = -3.0f + YShift;
+		float NearVal = NearDimX / (0.5f*(MyFarDimX - NearDimX));
+
+		// build matrix
+
+		Mat2.M[0][0] = -2.f*NearVal / (Right - Left);
+		Mat2.M[1][1] = -2.f*NearVal / (Top - Bottom);
+		Mat2.M[2][0] = (Right + Left) / (Right - Left);
+		Mat2.M[2][1] = (Top + Bottom) / (Top - Bottom);
+		Mat2.M[2][3] = -1.f;
+		Mat2.M[3][3] = 0.f;
+	}
+
+	// shrink to calculate density just outside of frustum
+	FMatrix Mat3 = FMatrix::Identity;
+	float Factor = FMath::Min((float)(GridDensityResource->GridResolution - 4) / (GridDensityResource->GridResolution), 0.75f);
+	{
+		Mat3.M[0][0] = Factor;
+		Mat3.M[1][1] = Factor;
+		Mat3.M[2][2] = Factor;
+		Mat3.M[3][0] = (1.0f - Factor)*0.5f;
+		Mat3.M[3][1] = (1.0f - Factor)*0.5f;
+		Mat3.M[3][2] = (1.0f - Factor)*0.5f;
+	}
+
+	// create frustum info
+	OutParameters.DimMatrix = Mat1 * Mat2 * Mat3; // create final matrix
+	OutParameters.NearDim = FVector2D(Factor*NearDimX, Factor*NearDimY);
+	OutParameters.FarDim = FVector2D(Factor*MyFarDimX, Factor*MyFarDimY);
+	OutParameters.DimZ = Factor*TargetDepth;
+}
+// NVCHANGE_END: JCAO - Grid Density with GPU particles
 
 void FFXSystem::SimulateGPUParticles(
 	FRHICommandListImmediate& RHICmdList,
@@ -4149,9 +5403,37 @@ void FFXSystem::SimulateGPUParticles(
 			VectorFieldParameters.VolumeSize[Index] = FVector(1.0f);
 			VectorFieldParameters.IntensityAndTightness[Index] = FVector2D::ZeroVector;
 		}
-		VectorFieldParameters.Count = 0;
+		// NVCHANGE_BEGIN: JCAO - Replace vector fields with APEX turbulence velocity fields
+		VectorFieldParameters.VectorFieldCount = 0;
+		VectorFieldParameters.VelocityFieldCount = 0;
+		// NVCHANGE_END: JCAO - Replace vector fields with APEX turbulence velocity fields
 		EmptyVectorFieldUniformBuffer = FVectorFieldUniformBufferRef::CreateUniformBufferImmediate(VectorFieldParameters, UniformBuffer_SingleFrame);
 	}
+
+	// NVCHANGE_BEGIN: JCAO - Add Attractor working with GPU particles
+#if WITH_APEX_TURBULENCE
+	FAttractorFSUniformBufferRef EmptyAttractorFSUniformBuffer;
+	{
+		FAttractorFSUniformParameters AttractorFSParameters;
+		AttractorFSParameters.Origin = FVector(1.0f);
+		AttractorFSParameters.RadiusAndStrength = FVector(1.0f);
+		AttractorFSParameters.Count = 0;
+		EmptyAttractorFSUniformBuffer = FAttractorFSUniformBufferRef::CreateUniformBufferImmediate(AttractorFSParameters, UniformBuffer_SingleFrame);
+	}
+	FNoiseFSUniformBufferRef EmptyNoiseFSUniformBuffer;
+	{
+		FNoiseFSUniformParameters NoiseFSParameters;
+		NoiseFSParameters.NoiseSpaceFreq = FVector(0.0f);
+		NoiseFSParameters.NoiseSpaceFreqOctaveMultiplier = FVector(0.0f);
+		NoiseFSParameters.NoiseStrengthAndTimeFreq = FVector4(0.0f);
+		NoiseFSParameters.NoiseOctaves = 0;
+		NoiseFSParameters.NoiseType = 0;
+		NoiseFSParameters.NoiseSeed = 0;
+		NoiseFSParameters.Count = 0;
+		EmptyNoiseFSUniformBuffer = FNoiseFSUniformBufferRef::CreateUniformBufferImmediate(NoiseFSParameters, UniformBuffer_SingleFrame);
+	}
+#endif // WITH_APEX_TURBULENCE
+	// NVCHANGE_END: JCAO - Add Attractor working with GPU particles
 
 	// Gather simulation commands from all active simulations.
 	static TArray<FSimulationCommandGPU> SimulationCommands;
@@ -4165,11 +5447,79 @@ void FFXSystem::SimulateGPUParticles(
 		if (Simulation->SimulationPhase == Phase
 			&& Simulation->TileVertexBuffer.AlignedTileCount > 0)
 		{
-			FSimulationCommandGPU* SimulationCommand = new(SimulationCommands) FSimulationCommandGPU(
+			// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+			if (GMaxRHIFeatureLevel == ERHIFeatureLevel::SM5
+				&& Simulation->bViewMatricesUpdated
+				&& Simulation->GridDensityResource->IsValid())
+			{
+				// NVCHANGE_BEGIN: JCAO - Add density time in the GPU particle stat
+				SCOPE_CYCLE_COUNTER(STAT_GPUParticleDensityTime);
+				// NVCHANGE_END: JCAO - Add density time in the GPU particle stat
+
+				// Grab the shader.
+				TShaderMapRef<FParticleGridDensityClearCS> GridDensityClearCS(GetGlobalShaderMap(FeatureLevel));
+				RHICmdList.SetComputeShader(GridDensityClearCS->GetComputeShader());
+				// Dispatch shader to compute bounds.
+				GridDensityClearCS->SetOutput(RHICmdList, Simulation->GridDensityResource->GridDensityBufferUAV);
+				DispatchComputeShader(
+					RHICmdList,
+					*GridDensityClearCS,
+					Simulation->GridDensityResource->GridResolution * Simulation->GridDensityResource->GridResolution * Simulation->GridDensityResource->GridResolution / PARTICLE_BOUNDS_THREADS,
+					1,
+					1);
+				GridDensityClearCS->UnbindBuffers(RHICmdList);
+
+				FGridDensityFrustumUniformParameters Parameters;
+				SetGridDensityFrustumUniformParameters(Parameters, Simulation->GridDensityResource, Simulation->ViewMatrices);
+				FGridDensityFrustumUniformBufferRef UniformBuffer =
+					FGridDensityFrustumUniformBufferRef::CreateUniformBufferImmediate(Parameters, UniformBuffer_SingleFrame);
+
+
+				ComputeGridDensityFillFrustum(RHICmdList,
+					FeatureLevel,
+					UniformBuffer,
+					Simulation->GridDensityResource->GridDensityUniformBuffer,
+					Simulation->VertexBuffer.VertexBufferSRV,
+					PrevStateTextures.PositionTextureRHI,
+					Simulation->GridDensityResource->GridDensityBufferUAV,
+					Simulation->VertexBuffer.ParticleCount
+					);
+
+				TShaderMapRef<FParticleGridDensityLowPassCS> GridDensityLowPassCS(GetGlobalShaderMap(FeatureLevel));
+				RHICmdList.SetComputeShader(GridDensityLowPassCS->GetComputeShader());
+				GridDensityLowPassCS->SetParameters(RHICmdList, Simulation->GridDensityResource->GridDensityUniformBuffer, Simulation->GridDensityResource->GridDensityBufferSRV);
+				GridDensityLowPassCS->SetOutput(RHICmdList, Simulation->GridDensityResource->GridDensityLowPassBufferUAV);
+				DispatchComputeShader(
+					RHICmdList,
+					*GridDensityLowPassCS,
+					Simulation->GridDensityResource->GridResolution * Simulation->GridDensityResource->GridResolution * Simulation->GridDensityResource->GridResolution / PARTICLE_BOUNDS_THREADS,
+					1,
+					1);
+				GridDensityLowPassCS->UnbindBuffers(RHICmdList);
+
+				ComputeGridDensityApplyFrustum(RHICmdList,
+					FeatureLevel,
+					UniformBuffer,
+					Simulation->GridDensityResource->GridDensityUniformBuffer,
+					Simulation->VertexBuffer.VertexBufferSRV,
+					PrevStateTextures.PositionTextureRHI,
+					Simulation->GridDensityResource->GridDensityLowPassBufferSRV,
+					CurrentStateTextures.DensityTextureUAV,
+					Simulation->VertexBuffer.ParticleCount
+					);
+
+			}
+			// NVCHANGE_END: JCAO - Grid Density with GPU particles
+
+			FSimulationCommandGPU* SimulationCommand = new(SimulationCommands)FSimulationCommandGPU(
 				Simulation->TileVertexBuffer.GetShaderParam(),
 				Simulation->EmitterSimulationResources->SimulationUniformBuffer,
 				Simulation->PerFrameSimulationParameters,
 				EmptyVectorFieldUniformBuffer,
+#if WITH_APEX_TURBULENCE
+				EmptyAttractorFSUniformBuffer,
+				EmptyNoiseFSUniformBuffer,
+#endif
 				Simulation->TileVertexBuffer.AlignedTileCount
 				);
 
@@ -4180,7 +5530,10 @@ void FFXSystem::SimulateGPUParticles(
 				const FBox SimulationBounds = Simulation->Bounds;
 
 				// Add the local vector field.
-				VectorFieldParameters.Count = 0;
+				// NVCHANGE_BEGIN: JCAO - Replace vector fields with APEX turbulence velocity fields
+				VectorFieldParameters.VelocityFieldCount = 0;
+				VectorFieldParameters.VectorFieldCount = 0;
+				// NVCHANGE_END: JCAO - Replace vector fields with APEX turbulence velocity fields
 				if (Simulation->LocalVectorField.Resource)
 				{
 					const float Intensity = Simulation->LocalVectorField.Intensity * Simulation->LocalVectorField.Resource->Intensity;
@@ -4188,7 +5541,9 @@ void FFXSystem::SimulateGPUParticles(
 					{
 						Simulation->LocalVectorField.Resource->Update(RHICmdList, Simulation->PerFrameSimulationParameters.DeltaSeconds);
 						SimulationCommand->VectorFieldTexturesRHI[0] = Simulation->LocalVectorField.Resource->VolumeTextureRHI;
-						SetParametersForVectorField(VectorFieldParameters, &Simulation->LocalVectorField, /*EmitterScale=*/ 1.0f, /*EmitterTightness=*/ -1, VectorFieldParameters.Count++);
+						// NVCHANGE_BEGIN: JCAO - Replace vector fields with APEX turbulence velocity fields
+						SetParametersForVectorField(VectorFieldParameters, &Simulation->LocalVectorField, /*EmitterScale=*/ 1.0f, /*EmitterTightness=*/ -1, VectorFieldParameters.VectorFieldCount++);
+						// NVCHANGE_END: JCAO - Replace vector fields with APEX turbulence velocity fields
 					}
 				}
 
@@ -4197,7 +5552,8 @@ void FFXSystem::SimulateGPUParticles(
 				const float GlobalVectorFieldTightness = Simulation->EmitterSimulationResources->GlobalVectorFieldTightness;
 				if (FMath::Abs(GlobalVectorFieldScale) > 0.0f)
 				{
-					for (TSparseArray<FVectorFieldInstance*>::TIterator VectorFieldIt(VectorFields); VectorFieldIt && VectorFieldParameters.Count < MAX_VECTOR_FIELDS; ++VectorFieldIt)
+					// NVCHANGE_BEGIN: JCAO - Replace vector fields with APEX turbulence velocity fields
+					for (TSparseArray<FVectorFieldInstance*>::TIterator VectorFieldIt(VectorFields); VectorFieldIt && VectorFieldParameters.VectorFieldCount < MAX_VECTOR_FIELDS; ++VectorFieldIt)
 					{
 						FVectorFieldInstance* Instance = *VectorFieldIt;
 						check(Instance && Instance->Resource);
@@ -4205,16 +5561,46 @@ void FFXSystem::SimulateGPUParticles(
 						if (SimulationBounds.Intersect(Instance->WorldBounds) &&
 							FMath::Abs(Intensity) > 0.0f)
 						{
-							SimulationCommand->VectorFieldTexturesRHI[VectorFieldParameters.Count] = Instance->Resource->VolumeTextureRHI;
+							SimulationCommand->VectorFieldTexturesRHI[VectorFieldParameters.VectorFieldCount] = Instance->Resource->VolumeTextureRHI;
 							SetParametersForVectorField(VectorFieldParameters, Instance, GlobalVectorFieldScale, GlobalVectorFieldTightness, VectorFieldParameters.Count++);
 						}
 					}
+					// NVCHANGE_END: JCAO - Replace vector fields with APEX turbulence velocity fields
 				}
 
-				// Fill out any remaining vector field entries.
-				if (VectorFieldParameters.Count > 0)
+				// NVCHANGE_BEGIN: JCAO - Replace vector fields with APEX turbulence velocity fields
+#if WITH_APEX_TURBULENCE
 				{
-					int32 PadCount = VectorFieldParameters.Count;
+					for (FTurbulenceFSInstanceList::TIterator TurbulenceFSIt(TurbulenceFSList); TurbulenceFSIt && (VectorFieldParameters.VelocityFieldCount + VectorFieldParameters.VectorFieldCount) < MAX_VECTOR_FIELDS; ++TurbulenceFSIt)
+					{
+						FTurbulenceFSInstance* Instance = *TurbulenceFSIt;
+						check(Instance && Instance->TurbulenceFSActor);
+
+						if (!Instance->bEnabled)
+						{
+							continue;
+						}
+
+						physx::apex::NxTurbulenceFSActor* TurbulenceActor = static_cast<physx::apex::NxTurbulenceFSActor*>(Instance->TurbulenceFSActor->GetApexActor());
+
+						if (SimulationBounds.Intersect(Instance->WorldBounds) && TurbulenceActor)
+						{
+							FApexRenderSurfaceBuffer* SurfaceBuffer = static_cast<FApexRenderSurfaceBuffer*>(TurbulenceActor->getVelocityFieldRenderSurface());
+
+							if (SurfaceBuffer)
+							{
+								SimulationCommand->VectorFieldTexturesRHI[VectorFieldParameters.VelocityFieldCount + VectorFieldParameters.VectorFieldCount] = SurfaceBuffer->VolumeTextureRHI;
+								SetParametersForVelocityField(VectorFieldParameters, Instance, SurfaceBuffer, VectorFieldParameters.VectorFieldCount + VectorFieldParameters.VelocityFieldCount++);
+							}
+						}
+					}
+				}
+#endif
+
+				// Fill out any remaining vector field entries.
+				if ((VectorFieldParameters.VelocityFieldCount + VectorFieldParameters.VectorFieldCount) > 0)
+				{
+					int32 PadCount = VectorFieldParameters.VelocityFieldCount + VectorFieldParameters.VectorFieldCount;
 					while (PadCount < MAX_VECTOR_FIELDS)
 					{
 						const int32 Index = PadCount++;
@@ -4225,6 +5611,50 @@ void FFXSystem::SimulateGPUParticles(
 					}
 					SimulationCommand->VectorFieldsUniformBuffer = FVectorFieldUniformBufferRef::CreateUniformBufferImmediate(VectorFieldParameters, UniformBuffer_SingleFrame);
 				}
+				// NVCHANGE_END: JCAO - Replace vector fields with APEX turbulence velocity fields
+
+				// NVCHANGE_BEGIN: JCAO - Add Attractor working with GPU particles
+#if WITH_APEX_TURBULENCE
+				FAttractorFSUniformParameters AttractorFSParameters;
+
+				AttractorFSParameters.Count = 0;
+
+				for (FAttractorFSInstanceList::TIterator AttractorFSIt(AttractorFSList); AttractorFSIt && AttractorFSParameters.Count < 1; ++AttractorFSIt)
+				{
+					FAttractorFSInstance* Instance = *AttractorFSIt;
+					check(Instance);
+					if (Instance->bEnabled && SimulationBounds.Intersect(Instance->WorldBounds) && Instance->Radius > 0.0f)
+					{
+						SetParametersForAttractorFS(AttractorFSParameters, Instance);
+						AttractorFSParameters.Count++;
+					}
+				}
+
+				if (AttractorFSParameters.Count > 0)
+				{
+					SimulationCommand->AttractorFSUniformBuffer = FAttractorFSUniformBufferRef::CreateUniformBufferImmediate(AttractorFSParameters, UniformBuffer_SingleFrame);
+				}
+
+				FNoiseFSUniformParameters NoiseFSParameters;
+				NoiseFSParameters.Count = 0;
+
+				for (FNoiseFSInstanceList::TIterator NoiseFSIt(NoiseFSList); NoiseFSIt && NoiseFSParameters.Count < 1; ++NoiseFSIt)
+				{
+					FNoiseFSInstance* Instance = *NoiseFSIt;
+					check(Instance);
+					if (Instance->bEnabled && SimulationBounds.Intersect(Instance->WorldBounds))
+					{
+						SetParametersForNoiseFS(NoiseFSParameters, Instance);
+						NoiseFSParameters.Count++;
+					}
+				}
+
+				if (NoiseFSParameters.Count > 0)
+				{
+					SimulationCommand->NoiseFSUniformBuffer = FNoiseFSUniformBufferRef::CreateUniformBufferImmediate(NoiseFSParameters, UniformBuffer_SingleFrame);
+				}
+#endif // WITH_APEX_TURBULENCE
+				// NVCHANGE_END: JCAO - Add Attractor working with GPU particles
 			}
 		
 			// Add to the list of tiles to clear.
@@ -4387,6 +5817,10 @@ static void SetGPUSpriteResourceData( FGPUSpriteResources* Resources, const FGPU
 	Resources->ColorTexelAllocation = GParticleCurveTexture.AddCurve( InResourceData.QuantizedColorSamples );
 	Resources->MiscTexelAllocation = GParticleCurveTexture.AddCurve( InResourceData.QuantizedMiscSamples );
 	Resources->SimulationAttrTexelAllocation = GParticleCurveTexture.AddCurve( InResourceData.QuantizedSimulationAttrSamples );
+	// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+	Resources->DensityColorTexelAllocation = GParticleCurveTexture.AddCurve(InResourceData.QuantizedDensityColorSamples);
+	Resources->DensitySizeTexelAllocation = GParticleCurveTexture.AddCurve(InResourceData.QuantizedDensitySizeSamples);
+	// NVCHANGE_END: JCAO - Grid Density with GPU particles
 
 	// Setup uniform parameters for the emitter.
 	Resources->UniformParameters.ColorCurve = GParticleCurveTexture.ComputeCurveScaleBias(Resources->ColorTexelAllocation);
@@ -4399,6 +5833,27 @@ static void SetGPUSpriteResourceData( FGPUSpriteResources* Resources, const FGPU
 
 	Resources->UniformParameters.SizeBySpeed = InResourceData.SizeBySpeed;
 	Resources->UniformParameters.SubImageSize = InResourceData.SubImageSize;
+
+	// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+	// Grid Density
+	Resources->GridDensityResource.GridResolution = InResourceData.GridResolution;
+	Resources->GridDensityResource.GridMaxCellCount = InResourceData.GridMaxCellCount;
+	Resources->GridDensityResource.GridDepth = InResourceData.GridDepth;
+
+	Resources->UniformParameters.GridDensityEnabled = InResourceData.GridResolution > 0 ? 1 : 0;
+	Resources->UniformParameters.ColorOverDensityEnabled = InResourceData.bColorOverDensityEnabled;
+	Resources->UniformParameters.SizeOverDensityEnabled = InResourceData.bSizeOverDensityEnabled;
+
+	Resources->UniformParameters.DensityColorCurve = GParticleCurveTexture.ComputeCurveScaleBias(Resources->DensityColorTexelAllocation);
+	Resources->UniformParameters.DensityColorScale = InResourceData.DensityColorScale;
+	Resources->UniformParameters.DensityColorBias = InResourceData.DensityColorBias;
+
+	Resources->UniformParameters.DensitySizeCurve = GParticleCurveTexture.ComputeCurveScaleBias(Resources->DensitySizeTexelAllocation);
+	Resources->UniformParameters.DensitySizeScale.X = InResourceData.DensitySizeScale.X;
+	Resources->UniformParameters.DensitySizeScale.Y = InResourceData.DensitySizeScale.Y;
+	Resources->UniformParameters.DensitySizeBias.X = InResourceData.DensitySizeBias.X;
+	Resources->UniformParameters.DensitySizeBias.Y = InResourceData.DensitySizeBias.Y;
+	// NVCHANGE_END: JCAO - Grid Density with GPU particles
 
 	// Setup tangent selector parameter.
 	const EParticleAxisLock LockAxisFlag = (EParticleAxisLock)InResourceData.LockAxisFlag;
@@ -4482,6 +5937,10 @@ static void SetGPUSpriteResourceData( FGPUSpriteResources* Resources, const FGPU
  */
 static void ClearGPUSpriteResourceData( FGPUSpriteResources* Resources )
 {
+	// NVCHANGE_BEGIN: JCAO - Grid Density with GPU particles
+	GParticleCurveTexture.RemoveCurve(Resources->DensitySizeTexelAllocation);
+	GParticleCurveTexture.RemoveCurve(Resources->DensityColorTexelAllocation);
+	// NVCHANGE_END: JCAO - Grid Density with GPU particles
 	GParticleCurveTexture.RemoveCurve( Resources->ColorTexelAllocation );
 	GParticleCurveTexture.RemoveCurve( Resources->MiscTexelAllocation );
 	GParticleCurveTexture.RemoveCurve( Resources->SimulationAttrTexelAllocation );

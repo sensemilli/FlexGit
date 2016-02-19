@@ -3,9 +3,8 @@
 #pragma once
 
 #include "ShapeElem.h"
+#include "DynamicMeshBuilder.h"
 #include "ConvexElem.generated.h"
-
-struct FDynamicMeshVertex;
 
 namespace physx
 {

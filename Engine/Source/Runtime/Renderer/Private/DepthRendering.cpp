@@ -231,6 +231,146 @@ void FDepthDrawingPolicy::SetMeshRenderState(
 	FMeshDrawingPolicy::SetMeshRenderState(RHICmdList, View,PrimitiveSceneProxy,Mesh,BatchElementIndex,bBackFace, DitheredLODTransitionValue,ElementData,PolicyContext);
 }
 
+FDepthWaveWorksDrawingPolicy::FDepthWaveWorksDrawingPolicy(
+	const FVertexFactory* InVertexFactory,
+	const FMaterialRenderProxy* InMaterialRenderProxy,
+	const FMaterial& InMaterialResource,
+	FMatrix InViewMatrix,
+	FMatrix InProjMatrix,
+	bool bIsTwoSided,
+	ERHIFeatureLevel::Type InFeatureLevel
+	) :
+	FMeshDrawingPolicy(InVertexFactory, InMaterialRenderProxy, InMaterialResource, false,/*bInTwoSidedOverride=*/ bIsTwoSided)
+	, CurrentViewMatrix(InViewMatrix)
+	, CurrentProjMatrix(InProjMatrix)
+{
+	QuadTreeShaderInputMapping.Add(0xffffffff);
+	QuadTreeShaderInputMapping.Add(0xffffffff);
+
+	FWaveWorksShaderParameters* WaveWorksShaderParams = nullptr;
+
+	// The primitive needs to be rendered with the material's pixel and vertex shaders if it is masked or if it is offsetting
+	// the pixel depth
+	bNeedsPixelShader = false;
+	if (!InMaterialResource.WritesEveryPixel() || InMaterialResource.HasPixelDepthOffsetConnected())
+	{
+		bNeedsPixelShader = true;
+		PixelShader = InMaterialResource.GetShader<FDepthOnlyPS>(InVertexFactory->GetType());
+	}
+	else
+	{
+		PixelShader = NULL;
+	}
+
+	const EMaterialTessellationMode TessellationMode = InMaterialResource.GetTessellationMode();
+	VertexShader = NULL;
+
+	HullShader = NULL;
+	DomainShader = NULL;
+
+	if (RHISupportsTessellation(GShaderPlatformForFeatureLevel[InFeatureLevel])
+		&& InVertexFactory->GetType()->SupportsTessellationShaders()
+		&& TessellationMode != MTM_NoTessellation)
+	{
+		VertexShader = InMaterialResource.GetShader<TDepthOnlyVS<false> >(VertexFactory->GetType());
+		HullShader = InMaterialResource.GetShader<FDepthOnlyHS>(VertexFactory->GetType());
+		DomainShader = InMaterialResource.GetShader<FDepthOnlyDS>(VertexFactory->GetType());
+
+		WaveWorksShaderParams = HullShader->GetWaveWorksShaderParameters();
+		if (WaveWorksShaderParams->QuadTreeShaderInputMappings.Num() > 1)
+		{
+			QuadTreeShaderInputMapping[1] = WaveWorksShaderParams->QuadTreeShaderInputMappings[1];
+		}
+	}
+	else
+	{
+		VertexShader = InMaterialResource.GetShader<TDepthOnlyVS<false> >(InVertexFactory->GetType());
+	}
+
+	WaveWorksShaderParams = VertexShader->GetWaveWorksShaderParameters();
+	if (WaveWorksShaderParams->QuadTreeShaderInputMappings.Num() > 0)
+	{
+		QuadTreeShaderInputMapping[0] = WaveWorksShaderParams->QuadTreeShaderInputMappings[0];
+	}
+}
+
+void FDepthWaveWorksDrawingPolicy::SetSharedState(FRHICommandList& RHICmdList, const FSceneView* View, const ContextDataType PolicyContext) const
+{
+	// Set the depth-only shader parameters for the material.
+	VertexShader->SetParameters(RHICmdList, MaterialRenderProxy, *MaterialResource, *View);
+	if (HullShader && DomainShader)
+	{
+		HullShader->SetParameters(RHICmdList, MaterialRenderProxy, *View);
+		DomainShader->SetParameters(RHICmdList, MaterialRenderProxy, *View);
+	}
+
+	if (bNeedsPixelShader)
+	{
+		PixelShader->SetParameters(RHICmdList, MaterialRenderProxy, *MaterialResource, View);
+	}
+
+	// Set the shared mesh resources.
+	FMeshDrawingPolicy::SetSharedState(RHICmdList, View, PolicyContext);
+}
+
+/**
+* Create bound shader state using the vertex decl from the mesh draw policy
+* as well as the shaders needed to draw the mesh
+* @return new bound shader state object
+*/
+FBoundShaderStateInput FDepthWaveWorksDrawingPolicy::GetBoundShaderStateInput(ERHIFeatureLevel::Type InFeatureLevel)
+{
+	return FBoundShaderStateInput(
+		FMeshDrawingPolicy::GetVertexDeclaration(),
+		VertexShader->GetVertexShader(),
+		GETSAFERHISHADER_HULL(HullShader),
+		GETSAFERHISHADER_DOMAIN(DomainShader),
+		bNeedsPixelShader ? PixelShader->GetPixelShader() : NULL,
+		NULL);
+}
+
+void FDepthWaveWorksDrawingPolicy::SetMeshRenderState(
+	FRHICommandList& RHICmdList,
+	const FSceneView& View,
+	const FPrimitiveSceneProxy* PrimitiveSceneProxy,
+	const FMeshBatch& Mesh,
+	int32 BatchElementIndex,
+	bool bBackFace,
+	float DitheredLODTransitionValue,
+	const ElementDataType& ElementData,
+	const ContextDataType PolicyContext
+	) const
+{
+	const FMeshBatchElement& BatchElement = Mesh.Elements[BatchElementIndex];
+	VertexShader->SetMesh(RHICmdList, VertexFactory, View, PrimitiveSceneProxy, BatchElement, DitheredLODTransitionValue);
+	if (HullShader && DomainShader)
+	{
+		HullShader->SetMesh(RHICmdList, VertexFactory, View, PrimitiveSceneProxy, BatchElement, DitheredLODTransitionValue);
+		DomainShader->SetMesh(RHICmdList, VertexFactory, View, PrimitiveSceneProxy, BatchElement, DitheredLODTransitionValue);
+	}
+
+	if (bNeedsPixelShader)
+	{
+		PixelShader->SetMesh(RHICmdList, VertexFactory, View, PrimitiveSceneProxy, BatchElement, DitheredLODTransitionValue);
+	}
+	FMeshDrawingPolicy::SetMeshRenderState(RHICmdList, View, PrimitiveSceneProxy, Mesh, BatchElementIndex, bBackFace, DitheredLODTransitionValue, ElementData, PolicyContext);
+}
+
+/** */
+void FDepthWaveWorksDrawingPolicy::DrawMesh(FRHICommandList& RHICmdList, const FMeshBatch& Mesh, int32 BatchElementIndex)
+{
+	if (SceneProxy->QuadTreeHandle)
+	{
+		auto WaveWorksRHI = SceneProxy->WaveWorksResource->GetWaveWorksRHI();
+		WaveWorksRHI->DrawQuadTree(
+			SceneProxy->QuadTreeHandle,
+			CurrentViewMatrix,
+			CurrentProjMatrix,
+			QuadTreeShaderInputMapping
+			);
+	}
+}
+
 int32 CompareDrawingPolicy(const FDepthDrawingPolicy& A,const FDepthDrawingPolicy& B)
 {
 	COMPAREDRAWINGPOLICYMEMBERS(VertexShader);
@@ -408,23 +548,45 @@ bool FDepthDrawingPolicyFactory::DrawMesh(
 		{
 			//render opaque primitives that support a separate position-only vertex buffer
 			const FMaterialRenderProxy* DefaultProxy = UMaterial::GetDefaultMaterial(MD_Surface)->GetRenderProxy(false);
-			FPositionOnlyDepthDrawingPolicy DrawingPolicy(Mesh.VertexFactory, DefaultProxy, *DefaultProxy->GetMaterial(View.GetFeatureLevel()), Material->IsTwoSided(), Material->IsWireframe());
-			RHICmdList.BuildAndSetLocalBoundShaderState(DrawingPolicy.GetBoundShaderStateInput(View.GetFeatureLevel()));
-			DrawingPolicy.SetSharedState(RHICmdList, &View, FDepthDrawingPolicy::ContextDataType());
 
-			int32 BatchElementIndex = 0;
-			uint64 Mask = BatchElementMask;
-			do
+			if (PrimitiveSceneProxy->IsWaveWorks())
 			{
-				if(Mask & 1)
-				{
-					DrawingPolicy.SetMeshRenderState(RHICmdList, View,PrimitiveSceneProxy,Mesh,BatchElementIndex,bBackFace,DitheredLODTransitionValue,FPositionOnlyDepthDrawingPolicy::ElementDataType(),FDepthDrawingPolicy::ContextDataType());
-					DrawingPolicy.DrawMesh(RHICmdList, Mesh,BatchElementIndex);
-				}
-				Mask >>= 1;
-				BatchElementIndex++;
-			} while(Mask);
+				FDepthWaveWorksDrawingPolicy DrawingPolicy(
+					Mesh.VertexFactory, 
+					DefaultProxy, 
+					*DefaultProxy->GetMaterial(View.GetFeatureLevel()),
+					View.ViewMatrices.ViewMatrix,
+					View.ViewMatrices.ProjMatrix,
+					Material->IsTwoSided(), 
+					View.GetFeatureLevel()
+					);
+				RHICmdList.BuildAndSetLocalBoundShaderState(DrawingPolicy.GetBoundShaderStateInput(View.GetFeatureLevel()));
+				DrawingPolicy.SetSharedState(RHICmdList, &View, FDepthDrawingPolicy::ContextDataType());
 
+				DrawingPolicy.SetMeshRenderState(RHICmdList, View, PrimitiveSceneProxy, Mesh, 0, bBackFace, DitheredLODTransitionValue, FMeshDrawingPolicy::ElementDataType(), FDepthDrawingPolicy::ContextDataType());
+				DrawingPolicy.SceneProxy = static_cast<FWaveWorksSceneProxy*>(const_cast<FPrimitiveSceneProxy*>(PrimitiveSceneProxy));
+
+				DrawingPolicy.DrawMesh(RHICmdList, Mesh, 0);
+			}
+			else
+			{
+				FPositionOnlyDepthDrawingPolicy DrawingPolicy(Mesh.VertexFactory, DefaultProxy, *DefaultProxy->GetMaterial(View.GetFeatureLevel()), Material->IsTwoSided(), Material->IsWireframe());
+				RHICmdList.BuildAndSetLocalBoundShaderState(DrawingPolicy.GetBoundShaderStateInput(View.GetFeatureLevel()));
+				DrawingPolicy.SetSharedState(RHICmdList, &View, FDepthDrawingPolicy::ContextDataType());
+
+				int32 BatchElementIndex = 0;
+				uint64 Mask = BatchElementMask;
+				do
+				{
+					if (Mask & 1)
+					{
+						DrawingPolicy.SetMeshRenderState(RHICmdList, View, PrimitiveSceneProxy, Mesh, BatchElementIndex, bBackFace, DitheredLODTransitionValue, FPositionOnlyDepthDrawingPolicy::ElementDataType(), FDepthDrawingPolicy::ContextDataType());
+						DrawingPolicy.DrawMesh(RHICmdList, Mesh, BatchElementIndex);
+					}
+					Mask >>= 1;
+					BatchElementIndex++;
+				} while (Mask);
+			}
 			bDirty = true;
 		}
 		else if (!IsTranslucentBlendMode(BlendMode))
@@ -454,22 +616,44 @@ bool FDepthDrawingPolicyFactory::DrawMesh(
 					MaterialRenderProxy = UMaterial::GetDefaultMaterial(MD_Surface)->GetRenderProxy(false);
 				}
 
-				FDepthDrawingPolicy DrawingPolicy(Mesh.VertexFactory, MaterialRenderProxy, *MaterialRenderProxy->GetMaterial(View.GetFeatureLevel()), Material->IsTwoSided(), View.GetFeatureLevel());
-				RHICmdList.BuildAndSetLocalBoundShaderState(DrawingPolicy.GetBoundShaderStateInput(View.GetFeatureLevel()));
-				DrawingPolicy.SetSharedState(RHICmdList, &View, FDepthDrawingPolicy::ContextDataType());
-
-				int32 BatchElementIndex = 0;
-				uint64 Mask = BatchElementMask;
-				do
+				if (PrimitiveSceneProxy->IsWaveWorks())
 				{
-					if(Mask & 1)
+					FDepthWaveWorksDrawingPolicy DrawingPolicy(
+						Mesh.VertexFactory,
+						MaterialRenderProxy,
+						*MaterialRenderProxy->GetMaterial(View.GetFeatureLevel()),
+						View.ViewMatrices.ViewMatrix,
+						View.ViewMatrices.ProjMatrix,
+						Material->IsTwoSided(),
+						View.GetFeatureLevel()
+						);
+					RHICmdList.BuildAndSetLocalBoundShaderState(DrawingPolicy.GetBoundShaderStateInput(View.GetFeatureLevel()));
+					DrawingPolicy.SetSharedState(RHICmdList, &View, FDepthDrawingPolicy::ContextDataType());
+
+					DrawingPolicy.SetMeshRenderState(RHICmdList, View, PrimitiveSceneProxy, Mesh, 0, bBackFace, DitheredLODTransitionValue, FMeshDrawingPolicy::ElementDataType(), FDepthDrawingPolicy::ContextDataType());
+					DrawingPolicy.SceneProxy = static_cast<FWaveWorksSceneProxy*>(const_cast<FPrimitiveSceneProxy*>(PrimitiveSceneProxy));
+
+					DrawingPolicy.DrawMesh(RHICmdList, Mesh, 0);
+				}
+				else
+				{
+					FDepthDrawingPolicy DrawingPolicy(Mesh.VertexFactory, MaterialRenderProxy, *MaterialRenderProxy->GetMaterial(View.GetFeatureLevel()), Material->IsTwoSided(), View.GetFeatureLevel());
+					RHICmdList.BuildAndSetLocalBoundShaderState(DrawingPolicy.GetBoundShaderStateInput(View.GetFeatureLevel()));
+					DrawingPolicy.SetSharedState(RHICmdList, &View, FDepthDrawingPolicy::ContextDataType());
+
+					int32 BatchElementIndex = 0;
+					uint64 Mask = BatchElementMask;
+					do
 					{
-						DrawingPolicy.SetMeshRenderState(RHICmdList, View,PrimitiveSceneProxy,Mesh,BatchElementIndex,bBackFace,DitheredLODTransitionValue,FMeshDrawingPolicy::ElementDataType(),FDepthDrawingPolicy::ContextDataType());
-						DrawingPolicy.DrawMesh(RHICmdList, Mesh,BatchElementIndex);
-					}
-					Mask >>= 1;
-					BatchElementIndex++;
-				} while(Mask);
+						if (Mask & 1)
+						{
+							DrawingPolicy.SetMeshRenderState(RHICmdList, View, PrimitiveSceneProxy, Mesh, BatchElementIndex, bBackFace, DitheredLODTransitionValue, FMeshDrawingPolicy::ElementDataType(), FDepthDrawingPolicy::ContextDataType());
+							DrawingPolicy.DrawMesh(RHICmdList, Mesh, BatchElementIndex);
+						}
+						Mask >>= 1;
+						BatchElementIndex++;
+					} while (Mask);
+				}
 
 				bDirty = true;
 			}

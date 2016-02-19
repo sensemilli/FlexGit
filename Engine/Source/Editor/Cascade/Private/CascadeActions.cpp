@@ -75,6 +75,18 @@ void FCascadeCommands::RegisterCommands()
 	UI_COMMAND(NewEmitterBefore, "Add New Emitter Before", "Add New Emitter Before Selected", EUserInterfaceActionType::Button, FInputChord());
 	UI_COMMAND(NewEmitterAfter, "Add New Emitter After", "Add New Emitter After Selected", EUserInterfaceActionType::Button, FInputChord());
 	UI_COMMAND(RemoveDuplicateModules, "Remove Duplicate Modules", "Remove Duplicate Modules", EUserInterfaceActionType::Button, FInputChord());
+
+#if WITH_APEX_TURBULENCE
+	// Turbulence FS
+	UI_COMMAND(ToggleVelocityField, "Velocity Field", "Velocity Field", EUserInterfaceActionType::ToggleButton, FInputGesture());
+	UI_COMMAND(ToggleStreamLines, "Streamlines", "Streamlines", EUserInterfaceActionType::ToggleButton, FInputGesture());
+	UI_COMMAND(ToggleBBox, "Bounding Box", "Bounding Box", EUserInterfaceActionType::ToggleButton, FInputGesture());
+
+	// Basic FS
+	UI_COMMAND(ToggleJetActor, "Jet Actor", "Jet Actor", EUserInterfaceActionType::ToggleButton, FInputGesture());
+	UI_COMMAND(ToggleVortexActor, "Vortex Actor", "Vortex Actor", EUserInterfaceActionType::ToggleButton, FInputGesture());
+	UI_COMMAND(ToggleNoiseActor, "Noise Actor", "Noise Actor", EUserInterfaceActionType::ToggleButton, FInputGesture());
+#endif
 }
 
 PRAGMA_ENABLE_OPTIMIZATION

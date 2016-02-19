@@ -1,0 +1,383 @@
+#include "GeneratedUniformBuffers.usf" 
+#include "ShaderVersion.usf"
+#include "Common.usf"
+#include "ReflectionEnvironmentShared.usf"
+#include "BRDF.usf"
+#include "SHCommon.usf"
+#include "DeferredLightingCommon.usf"
+#include "HeightFogCommon.usf"
+
+struct FVertexFactoryInterpolantsVSToPS
+{};
+#include "ShadowDepthCommon.usf"
+
+#include "GFSDK_HairWorks_ShaderCommon.usf"
+
+float4 IndirectLightingSHCoefficients[3];
+
+float3 LightDir;
+float3 LightColor;
+
+GFSDK_Hair_ConstantBuffer HairConstantBuffer;
+
+SamplerState TextureSampler;
+
+Texture2D RootColorTexture;
+Texture2D TipColorTexture;
+Texture2D SpecularColorTexture;
+
+GFSDK_HAIR_DECLARE_SHADER_RESOURCES(t10, t11, t12);
+
+Buffer<uint> LightGrid;
+float UseForwardLighting;
+
+struct MainOut
+{
+	float4 Color : SV_Target0;
+};
+
+/** Calculates lighting for a given position, normal, etc with a fully featured lighting model designed for quality. */
+float4 GetDynamicLightingHairWorks(float3 WorldPosition, float3 CameraVector, float2 InUV, FScreenSpaceData ScreenSpaceData, uint ShadingModelID, FDeferredLightData LightData, float4 LightAttenuation, uint2 Random, GFSDK_Hair_ShaderAttributes ShaderAttribs)
+{
+	FLightAccumulator LightAccumulator = (FLightAccumulator)0;
+
+	float3 V = -CameraVector;
+	float3 N = ScreenSpaceData.GBuffer.WorldNormal;
+	float3 ToLight = LightData.LightDirection;
+	float3 L = ToLight;	// no need to normalize
+	float NoL = saturate( dot(N, L) );
+	float DistanceAttenuation = 1;
+	float LightRadiusMask = 1;
+	float SpotFalloff = 1;
+
+	if (LightData.bRadialLight)
+	{
+		ToLight = LightData.LightPositionAndInvRadius.xyz - WorldPosition;
+		
+		float DistanceSqr = dot( ToLight, ToLight );
+		L = ToLight * rsqrt( DistanceSqr );
+
+		if (LightData.bInverseSquared)
+		{
+			const float SourceLength = LightData.SpotAnglesAndSourceRadius.w;
+
+			BRANCH
+			if( SourceLength > 0 )
+			{
+				// Line segment irradiance
+				float3 L01 = LightData.LightDirection * SourceLength;
+				float3 L0 = ToLight - 0.5 * L01;
+				float3 L1 = ToLight + 0.5 * L01;
+				float LengthL0 = length( L0 );
+				float LengthL1 = length( L1 );
+
+				DistanceAttenuation = rcp( ( LengthL0 * LengthL1 + dot( L0, L1 ) ) * 0.5 + 1 );
+				NoL = saturate( 0.5 * ( dot(N, L0) / LengthL0 + dot(N, L1) / LengthL1 ) );
+			}
+			else
+			{
+				// Sphere irradiance (technically just 1/d^2 but this avoids inf)
+				DistanceAttenuation = 1 / ( DistanceSqr + 1 );
+				NoL = saturate( dot( N, L ) );
+			}
+
+			// TODO optimize
+			LightRadiusMask = Square( saturate( 1 - Square( DistanceSqr * Square(LightData.LightPositionAndInvRadius.w) ) ) );
+		}
+		else
+		{
+			DistanceAttenuation = 1;
+			NoL = saturate( dot( N, L ) );
+			
+			LightRadiusMask = RadialAttenuation(ToLight * LightData.LightPositionAndInvRadius.w, LightData.LightColorAndFalloffExponent.w);	
+		}
+
+		if (LightData.bSpotLight)
+		{
+			SpotFalloff = SpotAttenuation(L, -LightData.LightDirection, LightData.SpotAnglesAndSourceRadius.xy);
+		}
+	}
+
+	LightAccumulator.EstimatedCost += 0.3f;		// running the PixelShader at all has a cost
+
+	BRANCH
+	if (LightRadiusMask > 0 && SpotFalloff > 0)
+	{
+		float SurfaceShadow = 1;
+		float SubsurfaceShadow = 1;
+
+		BRANCH
+		if (LightData.bShadowed)
+		{
+			GetShadowTerms(ScreenSpaceData, LightData, WorldPosition, LightAttenuation, SurfaceShadow, SubsurfaceShadow);
+
+			// greatly reduces shadow mapping artifacts
+			SurfaceShadow *= saturate(dot(N, L) * 6 - 0.2);
+		}
+		else
+		{
+			SurfaceShadow = ScreenSpaceData.AmbientOcclusion;
+		}
+
+		float SurfaceAttenuation	= (DistanceAttenuation * LightRadiusMask * SpotFalloff) * SurfaceShadow;
+		float SubsurfaceAttenuation	= (DistanceAttenuation * LightRadiusMask * SpotFalloff) * SubsurfaceShadow;
+
+		LightAccumulator.EstimatedCost += 0.3f;		// add the cost of getting the shadow terms
+
+		{
+			const float3 LightColor = LightData.LightColorAndFalloffExponent.rgb;
+
+// NVCHANGE_BEGIN: Add VXGI
+#if VXGI_EMITTANCE_VOXELIZATION
+
+			float3 SurfaceLightingDiff = Diffuse_Lambert(ScreenSpaceData.GBuffer.DiffuseColor);
+			LightAccumulator_Add(LightAccumulator, SurfaceLightingDiff, 0, LightColor * (NoL * SurfaceAttenuation));
+
+#else
+// NVCHANGE_END: Add VXGI
+
+			const float ClearCoatRoughness	= ScreenSpaceData.GBuffer.CustomData.y;
+
+			float3 LobeRoughness = float3(ClearCoatRoughness, ScreenSpaceData.GBuffer.Roughness, 1);
+			float3 LobeEnergy = AreaLightSpecular(LightData, LobeRoughness, ToLight, L, V, N);
+
+			// accumulate diffuse and specular
+			{
+#if 1	// for testing if there is a perf impact
+				// correct screen space subsurface scattering
+				float3 SurfaceLightingDiff = SurfaceShading(ScreenSpaceData.GBuffer, LobeRoughness, LobeEnergy, L, V, N, float2(1, 0));
+				float3 SurfaceLightingSpec = GFSDK_Hair_ComputeHairSpecularShading(L, ShaderAttribs, HairConstantBuffer.defaultMaterial) * HairConstantBuffer.defaultMaterial.specularColor; //SurfaceShading(ScreenSpaceData.GBuffer, LobeRoughness, LobeEnergy, L, V, N, float2(0, 1));
+				LightAccumulator_Add(LightAccumulator, SurfaceLightingDiff, SurfaceLightingSpec, LightColor * (NoL * SurfaceAttenuation));
+#else
+				// wrong screen space subsurface scattering but potentially faster
+				float3 SurfaceLighting = SurfaceShading(ScreenSpaceData.GBuffer, LobeRoughness, LobeEnergy, L, V, N, float2(1, 1));
+				LightAccumulator_Add(LightAccumulator, SurfaceLighting, 0, LightColor * (NoL * SurfaceAttenuation));
+#endif
+			}
+
+			// accumulate subsurface
+			{
+				float3 SubsurfaceLighting = SubsurfaceShading(ScreenSpaceData.GBuffer, L, V, N);
+
+				LightAccumulator_Add(LightAccumulator, SubsurfaceLighting, 0, LightColor * SubsurfaceAttenuation);
+
+				LightAccumulator.EstimatedCost += 0.4f;		// add the cost of the lighting computations (should sum up to 1 form one light)
+			}
+
+// NVCHANGE_BEGIN: Add VXGI
+#endif // VXGI_EMITTANCE_VOXELIZATION
+// NVCHANGE_END: Add VXGI
+
+		}
+	}
+
+	return LightAccumulator_GetResult(LightAccumulator);
+}
+
+float3 LightingForOneLight(GFSDK_Hair_PixelShaderInput Input, GFSDK_Hair_ShaderAttributes ShaderAttribs, uint LightIndex, FScreenSpaceData ScreenSpaceData)
+{
+	float3 CameraVector = normalize(ShaderAttribs.P - View.ViewOrigin.xyz);
+	
+	FDeferredLightData LightData = (FDeferredLightData)0;
+	LightData.LightPositionAndInvRadius = ForwardLightData.LightPositionAndInvRadius[LightIndex];
+	LightData.LightColorAndFalloffExponent = ForwardLightData.LightColorAndFalloffExponent[LightIndex];
+	{
+		float4 Value = ForwardLightData.LightDirectionAndSpotlightMaskAndMinRoughness[LightIndex];
+		LightData.LightDirection = Value.xyz;
+		LightData.bSpotLight = Value.w > 0;
+		LightData.MinRoughness = abs(Value.w);
+	}
+	LightData.SpotAnglesAndSourceRadius = float4( ForwardLightData.SpotAnglesAndSourceRadiusAndDir[LightIndex].xyz, 0 );
+	// currently we don't support shadows
+	LightData.ShadowMapChannelMask = 0;
+	LightData.bInverseSquared = ForwardLightData.LightColorAndFalloffExponent[LightIndex].w == 0;
+	// Only radial lights supported with tiled deferred
+	LightData.bRadialLight = ForwardLightData.SpotAnglesAndSourceRadiusAndDir[LightIndex].w == 0;
+	// The only type of shadowing supported for lights using tiled is static shadowing, so the light should only compute shadowing if it has static shadowing
+	LightData.bShadowed = dot(LightData.ShadowMapChannelMask, float4(1, 1, 1, 1));
+	
+	float2 ScreenUV = Input.position.xy * View.BufferSizeAndInvSize.zw;
+
+	return GetDynamicLightingHairWorks(ShaderAttribs.P, CameraVector, ScreenUV, ScreenSpaceData, ScreenSpaceData.GBuffer.ShadingModelID, LightData, float4(1, 1, 1, 1), uint2(0,0), ShaderAttribs).rgb;
+}
+
+// @param WorldNormal is not assumed to be normalized
+float3 AccumulateForwardLights(GFSDK_Hair_PixelShaderInput Input, GFSDK_Hair_ShaderAttributes ShaderAttribs, float3 DiffuseColor, float Roughness, float3 SpecularColor)
+{
+	float3 Ret = 0;
+
+	// not yet supported on opengl (firstbitlow() does not exist)
+#if !COMPILER_GLSL && !COMPILER_GLSL_ES2
+
+	// Which tile we are?
+	int2 Tile = int2((Input.position.xy - View.ViewRectMin.xy) * ForwardLightData.InvTileSize);
+
+	// Get bitmask from CPU for this tile
+	uint culling = LightGrid[Tile.x + Tile.y * ForwardLightData.TileCountX];
+
+	FScreenSpaceData ScreenSpaceData = (FScreenSpaceData)0;
+	ScreenSpaceData.GBuffer.WorldNormal = normalize(ShaderAttribs.N);
+	ScreenSpaceData.GBuffer.Roughness = Roughness;
+	ScreenSpaceData.GBuffer.SpecularColor = SpecularColor;
+	ScreenSpaceData.GBuffer.DiffuseColor = DiffuseColor;
+	ScreenSpaceData.GBuffer.BaseColor = 1;
+	ScreenSpaceData.GBuffer.Specular = 1;
+	ScreenSpaceData.GBuffer.Opacity = 1;
+	ScreenSpaceData.GBuffer.PrecomputedShadowFactors = 1;
+	ScreenSpaceData.GBuffer.ShadingModelID = SHADINGMODELID_DEFAULT_LIT;
+	//ScreenSpaceData.GBuffer.ShadingModelID = SHADINGMODELID_TWOSIDED_FOLIAGE;
+	ScreenSpaceData.GBuffer.CustomData = DiffuseColor;
+	ScreenSpaceData.AmbientOcclusion = 1;
+
+	// todo: support more than 32 lights
+
+	// loop through all lights specified by this bitmask
+	ALLOW_UAV_CONDITION while (culling != 0)
+	{
+		uint LightIndex = firstbitlow(culling);
+
+		culling &= ~(1 << LightIndex);
+
+		Ret += LightingForOneLight(Input, ShaderAttribs, LightIndex, ScreenSpaceData);
+	}
+#endif
+
+	return Ret;
+}
+
+/* Standard HairWorks Pixel Shader (Single light source) */
+MainOut Main(GFSDK_Hair_PixelShaderInput input)
+{
+	// Shader attributes
+	GFSDK_Hair_ShaderAttributes shaderAttributes = GFSDK_Hair_GetShaderAttributes(input, HairConstantBuffer);
+
+	// Setup material
+	if (HairConstantBuffer.useSpecularTexture)
+		HairConstantBuffer.defaultMaterial.specularColor.rgb = SpecularColorTexture.SampleLevel(TextureSampler, shaderAttributes.texcoords.xy, 0).rgb;
+
+	// Diffuse
+	float diffuse = GFSDK_Hair_ComputeHairDiffuseShading(
+		LightDir, 
+		shaderAttributes.T, 
+		shaderAttributes.N, 
+		HairConstantBuffer.defaultMaterial.diffuseScale,
+		HairConstantBuffer.defaultMaterial.diffuseBlend
+		);
+
+	// Indirect light
+	float3 IndirectLight = 0;
+	{
+		FTwoBandSHVectorRGB PointIndirectLighting;
+		PointIndirectLighting.R.V = IndirectLightingSHCoefficients[0];
+		PointIndirectLighting.G.V = IndirectLightingSHCoefficients[1];
+		PointIndirectLighting.B.V = IndirectLightingSHCoefficients[2];
+
+		FTwoBandSHVector DiffuseTransferSH = CalcDiffuseTransferSH(shaderAttributes.N.xyz, 1);
+		IndirectLight = max(half3(0, 0, 0), DotSH(PointIndirectLighting, DiffuseTransferSH));
+
+		IndirectLight *= View.IndirectLightingColorScale;
+	}
+
+	// Sky light
+	float3 sky = GetSkySHDiffuse(shaderAttributes.N) * View.SkyLightColor.rgb;
+
+	// Specular
+	float specular = GFSDK_Hair_ComputeHairSpecularShading(
+		LightDir,
+		shaderAttributes,
+		HairConstantBuffer.defaultMaterial
+		);
+
+	// Glint
+	float glint = GFSDK_Hair_ComputeHairGlint(
+		HairConstantBuffer,
+		HairConstantBuffer.defaultMaterial,
+		shaderAttributes
+		);
+
+	specular *= lerp(1.0, glint, HairConstantBuffer.defaultMaterial.glintStrength);
+
+	float4 lightAttenuation = Square(LightAttenuationTexture.Sample(TextureSampler, (input.position.xy + View.ViewRectMin.xy) * View.ViewSizeAndSceneTexelSize.zw));
+	const float3 lightColor = LightColor * min(lightAttenuation.x, lightAttenuation.z);
+	float luminance = dot(lightColor, float3(0.3, 0.5, 0.2));
+	sky += HairConstantBuffer.defaultMaterial.glintStrength * glint * float3(luminance, luminance, luminance);
+
+	// Sum
+	float3 hairColor = GFSDK_Hair_SampleHairColorTex(
+		HairConstantBuffer, 
+		HairConstantBuffer.defaultMaterial, 
+		TextureSampler,
+		RootColorTexture,
+		TipColorTexture,
+		shaderAttributes.texcoords
+		);
+
+	// Avoid looking too bright
+	float3 diffuseColor = Diffuse_Lambert(hairColor);
+	float3 specularColor = Diffuse_Lambert(HairConstantBuffer.defaultMaterial.specularColor);
+
+	MainOut outPut = (MainOut)0;
+
+	outPut.Color.rgb += (sky + IndirectLight) * diffuseColor + (diffuse * diffuseColor + specular * specularColor) * lightColor;
+
+	outPut.Color.a = GFSDK_Hair_ComputeAlpha(
+		HairConstantBuffer,
+		HairConstantBuffer.defaultMaterial,
+		shaderAttributes);
+
+	return outPut;
+}
+
+/* Multi light HairWorks Pixel Shader */
+MainOut MultiLightMain(GFSDK_Hair_PixelShaderInput input)
+{
+	// Shader attributes
+	GFSDK_Hair_ShaderAttributes shaderAttributes = GFSDK_Hair_GetShaderAttributes(input, HairConstantBuffer);
+
+	// Setup material
+	if (HairConstantBuffer.useSpecularTexture)
+		HairConstantBuffer.defaultMaterial.specularColor.rgb = SpecularColorTexture.SampleLevel(TextureSampler, shaderAttributes.texcoords.xy, 0).rgb;
+
+	MainOut outPut = (MainOut)0;
+
+	// Sky light
+	float3 sky = GetSkySHDiffuse(shaderAttributes.N) * View.SkyLightColor.rgb;
+
+	// Vertex fog
+	float4 VertexFog = CalculateVertexHeightFog(shaderAttributes.P, View.ViewOrigin);
+
+	// Sum
+	float3 hairColor = GFSDK_Hair_SampleHairColorTex(
+		HairConstantBuffer, 
+		HairConstantBuffer.defaultMaterial, 
+		TextureSampler,
+		RootColorTexture,
+		TipColorTexture,
+		shaderAttributes.texcoords
+		);
+
+
+	outPut.Color.a = GFSDK_Hair_ComputeAlpha(
+		HairConstantBuffer,
+		HairConstantBuffer.defaultMaterial,
+		shaderAttributes);
+
+	outPut.Color.rgb = AccumulateForwardLights(input, shaderAttributes, hairColor, 0, HairConstantBuffer.defaultMaterial.specularColor) * hairColor;
+
+	// Sky light
+	outPut.Color.rgb += sky * hairColor;
+
+	outPut.Color.rgb = outPut.Color.rgb * VertexFog.a + VertexFog.rgb;
+
+	return outPut;
+}
+
+float4 SimpleMain() : SV_Target0
+{
+	return 1;
+}
+
+float ShadowDepthMain(in float4 Position: SV_Position) : SV_Depth
+{
+	return Position.z * Position.w * ShadowParams.y + ShadowParams.x;
+}

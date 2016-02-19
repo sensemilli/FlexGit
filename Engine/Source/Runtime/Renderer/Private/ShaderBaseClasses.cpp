@@ -6,6 +6,7 @@
 
 #include "RendererPrivate.h"
 #include "ScenePrivate.h"
+#include "WaveWorksResource.h"
 
 /** If true, cached uniform expressions are allowed. */
 int32 FMaterialShader::bAllowCachedUniformExpressions = true;
@@ -73,6 +74,7 @@ FMaterialShader::FMaterialShader(const FMaterialShaderType::CompiledShaderInitia
 	// only used it Material has expression that requires PerlinNoise3DTexture
 	PerlinNoise3DTexture.Bind(Initializer.ParameterMap,TEXT("PerlinNoise3DTexture"));
 	PerlinNoise3DTextureSampler.Bind(Initializer.ParameterMap,TEXT("PerlinNoise3DTextureSampler"));
+	WaveWorksParameters.Bind(Initializer.ParameterMap, EShaderFrequency(Initializer.Target.Frequency));
 
 	GlobalDistanceFieldParameters.Bind(Initializer.ParameterMap);
 }
@@ -303,6 +305,17 @@ void FMaterialShader::SetParameters(
 			);
 	}
 
+	if (UniformExpressionCache->WaveWorks.IsValid())
+	{
+		FWaveWorksRHIRef WaveWorksRHI;
+		for (auto* CurrentWaveWorks : TObjectRange<UWaveWorks>())
+		{
+			if (CurrentWaveWorks->Id == UniformExpressionCache->WaveWorks && CurrentWaveWorks->Resource)
+				WaveWorksRHI = CurrentWaveWorks->Resource->GetWaveWorksRHI();
+		}
+		WaveWorksParameters.Set(RHICmdList, ShaderRHI, View, WaveWorksRHI);
+	}
+
 	GlobalDistanceFieldParameters.Set(RHICmdList, ShaderRHI, static_cast<const FViewInfo&>(View).GlobalDistanceFieldInfo.ParameterData);
 }
 
@@ -351,6 +364,8 @@ bool FMaterialShader::Serialize(FArchive& Ar)
 	Ar << PerFramePrevScalarExpressions;
 	Ar << PerFramePrevVectorExpressions;
 	Ar << GlobalDistanceFieldParameters;
+
+	Ar << WaveWorksParameters;
 
 	return bShaderHasOutdatedParameters;
 }

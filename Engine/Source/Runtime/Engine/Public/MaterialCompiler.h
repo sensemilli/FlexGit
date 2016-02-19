@@ -76,6 +76,11 @@ public:
 	virtual int32 ReflectionVector() = 0;
 	virtual int32 ReflectionAboutCustomWorldNormal(int32 CustomWorldNormal, int32 bNormalizeCustomWorldNormal) = 0;
 	virtual int32 CameraVector() = 0;
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	virtual int32 VxgiVoxelization() = 0;
+#endif
+	// NVCHANGE_END: Add VXGI
 	virtual int32 LightVector() = 0;
 
 	virtual int32 ScreenPosition() = 0;
@@ -96,6 +101,8 @@ public:
 	virtual int32 ParticleDirection() = 0;
 	virtual int32 ParticleSpeed() = 0;
 	virtual int32 ParticleSize() = 0;
+
+	virtual int32 FlexFluidSurfaceThickness(int32 Offset, int32 UV, bool bUseOffset) = 0;
 
 	virtual int32 If(int32 A,int32 B,int32 AGreaterThanB,int32 AEqualsB,int32 ALessThanB,int32 Threshold) = 0;
 
@@ -181,6 +188,8 @@ public:
 	virtual int32 SpeedTree(ESpeedTreeGeometryType GeometryType, ESpeedTreeWindType WindType, ESpeedTreeLODType LODType, float BillboardThreshold, bool bAccurateWindVelocities) = 0;
 	virtual int32 TextureCoordinateOffset() = 0;
 	virtual int32 EyeAdaptation() = 0;
+
+	virtual int32 WaveWorks(class UWaveWorks* WaveWorks, int32 UVs, float DistanceScale, FString OutputName) = 0;
 };
 
 /** 
@@ -243,6 +252,12 @@ public:
 	virtual int32 CameraVector() override { return Compiler->CameraVector(); }
 	virtual int32 LightVector() override { return Compiler->LightVector(); }
 
+	// NVCHANGE_BEGIN: Add VXGI
+#if WITH_GFSDK_VXGI
+	virtual int32 VxgiVoxelization() override{ return Compiler->VxgiVoxelization(); }
+#endif
+	// NVCHANGE_END: Add VXGI
+
 	virtual int32 ScreenPosition() override { return Compiler->ScreenPosition(); }
 	virtual int32 WorldPosition(EWorldPositionIncludedOffsets WorldPositionIncludedOffsets) override { return Compiler->WorldPosition(WorldPositionIncludedOffsets); }
 	virtual int32 ObjectWorldPosition() override { return Compiler->ObjectWorldPosition(); }
@@ -256,6 +271,8 @@ public:
 	virtual int32 ParticlePosition() override { return Compiler->ParticlePosition(); }
 	virtual int32 ParticleRadius() override { return Compiler->ParticleRadius(); }
 	virtual int32 SphericalParticleOpacity(int32 Density) override { return Compiler->SphericalParticleOpacity(Density); }
+
+	virtual int32 FlexFluidSurfaceThickness(int32 Offset, int32 UV, bool bUseOffset) override { return Compiler->FlexFluidSurfaceThickness(Offset, UV, bUseOffset); }
 
 	virtual int32 If(int32 A,int32 B,int32 AGreaterThanB,int32 AEqualsB,int32 ALessThanB,int32 Threshold) override { return Compiler->If(A,B,AGreaterThanB,AEqualsB,ALessThanB,Threshold); }
 
@@ -371,6 +388,12 @@ public:
 	{
 		return Compiler->EyeAdaptation();
 	}
+
+	virtual int32 WaveWorks(class UWaveWorks* WaveWorks, int32 UVs, float DistanceScale, FString OutputName)
+	{
+		return Compiler->WaveWorks(WaveWorks, UVs, DistanceScale, OutputName);
+	}
+
 protected:
 		
 	FMaterialCompiler* Compiler;

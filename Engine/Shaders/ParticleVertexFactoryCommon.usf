@@ -36,8 +36,12 @@ float4 ReprojectPosition(float4 TranslatedWorldPosition, float DepthOffset)
 	// Transform into view space
 	float4 ViewSpacePosition = mul(TranslatedWorldPosition, View.TranslatedWorldToView);
 	float ViewDepth = ViewSpacePosition.z;
+
+	float DepthOffsetClamped = clamp(ViewDepth, 0.0f, DepthOffset);
+	float NewViewDepth = ViewDepth - DepthOffsetClamped;
+
 	// Project the vertex onto the near plane, then reposition at the new depth
-	float4 ReprojectedViewSpacePosition = float4(ViewSpacePosition.xy * (ViewDepth - DepthOffset) / ViewDepth, ViewDepth - DepthOffset, 1);
+	float4 ReprojectedViewSpacePosition = float4(ViewSpacePosition.xy * NewViewDepth / ViewDepth, NewViewDepth, 1);
 	// Transform back into translated world space
 	float4 ReprojectedWorldPosition = mul(ReprojectedViewSpacePosition, View.ViewToTranslatedWorld);
 	return ReprojectedWorldPosition;

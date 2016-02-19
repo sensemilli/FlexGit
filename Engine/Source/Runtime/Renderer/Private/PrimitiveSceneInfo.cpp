@@ -101,6 +101,9 @@ FPrimitiveSceneInfo::FPrimitiveSceneInfo(UPrimitiveComponent* InComponent,FScene
 	ComponentForDebuggingOnly(InComponent),
 	bNeedsStaticMeshUpdate(false),
 	bNeedsUniformBufferUpdate(false)
+	// NVCHANGE_BEGIN: Add VXGI
+	, VxgiLastVoxelizationPass(0)
+	// NVCHANGE_END: Add VXGI
 {
 	check(ComponentForDebuggingOnly);
 	check(PrimitiveComponentId.IsValid());
@@ -480,6 +483,9 @@ bool FPrimitiveSceneInfo::ShouldRenderVelocity(const FViewInfo& View, bool bChec
 	{
 		return false;
 	}
+
+	if (PrimitiveViewRelevance.bHair)
+		return false;
 
 	const float LODFactorDistanceSquared = (Proxy->GetBounds().Origin - View.ViewMatrices.ViewOrigin).SizeSquared() * FMath::Square(View.LODDistanceFactor);
 

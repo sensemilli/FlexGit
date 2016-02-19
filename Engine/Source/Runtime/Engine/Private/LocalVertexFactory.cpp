@@ -80,11 +80,27 @@ void FLocalVertexFactory::InitRHI()
 	if(Data.PositionComponent.VertexBuffer != Data.TangentBasisComponents[0].VertexBuffer)
 	{
 		FVertexDeclarationElementList PositionOnlyStreamElements;
-		PositionOnlyStreamElements.Add(AccessPositionStreamComponent(Data.PositionComponent,0));
+		AddVertexPositionElements(Data, PositionOnlyStreamElements);
 		InitPositionDeclaration(PositionOnlyStreamElements);
 	}
 
 	FVertexDeclarationElementList Elements;
+	AddVertexElements(Data, Elements);
+
+	check(Streams.Num() > 0);
+
+	InitDeclaration(Elements, Data);
+
+	check(IsValidRef(GetDeclaration()));
+}
+
+void FLocalVertexFactory::AddVertexPositionElements(DataType& Data, FVertexDeclarationElementList& Elements)
+{
+	Elements.Add(AccessPositionStreamComponent(Data.PositionComponent, 0));
+}
+
+void FLocalVertexFactory::AddVertexElements(DataType& Data, FVertexDeclarationElementList& Elements)
+{
 	if(Data.PositionComponent.VertexBuffer != NULL)
 	{
 		Elements.Add(AccessStreamComponent(Data.PositionComponent,0));
@@ -140,12 +156,6 @@ void FLocalVertexFactory::InitRHI()
 	{
 		Elements.Add(AccessStreamComponent(Data.TextureCoordinates[0],15));
 	}
-
-	check(Streams.Num() > 0);
-
-	InitDeclaration(Elements,Data);
-
-	check(IsValidRef(GetDeclaration()));
 }
 
 FVertexFactoryShaderParameters* FLocalVertexFactory::ConstructShaderParameters(EShaderFrequency ShaderFrequency)

@@ -416,6 +416,8 @@ public:
 	inline bool UseEditorDepthTest() const { return bUseEditorDepthTest; }
 	inline bool SupportsDistanceFieldRepresentation() const { return bSupportsDistanceFieldRepresentation; }
 	inline bool SupportsHeightfieldRepresentation() const { return bSupportsHeightfieldRepresentation; }
+	inline bool IsFlexFluidSurface() const { return bFlexFluidSurface; }
+	inline bool IsWaveWorks() const { return bWaveWorks; }
 	inline bool TreatAsBackgroundForOcclusion() const { return bTreatAsBackgroundForOcclusion; }
 	inline bool NeedsLevelAddedToWorldNotification() const { return bNeedsLevelAddedToWorldNotification; }
 	inline bool IsComponentLevelVisible() const { return bIsComponentLevelVisible; }
@@ -642,6 +644,12 @@ protected:
 
 	/** Whether this primitive requires notification when its level is added to the world and made visible for the first time. */
 	uint32 bNeedsLevelAddedToWorldNotification : 1;
+
+	/** Whether the primitive has Flex fluid surface functionality */
+	uint32 bFlexFluidSurface : 1;
+
+	/** Whether the primitive is a WaveWorks primitive */
+	uint32 bWaveWorks : 1;
 
 private:
 
