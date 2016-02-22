@@ -2,6 +2,7 @@
 
 #include "EnginePrivate.h"
 #include "PhysXSupport.h"
+#include "PhysicsEngine/FlexContainerInstance.h"
 #include "DynamicMeshBuilder.h"
 
 

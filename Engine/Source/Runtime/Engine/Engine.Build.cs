@@ -75,11 +75,8 @@ public class Engine : ModuleRules
 				"Niagara",
                 "Internationalization",
                 "PacketHandler",
-<<<<<<< HEAD
                 "MaterialShaderQualitySettings",
-=======
                 "WaveWorks"
->>>>>>> remotes/MyGit/4.9.2_NVIDIA_Techs
 			}
         );
 

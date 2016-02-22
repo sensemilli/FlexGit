@@ -2359,7 +2359,7 @@ TArray<UActorComponent*> AActor::GetComponentsByClass(TSubclassOf<UActorComponen
 {
 	TArray<UActorComponent*> ValidComponents;
 
-        // In the UActorComponent case we can skip the IsA checks for a slight performance benefit
+		// In the UActorComponent case we can skip the IsA checks for a slight performance benefit
 	if (ComponentClass == UActorComponent::StaticClass())
 	{
 		for (UActorComponent* Component : OwnedComponents)
@@ -2517,8 +2517,8 @@ void AActor::PostSpawnInitialize(FTransform const& UserSpawnTransform, AActor* I
 		// Set the actor's location and rotation since it has a native rootcomponent
 		// Note that we respect any initial transformation the root component may have from the CDO, so the final transform
 		// might necessarily be exactly the passed-in UserSpawnTransform.
- 		const FTransform RootTransform(SceneRootComponent->RelativeRotation, SceneRootComponent->RelativeLocation, SceneRootComponent->RelativeScale3D);
- 		const FTransform FinalRootComponentTransform = RootTransform * UserSpawnTransform;
+		const FTransform RootTransform(SceneRootComponent->RelativeRotation, SceneRootComponent->RelativeLocation, SceneRootComponent->RelativeScale3D);
+		const FTransform FinalRootComponentTransform = RootTransform * UserSpawnTransform;
 		SceneRootComponent->SetWorldTransform(FinalRootComponentTransform);
 	}
 

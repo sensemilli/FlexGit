@@ -41,7 +41,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = Flex)
 	bool OverrideAsset;
 
-	UPROPERTY(EditAnywhere, Category = Flex)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Flex)
 	bool EnableParticleMode;
 
 	/** The simulation container to spawn any flex data contained in the static mesh into */
@@ -66,7 +66,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "FlexParticle")
 	EFlexParticleMode ParticleMode;
 
-	UPROPERTY(EditAnywhere, Category = "FlexParticle")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "FlexParticle")
 	UMaterialInterface* ParticleMaterial;
 
 	UPROPERTY(EditAnywhere, Category = "FlexParticle")
@@ -75,7 +75,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "FlexParticle")
 	UMaterialInterface* DiffuseParticleMaterial;
 
-	UPROPERTY(EditAnywhere, Category = "FlexParticle")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "FlexParticle")
 	UFlexFluidSurface* FluidSurfaceTemplate;
 
 	UPROPERTY(EditAnywhere, Category = "FlexFillVolume", meta = (DisplayName="Radius"))

@@ -583,23 +583,23 @@ void InitGamePhys()
 	// NVCHANGE_BEGIN : JCAO - Add Turbulence Module
 #if WITH_APEX_TURBULENCE
 	GApexModuleTurbulenceFS = static_cast<NxModuleTurbulenceFS*>(GApexSDK->createModule("TurbulenceFS", &ErrorCode));
-	check(GApexModuleTurbulenceFS);
-	GApexModuleTurbulenceFS->enableOutputVelocityField();
-	GApexModuleTurbulenceFS->setLODEnabled(false);
+//	check(GApexModuleTurbulenceFS);
+	//GApexModuleTurbulenceFS->enableOutputVelocityField();
+	//GApexModuleTurbulenceFS->setLODEnabled(false);
 	// NVCHANGE_BEGIN: JCAO - Add custom filter shader for turbulence interacting with the kinematic rigid body
-	GApexModuleTurbulenceFS->setCustomFilterShader(TurbulenceFSFilterShader, NULL, 0);
+	//GApexModuleTurbulenceFS->setCustomFilterShader(TurbulenceFSFilterShader, NULL, 0);
 	// NVCHANGE_END: JCAO - Add custom filter shader for turbulence interacting with the kinematic rigid body
 
 	GApexModuleParticles = static_cast<NxModuleParticles*>(GApexSDK->createModule("Particles"));
-	check(GApexModuleParticles);
+//	check(GApexModuleParticles);
 
-	GApexModuleBasicFS = static_cast<NxModuleBasicFS*>(GApexModuleParticles->getModule("BasicFS"));
-	check(GApexModuleBasicFS);
-	GApexModuleBasicFS->setLODEnabled(false);
+//	GApexModuleBasicFS = static_cast<NxModuleBasicFS*>(GApexModuleParticles->getModule("BasicFS"));
+	//check(GApexModuleBasicFS);
+	//GApexModuleBasicFS->setLODEnabled(false);
 
-	GApexModuleFieldSampler = static_cast<NxModuleFieldSampler*>(GApexModuleParticles->getModule("FieldSampler"));
-	check(GApexModuleFieldSampler);
-	GApexModuleFieldSampler->setLODEnabled(false);
+//	GApexModuleFieldSampler = static_cast<NxModuleFieldSampler*>(GApexModuleParticles->getModule("FieldSampler"));
+	//check(GApexModuleFieldSampler);
+	//GApexModuleFieldSampler->setLODEnabled(false);
 #endif // WITH_APEX_TURBULENCE
 	// NVCHANGE_END : JCAO - Add Turbulence Module
 

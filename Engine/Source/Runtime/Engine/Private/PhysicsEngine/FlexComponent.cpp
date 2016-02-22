@@ -318,7 +318,7 @@ void UFlexComponent::Synchronize()
 				const FTransform NewTransform(Rotation, Translation);
 
 				// offset to handle case where object's pivot is not aligned with the object center of mass
-                const FVector Offset = ComponentToWorld.TransformVector(FVector(AssetInstance->mAsset->mShapeCenters[0], AssetInstance->mAsset->mShapeCenters[1], AssetInstance->mAsset->mShapeCenters[2]));
+				const FVector Offset = ComponentToWorld.TransformVector(FVector(AssetInstance->mAsset->mShapeCenters[0], AssetInstance->mAsset->mShapeCenters[1], AssetInstance->mAsset->mShapeCenters[2]));
 				const FVector MoveBy = NewTransform.GetLocation() - ComponentToWorld.GetLocation() - Offset;
 				const FRotator NewRotation = NewTransform.Rotator();
 
@@ -843,7 +843,7 @@ FMatrix UFlexComponent::GetRenderMatrix() const
 {
 #if WITH_FLEX
 	if (ContainerInstance && StaticMesh && (StaticMesh->FlexAsset->GetClass() == UFlexAssetCloth::StaticClass() || 
-										    StaticMesh->FlexAsset->GetClass() == UFlexAssetSoft::StaticClass()))
+											StaticMesh->FlexAsset->GetClass() == UFlexAssetSoft::StaticClass()))
 	{
 		// particles are simulated in world space
 		return FMatrix::Identity;

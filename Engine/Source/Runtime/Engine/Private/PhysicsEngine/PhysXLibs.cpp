@@ -62,8 +62,6 @@ void LoadPhysXModules()
 	FString FLEXBinariesRoot = FPaths::EngineDir() / TEXT("Binaries/ThirdParty/PhysX/FLEX-0.9.0/");
 
 	#if PLATFORM_64BITS
-
-<<<<<<< HEAD
 		#if _MSC_VER >= 1900
 			FString RootPhysXPath(PhysXBinariesRoot + TEXT("Win64/VS2015/"));
 			FString RootAPEXPath(APEXBinariesRoot + TEXT("Win64/VS2015/"));
@@ -71,12 +69,8 @@ void LoadPhysXModules()
 			FString RootPhysXPath(PhysXBinariesRoot + TEXT("Win64/VS2013/"));
 			FString RootAPEXPath(APEXBinariesRoot + TEXT("Win64/VS2013/"));
 		#endif
-=======
-		FString RootPhysXPath(PhysXBinariesRoot + TEXT("Win64/VS2013/"));
-		FString RootAPEXPath(APEXBinariesRoot + TEXT("Win64/VS2013/"));
 
 		FString RootFLEXPath(FLEXBinariesRoot + TEXT("Win64/"));
->>>>>>> remotes/MyGit/4.9.2_NVIDIA_Techs
 
 		#if UE_BUILD_DEBUG && !defined(NDEBUG)	// Use !defined(NDEBUG) to check to see if we actually are linking with Debug third party libraries (bDebugBuildsActuallyUseDebugCRT)
 

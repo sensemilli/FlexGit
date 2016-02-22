@@ -317,8 +317,6 @@
 #include "TimerManager.h"					// Game play timers
 #include "SlateCore.h"
 #include "SlateBasics.h"
-<<<<<<< HEAD
-=======
 
 // NVCHANGE_BEGIN: JCAO - Add Turbulence Header
 #include "FieldSampler/AttractorActor.h"
@@ -346,4 +344,3 @@
 #include "FieldSampler/VortexAsset.h"
 #include "FieldSampler/VortexComponent.h"
 // NVCHANGE_END: JCAO - Add Turbulence Header
->>>>>>> remotes/MyGit/4.9.2_NVIDIA_Techs

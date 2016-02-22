@@ -5,7 +5,7 @@
 =============================================================================*/
 
 #pragma once
-
+#include "PhysicsPublic.h"
 #include "PhysXPublic.h"
 
 #if WITH_PHYSX

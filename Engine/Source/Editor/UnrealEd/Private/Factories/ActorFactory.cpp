@@ -66,14 +66,10 @@ ActorFactory.cpp:
 #include "Animation/AnimBlueprintGeneratedClass.h"
 #include "Kismet2/ComponentEditorUtils.h"
 #include "Components/BillboardComponent.h"
-
-<<<<<<< HEAD
 #include "LevelSequence.h"
 #include "LevelSequenceActor.h"
 #include "ActorFactoryMovieScene.h"
-=======
 #include "PhysicsEngine/FlexActor.h"
->>>>>>> remotes/MyGit/4.9.2_NVIDIA_Techs
 
 DEFINE_LOG_CATEGORY_STATIC(LogActorFactory, Log, All);
 
@@ -1987,7 +1983,6 @@ void UActorFactoryCylinderVolume::PostSpawnActor( UObject* Asset, AActor* NewAct
 	}
 }
 
-<<<<<<< HEAD
 /*-----------------------------------------------------------------------------
 UActorFactoryMovieScene
 -----------------------------------------------------------------------------*/
@@ -1998,17 +1993,20 @@ UActorFactoryMovieScene::UActorFactoryMovieScene(const FObjectInitializer& Objec
 	NewActorClass = ALevelSequenceActor::StaticClass();
 }
 
-bool UActorFactoryMovieScene::CanCreateActorFrom( const FAssetData& AssetData, FText& OutErrorMsg )
+bool UActorFactoryMovieScene::CanCreateActorFrom(const FAssetData& AssetData, FText& OutErrorMsg)
 {
-	if ( UActorFactory::CanCreateActorFrom( AssetData, OutErrorMsg ) )
+	if (UActorFactory::CanCreateActorFrom(AssetData, OutErrorMsg))
 	{
 		return true;
 	}
 
-	if ( AssetData.IsValid() && !AssetData.GetClass()->IsChildOf( ULevelSequence::StaticClass() ) )
+	if (AssetData.IsValid() && !AssetData.GetClass()->IsChildOf(ULevelSequence::StaticClass()))
 	{
 		OutErrorMsg = NSLOCTEXT("CanCreateActor", "NoLevelSequenceAsset", "A valid sequencer asset must be specified.");
-=======
+		return true;
+	}
+	return false;
+}
 // NVCHANGE_BEGIN: JCAO - Add Field Sampler Asset
 /*-----------------------------------------------------------------------------
 UActorFactoryGridActor
@@ -2173,14 +2171,12 @@ bool UActorFactoryNoiseActor::CanCreateActorFrom(const FAssetData& AssetData, FT
 	if (!AssetData.IsValid() || !AssetData.GetClass()->IsChildOf(UNoiseAsset::StaticClass()))
 	{
 		OutErrorMsg = NSLOCTEXT("CanCreateActor", "NoNoiseAsset", "No Noise Asset was specified.");
->>>>>>> remotes/MyGit/4.9.2_NVIDIA_Techs
 		return false;
 	}
 
 	return true;
 }
 
-<<<<<<< HEAD
 AActor* UActorFactoryMovieScene::SpawnActor( UObject* Asset, ULevel* InLevel, const FVector& Location, const FRotator& Rotation, EObjectFlags ObjectFlags, const FName& Name )
 {
 	ALevelSequenceActor* NewActor = Cast<ALevelSequenceActor>(Super::SpawnActor(Asset, InLevel, Location, Rotation, ObjectFlags, Name));
@@ -2205,7 +2201,7 @@ UObject* UActorFactoryMovieScene::GetAssetFromActorInstance(AActor* Instance)
 
 	return nullptr;
 }
-=======
+
 void UActorFactoryNoiseActor::PostSpawnActor(UObject* Asset, AActor* NewActor)
 {
 	UNoiseAsset* NoiseAsset = CastChecked<UNoiseAsset>(Asset);
@@ -2296,6 +2292,5 @@ void UActorFactoryVelocitySourceActor::PostSpawnActor(UObject* Asset, AActor* Ne
 	}
 }
 // NVCHANGE_END: JCAO - Add Field Sampler Asset
->>>>>>> remotes/MyGit/4.9.2_NVIDIA_Techs
 
 #undef LOCTEXT_NAMESPACE

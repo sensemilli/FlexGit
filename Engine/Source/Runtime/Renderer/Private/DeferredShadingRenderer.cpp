@@ -24,9 +24,7 @@
 #include "DistanceFieldAtlas.h"
 #include "../../Engine/Private/SkeletalRenderGPUSkin.h"		// GPrevPerBoneMotionBlur
 #include "EngineModule.h"
-<<<<<<< HEAD
 #include "IHeadMountedDisplay.h"
-=======
 #include "HairSceneProxy.h"
 
 // NVCHANGE_BEGIN: Add HBAO+
@@ -34,7 +32,6 @@
 #include "GFSDK_SSAO.h"
 #endif
 // NVCHANGE_END: Add HBAO+
->>>>>>> remotes/MyGit/4.9.2_NVIDIA_Techs
 
 TAutoConsoleVariable<int32> CVarEarlyZPass(
 	TEXT("r.EarlyZPass"),

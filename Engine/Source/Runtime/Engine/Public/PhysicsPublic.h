@@ -10,6 +10,7 @@
 #include "PhysxUserData.h"
 #include "DynamicMeshBuilder.h"
 #include "LocalVertexFactory.h"
+#include "PhysicsEngine/FlexContainer.h"
 #include "PhysicsEngine/PhysicsAsset.h"
 
 #define	USE_MULTIPLE_GPU_DISPATCHER_FOR_EACH_SCENE	0

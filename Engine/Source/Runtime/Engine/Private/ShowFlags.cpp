@@ -304,9 +304,7 @@ void ApplyViewMode(EViewModeIndex ViewModeIndex, bool bPerspective, FEngineShowF
 	EngineShowFlags.SetWireframe(ViewModeIndex == VMI_Wireframe || ViewModeIndex == VMI_BrushWireframe);
 	EngineShowFlags.SetCollisionPawn(ViewModeIndex == VMI_CollisionPawn);
 	EngineShowFlags.SetCollisionVisibility(ViewModeIndex == VMI_CollisionVisibility);
-<<<<<<< HEAD
 	EngineShowFlags.SetLODColoration(ViewModeIndex == VMI_LODColoration);
-=======
 
 	// NVCHANGE_BEGIN: Add VXGI
 #if WITH_GFSDK_VXGI
@@ -315,7 +313,6 @@ void ApplyViewMode(EViewModeIndex ViewModeIndex, bool bPerspective, FEngineShowF
 	EngineShowFlags.SetVxgiIrradianceVoxels(ViewModeIndex == VMI_VxgiIrradianceVoxels);
 #endif
 	// NVCHANGE_END: Add VXGI
->>>>>>> remotes/MyGit/4.9.2_NVIDIA_Techs
 }
 
 void EngineShowFlagOverride(EShowFlagInitMode ShowFlagInitMode, EViewModeIndex ViewModeIndex, FEngineShowFlags& EngineShowFlags, FName CurrentBufferVisualizationMode, bool bIsSplitScreen)

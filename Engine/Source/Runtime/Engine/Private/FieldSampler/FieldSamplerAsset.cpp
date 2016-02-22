@@ -27,7 +27,7 @@ void UFieldSamplerAsset::CreateApexAsset()
 		if (AssetObjTypeName) 
 		{
 			physx::apex::NxApexAssetAuthoring *Authoring = GApexSDK->createAssetAuthoring(AssetObjTypeName);
-			check(Authoring);
+//			check(Authoring);
 			if (Authoring)
 			{
 				NxParameterized::Interface* ApexAssetParams = Authoring->releaseAndReturnNxParameterizedInterface();

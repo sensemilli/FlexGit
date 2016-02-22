@@ -2592,8 +2592,6 @@ public:
 	const UGameUserSettings* GetGameUserSettings() const;
 	UGameUserSettings* GetGameUserSettings();
 
-<<<<<<< HEAD
-=======
 	/** Delegate handler for screenshots */
 	void HandleScreenshotCaptured(int32 Width, int32 Height, const TArray<FColor>& Colors);
 
@@ -2604,7 +2602,6 @@ public:
 	void SetNextPhysXLevel(int32 InLevel);
 	// NVCHANGE_END: JCAO - Add PhysXLevel and blueprint node
 
->>>>>>> remotes/MyGit/4.9.2_NVIDIA_Techs
 private:
 	void CreateGameUserSettings();
 

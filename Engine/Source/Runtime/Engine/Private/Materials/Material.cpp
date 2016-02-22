@@ -31,15 +31,12 @@
 #include "ComponentRecreateRenderStateContext.h"
 #include "ShaderCompiler.h"
 #include "Materials/MaterialParameterCollection.h"
-<<<<<<< HEAD
 #include "MaterialShaderQualitySettings.h"
-=======
 
 // NVCHANGE_BEGIN: Add VXGI
 #include "Materials/MaterialExpressionVxgiVoxelization.h"
 // NVCHANGE_END: Add VXGI
 
->>>>>>> remotes/MyGit/4.9.2_NVIDIA_Techs
 #if WITH_EDITOR
 #include "MessageLog.h"
 #include "UObjectToken.h"

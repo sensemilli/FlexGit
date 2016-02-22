@@ -18,7 +18,7 @@ DEFINE_LOG_CATEGORY(LogHairWorks);
 #define HairVisualizerCVarDefine(name)	\
 	static TAutoConsoleVariable<int> CVarHairVisualize##name(TEXT("r.Hair.Visualize")TEXT(#name),	0, TEXT(""), ECVF_RenderThreadSafe)
 
-HairVisualizerCVarDefine(GuideHairs);
+/*HairVisualizerCVarDefine(GuideHairs);
 HairVisualizerCVarDefine(SkinnedGuideHairs);
 HairVisualizerCVarDefine(HairInteractions);
 HairVisualizerCVarDefine(ControlVertices);
@@ -30,7 +30,7 @@ HairVisualizerCVarDefine(Bones);
 HairVisualizerCVarDefine(Capsules);
 HairVisualizerCVarDefine(BoundingBox);
 HairVisualizerCVarDefine(PinConstraints);
-HairVisualizerCVarDefine(ShadingNormalBone);
+HairVisualizerCVarDefine(ShadingNormalBone);*/
 
 // Configuration console variables.
 static TAutoConsoleVariable<int> CVarHairMsaaLevel(TEXT("r.Hair.MsaaLevel"), 8, TEXT(""), ECVF_RenderThreadSafe);
@@ -456,7 +456,7 @@ void FHairSceneProxy::DrawTranslucency(const FSceneView& View, const FVector& Li
 #define HairVisualizerCVarUpdate(name)	\
 	HairDesc.m_visualize##name = CVarHairVisualize##name.GetValueOnRenderThread() != 0
 
-	HairVisualizerCVarUpdate(GuideHairs);
+/*	HairVisualizerCVarUpdate(GuideHairs);
 	HairVisualizerCVarUpdate(SkinnedGuideHairs);
 	HairVisualizerCVarUpdate(HairInteractions);
 	HairVisualizerCVarUpdate(ControlVertices);
@@ -468,7 +468,7 @@ void FHairSceneProxy::DrawTranslucency(const FSceneView& View, const FVector& Li
 	HairVisualizerCVarUpdate(Capsules);
 	HairVisualizerCVarUpdate(BoundingBox);
 	HairVisualizerCVarUpdate(PinConstraints);
-	HairVisualizerCVarUpdate(ShadingNormalBone);
+	HairVisualizerCVarUpdate(ShadingNormalBone);*/
 
 	HairWorksSdk->UpdateInstanceDescriptor(HairInstanceId, HairDesc);
 
